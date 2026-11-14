@@ -27,7 +27,7 @@ The first production `create_checkout` returned `provider_unavailable`: this Str
 
 ## Not exercised here
 
-Declined cards (4000 0000 0000 0002), cancelling in the Customer Portal and the resulting `customer.subscription.updated/deleted` events on production, and out-of-order/replayed deliveries on production. These are covered by the 18 unit tests (real Stripe signature verification, faked network) and by the manual checklist in `STRIPE_SANDBOX_SETUP.md`.
+(Declined cards and Portal cancellation were later exercised on production; see the next section.) Out-of-order and replayed deliveries, and `customer.subscription.deleted` at period end, on production. These are covered by the 18 unit tests (real Stripe signature verification, faked network) and by the manual checklist in `STRIPE_SANDBOX_SETUP.md`.
 
 ## Edge cases on production — 15 November 2026, early morning
 
@@ -35,3 +35,4 @@ Declined cards (4000 0000 0000 0002), cancelling in the Customer Portal and the 
 | --- | --- |
 | Declined test card (4000 0000 0000 0002) on a free workspace | Stripe kept the person on its page with a decline message (`stripe-declined.png`). Faceful: still 3 credits, status `checkout_pending` (a display hint only; it clears when the session expires). Nothing granted. |
 | Cancel in the hosted Customer Portal | Stripe showed "Cancels Dec 14 · Faceful Creator (demo plan) €19" (`stripe-portal-cancel-confirm.png`, `stripe-portal-cancelled.png`). The signed webhook arrived and was processed, but **Faceful did not show the scheduled cancellation**: this API version records it as `cancel_at` (the period end) with `cancel_at_period_end: false`, and the engine read only the flag. Bug found; fix in progress, to be re-verified on production. |
+| Re-check after the fix shipped (PR #13) | A metadata-only update to the same sandbox subscription (`sub_…VRtO`, `cancel_at` 14 Dec 2026, `cancel_at_period_end: false`) made Stripe send a fresh signed `customer.subscription.updated`. Production `/v1/studio/billing` now reports `status: active`, `cancelAtPeriodEnd: true`, `currentPeriodEnd: 2026-12-14T17:39:54Z`, 31 credits kept. **Fixed and verified on production.** |

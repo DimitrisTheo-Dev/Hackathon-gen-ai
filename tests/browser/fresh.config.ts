@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url';
 const port = Number(process.env.FRESH_E2E_PORT ?? 4873);
 export default defineConfig({
   testDir: '.',
-  testIgnore: [/live-.*\.spec\.ts/, /onboarding\.spec\.ts/, /landing-flow\.spec\.ts/],
+  // Each of these suites has its own config and server (live, onboarding, landing, pitch).
+  testIgnore: [/live-.*\.spec\.ts/, /onboarding\.spec\.ts/, /landing-flow\.spec\.ts/, /pitch.*\.spec\.ts/],
   timeout: 30_000,
   workers: 2,
   reporter: 'list',

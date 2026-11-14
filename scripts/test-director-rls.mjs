@@ -6,8 +6,11 @@ const migration=readFileSync('supabase/migrations/20261114151010_director_conver
 try {
   run('postgres',`create database ${database};`);
   const output=run(database,`begin;
-create role authenticated;
-create role anon;
+do $roles$begin
+  -- Roles are cluster-wide; test-engine-rls.mjs may already have created them on this server.
+  if not exists (select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+  if not exists (select from pg_roles where rolname='anon') then create role anon; end if;
+end$roles$;
 create schema auth;
 create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;

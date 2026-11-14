@@ -359,7 +359,10 @@ test("the agent guide documents exactly the MCP tools, protocol and SDK the engi
     assert.match(text, /local engine server/);
     assert.match(text, /OAuth has not yet been tried through a host['’]s own sign-in screen/);
     assert.match(text, /Cursor, Gemini CLI and other hosts are untested/);
-    assert.match(text, /no application rate limiting/);
+    // Rate limiting is live (15 Nov 2026); the guide states the per-connection limits and how to back off.
+    assert.match(text, /rate limited per connection/);
+    assert.match(text, /retryAfterSeconds/);
+    assert.doesNotMatch(text, /no application rate limiting/);
   }
   assert.equal(guide.title, "Use Faceful with your AI agent");
 });

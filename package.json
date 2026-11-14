@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.65.1",
     "@types/node": "^26.6.6",
     "@types/react": "19.3.0",

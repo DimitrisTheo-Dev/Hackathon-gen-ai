@@ -21,7 +21,9 @@ createServer(async (req,res) => {
     const request = new Request(url,{method:req.method,headers});
     const result = proxy(request);
     if(result.headers.get('x-middleware-next') !== '1') { res.writeHead(result.status,Object.fromEntries(result.headers)); res.end(Buffer.from(await result.arrayBuffer())); return; }
-    const privatePage = /^\/(studio|dev|oauth)(\/|$)/.test(url.pathname);
+    // The same pages vercel.json rewrites to the app shell.
+    // Real files under those folders (e.g. /pitch/presenter.vtt) are served as files, as Vercel does before rewrites.
+    const privatePage = /^\/(studio|dev|oauth|claude-login-test|pitch)(\/|$)/.test(url.pathname) && !/\/[^/]+\.[a-z0-9]+$/i.test(url.pathname);
     const filename = privatePage ? resolve(root,'studio/index.html') : resolve(root,'.'+decodeURIComponent(url.pathname));
     if(filename !== root && !filename.startsWith(root+sep)) {res.writeHead(404);res.end();return;}
     const file = (await stat(filename)).isDirectory() ? resolve(filename,'index.html') : filename;

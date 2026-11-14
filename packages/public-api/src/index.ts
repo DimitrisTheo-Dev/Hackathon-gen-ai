@@ -205,12 +205,58 @@ function respond(request: Request, body: unknown, status = 200, headers: Record<
 export function publicProblem(request: Request, status: 400 | 404 | 405, code: string, detail: string, resolution: string) {
   return respond(request, problemSchema.parse({ type: "about:blank", title: status === 404 ? "Not Found" : status === 405 ? "Method Not Allowed" : "Bad Request", status, detail, instance: new URL(request.url).pathname.slice(0,512), code, resolution }), status, status === 405 ? { Allow: "GET, HEAD" } : {});
 }
+export const MCP_SERVER_CARD_PATH = "/.well-known/mcp/server-card.json";
+/** Must match `LATEST_PROTOCOL_VERSION` of the installed MCP SDK and `SERVER_VERSION` in packages/engine/src/mcp.ts (asserted in tests). */
+export const MCP_PROTOCOL_VERSION = "2025-11-25";
+export const MCP_SERVER_VERSION = "0.1.0";
+
+/**
+ * MCP server card for HTTP discovery. The format is a draft (SEP-1649, continued as SEP-2127) and sources still
+ * disagree on field names, so the card carries both the flat registry-style fields (`name`, `remotes`,
+ * `supportedProtocolVersions`) and the nested ones (`serverInfo`, `transport`, `authentication`). It describes how to
+ * reach and authorize the server only; tools are listed at runtime through `tools/list`. Served only where the engine
+ * is configured, so it never advertises a transport that would refuse every call.
+ */
+export function buildMcpServerCard(env: PublicEnv = {}) {
+  if (!deploymentFacts(env).engine) return null;
+  const endpoint = `${publicOrigin}/mcp`;
+  const description = "Create and revise presenter-led video drafts, check render and billing status, and propose schedules in a Faceful workspace. Agents cannot approve, publish or manage billing.";
+  return {
+    $comment: "MCP server card, draft format (SEP-1649 / SEP-2127; not final). Tools are discovered with tools/list after authorization.",
+    name: "app.vercel.faceful/studio",
+    title: "Faceful studio",
+    description,
+    version: MCP_SERVER_VERSION,
+    websiteUrl: `${publicOrigin}/docs/mcp/`,
+    icons: [{ src: `${publicOrigin}/icons/app-512.png`, mimeType: "image/png", sizes: "512x512" }],
+    remotes: [{ type: "streamable-http", url: endpoint }],
+    supportedProtocolVersions: [MCP_PROTOCOL_VERSION],
+    serverInfo: { name: "faceful", title: "Faceful studio", version: MCP_SERVER_VERSION, description, documentation: `${publicOrigin}/docs/mcp/`, homepage: `${publicOrigin}/` },
+    transport: { type: "streamable-http", url: endpoint },
+    authentication: {
+      required: true,
+      schemes: ["oauth2", "bearer"],
+      resourceMetadata: `${publicOrigin}/.well-known/oauth-protected-resource/mcp`,
+      description: "OAuth 2.1 with PKCE (authorization server named in resourceMetadata), or a scoped, expiring workspace token created by a workspace owner in the studio. Unauthenticated calls get 401 with a WWW-Authenticate challenge.",
+    },
+    capabilities: { tools: { listChanged: false } },
+    links: { documentation: `${publicOrigin}/docs/mcp/`, status: `${publicOrigin}/api/public/status`, openapi: `${publicOrigin}/openapi.json`, llms: `${publicOrigin}/llms.txt` },
+  };
+}
+
 /**
  * Public discovery only; returns null for every private/domain route.
  * `env` defaults to this deployment's server configuration and exists so both states can be tested.
  */
 export function handlePublicRequest(request: Request, env: PublicEnv = runtimeEnv()): Response | null {
   const path = new URL(request.url).pathname;
+  if (path === MCP_SERVER_CARD_PATH) {
+    if (request.method !== "GET" && request.method !== "HEAD") return publicProblem(request, 405, "method_not_allowed", "This public resource is read-only.", "Repeat the request with GET or HEAD. No credentials are needed.");
+    const card = buildMcpServerCard(env);
+    if (!card) return publicProblem(request, 404, "mcp_unavailable", "This deployment has no engine configured, so it serves no MCP endpoint.", "Read /api/public/status for what this deployment has configured.");
+    // Public by design: discovery must work without credentials, from any origin.
+    return respond(request, card, 200, { "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300, stale-while-revalidate=3600" });
+  }
   if (path !== "/openapi.json" && path !== "/api/public" && !path.startsWith("/api/public/")) return null;
   let result: unknown;
   if (path === "/openapi.json") result = openApiDocument;

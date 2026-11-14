@@ -4,7 +4,7 @@
 
 - Live: <https://faceful.vercel.app> (studio at `/studio/`, agent docs at `/docs/mcp/`)
 - Repository: <https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai> (private; access on request)
-- Demo video: _link added at submission_
+- Demo video: _link added at submission_ · one-minute pitch surface: <https://faceful.vercel.app/pitch> (press F, then R)
 - Status, evidence and limits: [`DEMO_READINESS.md`](../../DEMO_READINESS.md) · how it works: [`INTEGRATION_CONTRACTS.md`](../../INTEGRATION_CONTRACTS.md) · security: [`SECURITY.md`](../../SECURITY.md)
 
 ## The problem
@@ -29,8 +29,10 @@ Short presenter-led videos (Reels, Shorts, TikToks) are the most effective forma
 | MCP: Claude Code against the production endpoint created and revised drafts; Codex against the same engine | `docs/demo/evidence/production/mcp-and-oauth.md` |
 | OAuth 2.1 for agents: discovery, dynamic registration, consent page, PKCE token, refresh | same file |
 | "Use your own Claude subscription": the studio hands a request to the person's Claude Code, which writes Greek drafts through Faceful's tools | same file |
-| Stripe sandbox: hosted Checkout (test card), plan and credits granted only by signed webhooks, Customer Portal, double-subscription guard, declined cards grant nothing | `docs/demo/evidence/production/stripe-sandbox.md` |
+| Stripe sandbox: hosted Checkout (test card), plan and credits granted only by signed webhooks, Customer Portal cancellation reflected, double-subscription guard, declined cards grant nothing | `docs/demo/evidence/production/stripe-sandbox.md` |
+| Rate limits (Postgres-backed, IETF `RateLimit` headers), 256 KB body cap, HSTS/COOP/CSP, MCP batch cap | production checks of 15 Nov; `SECURITY.md` |
 | Studio refresh: one continuous loading state, zero layout shift | measured on production with a signed-in session |
+| Works in Chromium, Safari (WebKit) and Firefox; no serious or critical axe findings (WCAG 2.2 AA) on 12 surfaces at desktop and phone widths; landing Lighthouse 100 mobile and desktop on a compressed server | 342 browser tests across three engines; `docs/demo/evidence/quality/` |
 
 **Not yet live (stated plainly in the product):** presenter-video rendering waits for the Humanlike recorder; AI writing on the server needs a model key (until then the studio offers the hand-off to your own agent); YouTube publishing is built but not yet verified with a real channel; Instagram and TikTok need each platform's app review.
 
@@ -65,6 +67,7 @@ The studio, the AI Director and every MCP tool call the same engine functions. T
 - **Signed Stripe webhooks,** sandbox-only keys enforced at boot, entitlements only from verified events.
 - **Prompt-injection hygiene:** sources, brand text and history are passed to the model as data; the model has no tools and can only propose typed actions a person applies.
 - **Rate limits, security headers, no secrets in the browser** — see `SECURITY.md`.
+- **Verified, not assumed:** a pre-submission review found an operation-dispatch bug and a missed Stripe cancellation shape; both were fixed, covered by tests and re-checked on production. `DEMO_READINESS.md` labels every capability as verified live, implemented-not-verified, blocked or deferred.
 
 ## Built with
 

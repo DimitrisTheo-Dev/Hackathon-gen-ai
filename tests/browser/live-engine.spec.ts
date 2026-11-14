@@ -259,6 +259,21 @@ test('agent consent: shows who is asking and what access means, then follows the
   expect(answers).toHaveLength(2);
 });
 
+test('agent consent refuses a script-bearing callback before offering Allow', async ({ page }) => {
+  const answers: string[] = [];
+  await signIn(page, {
+    '/auth/v1/oauth/authorizations/': (path, method) => {
+      if (method === 'GET') return { authorization_id: 'auth-evil', redirect_uri: 'javascript:alert(document.domain)', client: { id: 'client-2', name: 'Totally Claude', uri: '', logo_uri: '' }, user: { id: 'u', email: 'u@e2e.test' }, scope: 'openid email' };
+      answers.push(path);
+      return { redirect_url: 'javascript:alert(document.domain)' };
+    },
+  });
+  await page.goto('/oauth/consent?authorization_id=auth-evil');
+  await expect(page.locator('.consent-card')).toContainText('points somewhere unsafe');
+  await expect(page.getByRole('button', { name: 'Allow access' })).toHaveCount(0);
+  expect(answers).toHaveLength(0);
+});
+
 test('agent consent without a request id explains what to do instead of failing silently', async ({ page }) => {
   await signIn(page);
   await page.goto('/oauth/consent');

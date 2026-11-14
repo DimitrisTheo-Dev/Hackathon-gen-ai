@@ -23,7 +23,9 @@ const probe = `(${bootProbe.toString()})();`;
 if (/__name|__publicField|import_|\bexports\b/.test(probe)) throw new Error('bootProbe must be self-contained: it is emitted as a standalone script.');
 new Function(probe);
 const warm = (await readdir('dist/assets')).filter(name => /^(AuthApp|Studio|fixture)-[\w-]+\.(js|css)$/.test(name)).map(name => `/assets/${name}`);
-const bootScript = `${probe}\n(function(urls){if(document.documentElement.getAttribute("data-boot")==="none")return;for(var i=0;i<urls.length;i++){var link=document.createElement("link"),css=/\\.css$/.test(urls[i]);link.rel=css?"preload":"modulepreload";if(css)link.as="style";link.crossOrigin="";link.href=urls[i];document.head.appendChild(link);}})(${JSON.stringify(warm)});\n`;
+// A studio about to open ("shell") fetches every chunk it needs now. A signed-out visitor ("auth") needs only the
+// sign-in code; the studio's chunks are fetched at idle priority so they never compete with the sign-in card.
+const bootScript = `${probe}\n(function(urls){var state=document.documentElement.getAttribute("data-boot");if(state==="none")return;for(var i=0;i<urls.length;i++){var link=document.createElement("link"),css=/\\.css$/.test(urls[i]),now=state!=="auth"||/\\/AuthApp-/.test(urls[i]);link.rel=now?(css?"preload":"modulepreload"):"prefetch";if(css)link.as="style";link.crossOrigin="";link.href=urls[i];document.head.appendChild(link);}})(${JSON.stringify(warm)});\n`;
 // Under /assets like every other built script: served as a static file locally and on the deployment, and content-hashed.
 const bootFile = `/assets/studio-boot-${createHash('sha256').update(bootScript).digest('hex').slice(0,10)}.js`;
 await writeFile(`dist${bootFile}`,bootScript);

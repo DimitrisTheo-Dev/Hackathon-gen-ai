@@ -80,7 +80,19 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | `POST /v1/worker/render/*` | Render worker protocol (§7) |
 | `GET /v1/cron/tick` | Sweep stuck renders; process due publish jobs |
 
-Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_checkout`, `create_portal`. `create_run_grant` answers `unsupported`.
+Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
+
+**Limits.** JSON bodies on `/v1` and `/mcp` are capped at 256 KB (`413 validation_error`; a declared `Content-Length` over the cap is refused before reading). Requests are rate limited in fixed one-minute windows counted in Postgres (`engine_rate_limit_hit`), so limits hold across function instances:
+
+| Bucket | Default per minute | Keyed by |
+| --- | --- | --- |
+| `principal` | 240 | user, OAuth agent or workspace token (IDs only) |
+| `director` | 10 | principal, for Director turns |
+| `costly` | 10 | principal, for `render_content`, `create_checkout`, `connect_channel` |
+| `anonymous` | 120 | client network, requests without a credential |
+| `failed_auth` | 60 | client network, requests whose credential was refused |
+
+An exceeded limit is `429 quota_exceeded` with `retryAfterSeconds`, a `Retry-After` header, and the IETF `RateLimit-Policy` / `RateLimit` headers (for example `"principal";q=240;w=60` and `"principal";r=237;t=53`). The Stripe webhook, an authorized cron tick and the render worker are exempt. If the limiter's database call fails, requests are let through with a structured log (fail open), except `failed_auth`, which falls back to a per-instance counter. Limits are set with `RATE_LIMIT_*` variables (`.env.example`).
 
 Mapping from the brief's suggested action contract: `StartDraft` → `start_campaign` / `director/turn` / `create_from_template`; `EditDraft` → `revise_content` (version-checked patch) or a director proposal; `ListAvatars` → `context.avatars`; `StartRender` → `render_content`; `RenderResult` → `GET /jobs/:id` plus `item.media`; `GetAsset` → `campaigns/:id` and `versions`; `ProposeSchedule` → `revise_content` (`patch.targets`) then `prepare_schedule`; `ApproveSchedule` → `approve_schedule`; `BillingStatus` → `GET /billing`; `CreateCheckout` → `create_checkout`.
 
@@ -152,6 +164,8 @@ Model: `claude-opus-5-5` through the Anthropic SDK, structured output, low effor
 
 Tools: `list_projects`, `create_project`, `create_draft`, `revise_draft`, `list_avatars`, `start_render`, `get_render_status`, `list_assets`, `get_asset`, `propose_schedule`, `approve_schedule`, `get_billing_status`, `create_checkout_link`. Each maps to one engine function and inherits its checks. Side-effecting tools accept `idempotencyKey`.
 
+A POST may carry 1–10 JSON-RPC messages (otherwise `-32600`); every message counts against the caller's `principal` bucket, and `start_render` / `create_checkout_link` also count against `costly`. Going over `principal` refuses the whole POST with `429` and the headers above; going over `costly` inside a call returns a tool error with `quota_exceeded` and `retryAfterSeconds`; the server's `instructions` tell agents to wait that long rather than retry at once. Unauthenticated calls get `401` with the protected-resource metadata link and count against `anonymous` or `failed_auth`.
+
 ## 10. Data model
 
 Tables (all with RLS enabled): `organizations`, `memberships`, `user_state`, `brand_profiles`, `projects`, `content_items`, `content_versions`, `media_assets`, `render_jobs`, `job_events`, `audit_events`, `operations`, `schedule_manifests`, `publish_jobs`, `provider_connections`, `agent_connections`, `billing_customers`, `billing_state`, `checkout_sessions`, `stripe_events`, `credit_ledger`, plus the earlier `castroom_director_access` / `castroom_director_entries`.
@@ -166,7 +180,7 @@ Browsers can `SELECT` their own organization's projects, items, versions, media 
 - Collaborator invitations (the role model and checks exist; there is no invite flow).
 - Unattended publishing grants (`create_run_grant`).
 - Realtime push; the studio polls every five seconds.
-- Application rate limiting on `/v1` and `/mcp`.
+- Per-workspace (as opposed to per-principal) rate limits; edge/WAF rules in front of the functions.
 
 ## 12. Publishing: YouTube
 

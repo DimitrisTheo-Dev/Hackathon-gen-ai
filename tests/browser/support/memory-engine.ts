@@ -94,7 +94,16 @@ export function createMemoryEngine(origin: string) {
   async function control(request: Request, pathname: string): Promise<Response> {
     if (request.method === "GET" && pathname.startsWith("/__e2e/media/")) {
       const object = store.media.objects.get(decodeURIComponent(pathname.slice("/__e2e/media/".length)));
-      return object ? new Response(object.bytes, { headers: { "Content-Type": "audio/wav", "Accept-Ranges": "none", "Cache-Control": "no-store" } }) : new Response("Not found", { status: 404 });
+      if (!object) return new Response("Not found", { status: 404 });
+      // Byte ranges, like the real storage: Safari will not play media from a server that cannot serve them.
+      const bytes = object.bytes, size = bytes.byteLength;
+      const headers = { "Content-Type": "audio/wav", "Accept-Ranges": "bytes", "Cache-Control": "no-store" };
+      const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("range") ?? "");
+      if (!range) return new Response(bytes, { headers });
+      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      if (start > end || start >= size) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
+      return new Response(bytes.slice(start, end + 1), { status: 206, headers: { ...headers, "Content-Range": `bytes ${start}-${end}/${size}` } });
     }
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
     let user: ReturnType<typeof claims>;

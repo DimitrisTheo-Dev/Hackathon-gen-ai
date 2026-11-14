@@ -22,6 +22,20 @@ function lockPage() {
   return () => { if (--locks === 0) document.documentElement.style.overflow = previousOverflow; };
 }
 
+/**
+ * Safari moves focus to the page as soon as a focused button becomes disabled, which is what a trigger does while
+ * its action runs (Review schedule, for one). The place to return focus to is therefore the last element that held
+ * it, not whatever holds focus at the moment a surface opens.
+ */
+let lastFocused: HTMLElement | null = null;
+if (typeof document !== "undefined")
+  document.addEventListener("focusin", (event) => { if (event.target instanceof HTMLElement && event.target !== document.body) lastFocused = event.target; }, true);
+function returnTarget() {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active !== document.body) return active;
+  return lastFocused?.isConnected ? lastFocused : null;
+}
+
 type Controls = { close: () => void; grip: ReactNode; mobile: boolean };
 /** Native dialog provides focus containment, inert background and focus restoration.
  * Only the explicit handle owns dragging; content keeps native scrolling/selection/zoom.
@@ -79,7 +93,7 @@ export function SurfaceDialog({ title, className, editor = false, inline = false
   useLayoutEffect(() => {
     const dialog = ref.current!;
     finished.current = false;
-    priorFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    priorFocus.current = returnTarget();
     if (!open) { if(dialog.open)dialog.close(); return; }
     const modal = !inline && (!editor || mobile);
     if (dialog.open) dialog.close();

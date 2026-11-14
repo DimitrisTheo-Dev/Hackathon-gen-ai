@@ -111,9 +111,11 @@ test('sign-in works from the keyboard and lands on the composer with no wizard',
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-for (const width of [1440, 390]) test(`connect an agent at ${width}px: choose, create a real token, copy the setup, and see the first call arrive`, async ({ page, context }) => {
+for (const width of [1440, 390]) test(`connect an agent at ${width}px: choose, create a real token, copy the setup, and see the first call arrive`, async ({ page, context, browserName }) => {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Only Chromium lets a test grant clipboard read; elsewhere the copy is checked by its confirmation.
+  const readClipboard = browserName === 'chromium';
+  if (readClipboard) await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await signIn(page);
   await page.goto('/studio/?view=connect');
   await expect(page.getByRole('heading', { name: 'Connect your agent' })).toBeVisible();
@@ -166,9 +168,11 @@ for (const width of [1440, 390]) test(`connect an agent at ${width}px: choose, c
   expect(await view.innerText()).not.toContain(token);
   await page.getByRole('button', { name: 'Copy with token' }).click();
   await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
-  const copied = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copied).toContain(`export FACEFUL_TOKEN='${token}'`);
-  expect(copied).toContain('claude mcp add --transport http faceful');
+  if (readClipboard) {
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain(`export FACEFUL_TOKEN='${token}'`);
+    expect(copied).toContain('claude mcp add --transport http faceful');
+  }
   await expect(page.locator('.ob-live')).toContainText('Waiting for your agent’s first call');
   expect(await noOverflow(page)).toBe(true);
   await shot(page, `connect-steps-${width}`);

@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-const evidence='docs/demo/evidence/creative-director';
+import { evidence } from './support/evidence';
 test('director plan → saved canvas revision → history → undo, with honest unavailable AI',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/dev/studio/?view=canvas');await expect(page.locator('.content-card')).toHaveCount(3);
@@ -21,7 +21,7 @@ test('director plan → saved canvas revision → history → undo, with honest 
  await page.locator('.content-select').first().click();await page.reload();await expect(page.locator('.director-result')).toContainText('Saved version 2');
  await page.getByRole('button',{name:'Undo this change'}).click();await expect(page.locator('.director-result')).toContainText('Restored as a new saved revision');await expect(page.locator('.content-card').first()).toContainText('Find your next moment');
  await page.getByLabel('Direction for your content').fill('Rewrite the opening');await page.getByRole('button',{name:'Prepare action plan'}).click();await expect(page.locator('.director-turn').last()).toContainText('AI direction is not connected yet');
- await page.screenshot({path:`${evidence}/chat-desktop.png`});expect(errors).toEqual([]);
+ await page.screenshot({path:evidence(`chat-desktop.png`)});expect(errors).toEqual([]);
 });
 test('director failed edit rolls canvas back; retry preserves intent; new revisions make old plans stale',async({page})=>{
  await page.goto('/dev/studio/?view=canvas');await page.getByLabel('Direction for your content').fill('Set script: This exact opening is ready to review.');await page.getByRole('button',{name:'Prepare action plan'}).click();
@@ -35,10 +35,10 @@ test('director failed edit rolls canvas back; retry preserves intent; new revisi
 test('phone director exact-script plan preserves Details and safe focus styles',async({page})=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/dev/studio/?view=canvas');await page.locator('.content-select').first().click();await page.getByRole('button',{name:'Edit script',exact:true}).click();
  await page.getByLabel('Your replacement script').fill('A warmer day, in your own words.');await page.getByRole('button',{name:'Review script change'}).click();await page.getByRole('button',{name:'Apply changes',exact:true}).click();await expect(page.locator('.director-result')).toContainText('Saved version 2');
- await page.screenshot({path:`${evidence}/chat-phone.png`});
+ await page.screenshot({path:evidence(`chat-phone.png`)});
  await page.getByRole('button',{name:'Details',exact:true}).click();await expect(page.locator('#script')).toHaveValue('A warmer day, in your own words.');await page.locator('#script').focus();
  const focus=await page.locator('#script').evaluate(el=>{const s=getComputedStyle(el);return {width:s.outlineWidth,offset:s.outlineOffset,shadow:s.boxShadow,font:s.fontSize}});expect(focus).toEqual({width:'1px',offset:'-2px',shadow:'none',font:'16px'});
- await page.screenshot({path:`${evidence}/details-phone-focus.png`});await page.getByRole('button',{name:'Return to campaign'}).click();await expect(page.locator('.content-card')).toHaveCount(3);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:evidence(`details-phone-focus.png`)});await page.getByRole('button',{name:'Return to campaign'}).click();await expect(page.locator('.content-card')).toHaveCount(3);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 test('Details stays short: guidance folds away, the render action says why it is unavailable, one hint at a time',async({page})=>{
  await page.goto('/dev/studio/?view=canvas');await page.getByRole('button',{name:'Details',exact:true}).click();
