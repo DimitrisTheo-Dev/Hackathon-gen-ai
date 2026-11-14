@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+  # Deployed to Cloudflare with its own npm lockfile (see apps/machines/package.json).
+  - '!apps/machines'
 
 allowBuilds:
   esbuild: true

@@ -1,9 +1,14 @@
 // Typed client for the Claude Code runner in apps/claude-runner.
 export type RunnerAuth = { loggedIn: boolean; authMethod: string | null; email: string | null; subscriptionType: string | null; organization: string | null };
-export type RunnerStatus = { runner: string; claudeVersion: string | null; auth: RunnerAuth; tokenStored: boolean; workspace: string; busy: boolean; loginPending: boolean };
+export type RunnerStatus = { runner: string; claudeVersion: string | null; auth: RunnerAuth; tokenStored: boolean; workspace: string; store?: boolean; busy: boolean; loginPending: boolean };
+export type WorkspaceSave = { key: string; bytes: number; savedAt: string; files: number | null };
+export type Workspace = { configured: boolean; project: string; autosave: WorkspaceSave | null; saves: WorkspaceSave[] };
+/** Present only when the address is a Faceful machines gateway (apps/machines), not a plain runner. */
+export type Machine = { gateway: true; user: string; identity: "token" | "session"; instanceType: string; sleepAfterMinutes: number; live: string; running?: boolean; machine: { starts: number; last_started_at: string | null; last_stopped_at: string | null } | null };
+export type Project = { id: string; title: string; session_id: string | null; runs: number; last_run_at: string | null; last_saved_at: string | null; autosave_bytes: number | null; autosave_files: number | null };
 export type Model = "fable" | "opus" | "sonnet" | "haiku";
 export type PermissionMode = "acceptEdits" | "auto" | "bypassPermissions" | "plan";
-export type RunInput = { prompt: string; sessionId?: string; model?: Model; permissionMode: PermissionMode };
+export type RunInput = { prompt: string; project?: string; sessionId?: string; model?: Model; permissionMode: PermissionMode };
 export type StreamEvent = Record<string, unknown> & { type: string };
 
 export class RunnerError extends Error {
@@ -52,14 +57,15 @@ export async function readNdjson(body: ReadableStream<Uint8Array>, onValue: (val
   flush(buffer + decoder.decode());
 }
 
-export function createRunnerClient(baseUrl: string, accessKey: string, fetcher: typeof fetch = (...args) => fetch(...args)) {
+/** `accessKey` is a fixed key, or a function for credentials that expire (a Faceful session). */
+export function createRunnerClient(baseUrl: string, accessKey: string | (() => Promise<string>), fetcher: typeof fetch = (...args) => fetch(...args)) {
   async function call<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     let response: Response;
     try {
       response = await fetcher(`${baseUrl}${path}`, {
         method,
         signal,
-        headers: { Authorization: `Bearer ${accessKey}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+        headers: { Authorization: `Bearer ${typeof accessKey === "string" ? accessKey : await accessKey()}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
         body: body === undefined ? undefined : JSON.stringify(body),
         cache: "no-store",
       });
@@ -82,6 +88,17 @@ export function createRunnerClient(baseUrl: string, accessKey: string, fetcher: 
     saveToken: (token: string) => json<{ auth: RunnerAuth }>("POST", "/v1/token", { token }),
     signOut: () => json<{ auth: RunnerAuth }>("DELETE", "/v1/auth"),
     stop: () => json<{ stopped: boolean }>("POST", "/v1/run/stop"),
+    workspace: (project: string) => json<Workspace>("GET", `/v1/workspace?project=${encodeURIComponent(project)}`),
+    /** Null when the address is a plain runner. Never wakes a sleeping machine. */
+    machine: async (): Promise<Machine | null> => {
+      try { return await json<Machine>("GET", "/v1/machine"); }
+      catch (error) { if (error instanceof RunnerError && error.status === 404) return null; throw error; }
+    },
+    sleepMachine: () => json<{ stopped: boolean }>("POST", "/v1/machine/sleep"),
+    projects: () => json<{ projects: Project[] }>("GET", "/v1/projects"),
+    createProject: (title: string) => json<{ project: Project }>("POST", "/v1/projects", { title }),
+    saveWorkspace: (project: string) => json<{ save: WorkspaceSave }>("POST", "/v1/workspace/save", { project }),
+    restoreWorkspace: (project: string, key: string) => json<{ restored: { key: string; restoredAt: string } }>("POST", "/v1/workspace/restore", { project, key }),
     async run(input: RunInput, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) {
       const response = await call<Response>("POST", "/v1/run", input, signal);
       if (!response.body) throw new RunnerError(0, "no_stream", "This browser can't read streamed responses.");

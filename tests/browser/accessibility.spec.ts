@@ -37,7 +37,7 @@ const surfaces: Array<{ name: string; open: (page: Page) => Promise<unknown> }> 
   { name: 'billing', open: async (page) => { await page.goto('/dev/studio/?view=billing'); await expect(page.getByRole('heading', { name: 'Billing and usage' })).toBeVisible(); } },
   { name: 'agents', open: async (page) => { await page.goto('/dev/studio/?view=connect'); await expect(page.getByRole('heading', { name: 'Connect your agent' })).toBeVisible(); } },
   { name: 'creation dialog', open: async (page) => { await page.goto('/dev/studio/'); await page.getByRole('button', { name: 'Create with my own script' }).click(); await expect(page.getByRole('dialog')).toBeVisible(); } },
-  { name: 'Claude Code runner', open: async (page) => { await page.goto('/claude-login-test/'); await expect(page.getByRole('heading', { name: 'Connect your server' })).toBeVisible(); } },
+  { name: 'Claude Code runner', open: async (page) => { await page.goto('/claude-login-test/'); await expect(page.getByRole('heading', { name: 'Connect your machine' })).toBeVisible(); } },
 ];
 
 for (const width of [1440, 390]) {
