@@ -21,7 +21,7 @@
   .app-frame .button.primary { box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 1px 2px rgba(42,42,39,.24); }
   .app-frame .button.secondary { background: var(--surface); box-shadow: var(--elev-1); border-color: transparent; }
   .app-frame .icon-button { border-radius: 8px; color: var(--text-secondary); }
-  .app-frame kbd { font: 500 11px/1 var(--font-inter); color: var(--text-muted); padding: 3px 5px; border-radius: 5px; background: rgba(42,42,39,.05); letter-spacing: .02em; }
+  .app-frame kbd { font: 500 11px/1 var(--font-inter); color: var(--text-secondary); padding: 3px 5px; border-radius: 5px; background: rgba(42,42,39,.05); letter-spacing: .02em; }
 
   /* Segmented control: quiet track, raised thumb */
   .app-frame .segmented { display: inline-flex; gap: 2px; padding: 3px; border: 0; border-radius: 10px; background: rgba(42,42,39,.055); }
@@ -52,7 +52,6 @@
   .skeleton-line { block-size: 12px; inline-size: 72%; }
   .skeleton-line.short { inline-size: 44%; }
   .skeleton-title { block-size: 30px; inline-size: min(360px, 70%); border-radius: 10px; }
-  .skeleton-composer { block-size: 132px; inline-size: min(640px, 100%); border-radius: 18px; }
   .skeleton-block { block-size: 180px; inline-size: 100%; border-radius: 14px; }
   .view-skeleton { display: grid; gap: 14px; padding: 40px clamp(20px, 5vw, 56px); max-inline-size: 760px; }
 
@@ -99,7 +98,6 @@
   .schedule-view.no-project .schedule-header h1 { font-size: 24px; font-weight: 620; letter-spacing: -.03em; line-height: 1.2; }
   .schedule-view.no-project .schedule-header p { font-size: 13px; }
 
-
   /* ───────────── desktop + tablet shell (sidebar visible) ───────────── */
   @media (min-width: 761px) {
     .app-frame { padding: 10px; }
@@ -116,6 +114,8 @@
     .app-frame .search-box { inline-size: 100%; margin: 0 0 10px; min-block-size: 34px; padding: 0 9px 0 10px; gap: 10px; border: 0; border-radius: 9px; background: var(--surface); box-shadow: var(--elev-1); font-size: 13px; color: var(--text-secondary); text-align: start; overflow: hidden; }
     .app-frame .search-box > svg { flex: 0 0 auto; }
     .app-frame .search-box > span { flex: 1; }
+    /* The shortcut hint is drawn, not text: the button is named by what it says ("Search"), and the keys are announced through aria-keyshortcuts. */
+    .app-frame .search-box kbd::after { content: attr(data-keys); }
 
     .app-frame .sidebar nav { gap: 2px; }
     .app-frame .sidebar :is(.sidebar-nav button, .project-list button, .sidebar-row) { display: flex; align-items: center; gap: 10px; inline-size: 100%; min-block-size: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-secondary); font-size: 13px; font-weight: 450; text-align: start; overflow: hidden; }
@@ -124,22 +124,24 @@
     .app-frame .sidebar .sidebar-nav button.active, .app-frame .sidebar .sidebar-row.selected { background: rgba(42,42,39,.07); color: var(--ink); font-weight: 550; }
     .app-frame .sidebar .sidebar-nav button.active > svg, .app-frame .sidebar .sidebar-row.selected > svg { color: var(--ink); }
 
-    .app-frame .projects-heading { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 4px; padding: 0 4px 0 10px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+    .app-frame .projects-heading { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 4px; padding: 0 4px 0 10px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .app-frame .projects-heading .icon-button { inline-size: 24px; block-size: 24px; display: grid; place-items: center; border: 0; background: transparent; }
     .app-frame .sidebar .project-list { display: flex; flex-direction: column; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; margin-inline: -4px; padding-inline: 4px; scrollbar-width: thin; }
     .app-frame .sidebar .project-list button .project-name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
-    .app-frame .sidebar .project-list button small { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .app-frame .sidebar .project-list button small { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
     .app-frame .sidebar .project-list button.current-project { background: var(--surface); color: var(--ink); font-weight: 550; box-shadow: var(--elev-1); }
     .app-frame .sidebar .project-list button.current-project > svg { color: var(--ink); }
-    .project-empty { margin: 4px 10px; font-size: 12px; line-height: 1.5; color: var(--text-muted); white-space: normal; }
+    .project-empty { margin: 4px 10px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); white-space: normal; }
 
     .app-frame .sidebar-bottom { margin-block-start: auto; padding-block-start: 12px; gap: 2px; }
     .app-frame .sidebar .sidebar-row > small { font-size: 12px; color: var(--text-secondary); display: inline-flex; align-items: center; font-variant-numeric: tabular-nums; }
     .app-frame .sidebar .sidebar-row > small b { font-weight: 550; color: var(--ink); margin-inline-end: 3px; }
+    /* The sidebar is darker than the canvas: its quiet text uses the secondary tone so it still clears 4.5:1. */
+    .app-frame .sidebar .sidebar-row.selected > small { color: var(--ink-secondary); }
     .app-frame .user-row { display: flex; align-items: center; gap: 10px; margin-block-start: 8px; padding: 10px 4px 0 7px; border-block-start: 1px solid var(--border); font-size: 13px; overflow: hidden; }
     .app-frame .user-avatar { inline-size: 24px; block-size: 24px; flex: 0 0 auto; font-size: 11px; background: var(--art-wash); color: var(--ink); }
     .app-frame .user-name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
-    .app-frame .user-name small { display: block; font-size: 11.5px; color: var(--text-muted); text-transform: capitalize; }
+    .app-frame .user-name small { display: block; font-size: 11.5px; color: var(--text-secondary); text-transform: capitalize; }
     .app-frame .workspace-switch { margin-block-end: 10px; padding: 4px 6px; border: 0; border-radius: 9px; background: var(--surface); box-shadow: var(--elev-1); gap: 8px; overflow: hidden; }
     .app-frame .workspace-avatar { inline-size: 24px; block-size: 24px; font-size: 12px; border-radius: 6px; }
     .app-frame .workspace-select { flex: 1; max-inline-size: none; border: 0; background: transparent; font-size: 13px; padding: 4px 0; }
@@ -182,7 +184,7 @@
     .app-frame .sidebar .agent-status > svg { display: block; }
     .app-frame .sidebar .agent-status > span:nth-child(2) { display: block; }
     .app-frame .user-row { justify-content: center; padding: 10px 0 0; }
-    .app-frame .timezone-label, .app-frame .breadcrumbs > :is(svg, span) { display: none; }
+    .app-frame .breadcrumbs > :is(svg, span) { display: none; }
     .app-frame .breadcrumbs .mobile-menu { inline-size: 32px; block-size: 32px; display: grid; place-items: center; border: 0; background: transparent; margin-inline-start: -6px; }
   }
   @media (min-width: 1001px) {
@@ -284,9 +286,6 @@
   .app-frame .director-compose-area { position: relative; padding: 8px 12px max(10px, env(safe-area-inset-bottom)); border-block-start: 0; background: transparent; }
   .app-frame .director-composer { padding: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 1px 2px rgba(42,42,39,.04), 0 8px 24px rgba(42,42,39,.06); transition: border-color var(--dur-fast) ease, box-shadow var(--dur-base) ease; }
   .app-frame .director-composer:focus-within { border-color: var(--focus); }
-  .director-context-line { display: flex; align-items: center; gap: 7px; margin: 0; padding: 9px 12px 0; font-size: 11.5px; line-height: 1.4; color: var(--text-muted); white-space: nowrap; overflow: hidden; }
-  .director-context-line > i { inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--text-muted); flex: 0 0 auto; }
-  .director-context-line > b { font-weight: 500; color: var(--ink-secondary); overflow: hidden; text-overflow: ellipsis; }
   .app-frame .director-composer textarea { display: block; min-block-size: 40px; max-block-size: none; padding: 6px 12px 4px; border-radius: 0; background: transparent; resize: none; font-size: 14px; line-height: 1.5; }
   .app-frame .director-composer-actions { gap: 2px; padding: 2px 6px 6px; }
   .app-frame .director-composer-actions .icon-button { position: relative; inline-size: 32px; block-size: 32px; display: grid; place-items: center; border: 0; background: transparent; }
@@ -297,20 +296,16 @@
   .app-frame .director-quick-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 14px; margin: 6px 4px 0; }
   .app-frame .director-quick-actions .text-button { display: inline-flex; align-items: center; gap: 5px; min-block-size: 26px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
   .app-frame .director-storage { margin: 0 0 0 auto; font-size: 11px; color: var(--text-muted); text-align: end; }
-  .app-frame .director-attachments { padding: 10px 4px 2px; }
 
   /* Details */
   .app-frame .editor-scroll { padding: 14px 16px 20px; scrollbar-width: thin; }
   .app-frame .editor-preview :is(.poster, .video-wrap) { border-radius: 14px; }
-  .app-frame .editor-title-row { display: none; }
-  .app-frame .editor-tabs { display: flex; margin-block: 16px 14px; }
-  .app-frame .editor-tabs button { flex: 1; padding-inline: 6px; font-size: 12.5px; }
   .app-frame .editor-footer { padding: 10px 14px 12px; background: var(--glass); backdrop-filter: blur(14px) saturate(160%); }
   .app-frame .editor-actions > .button { min-block-size: 36px; font-size: 13px; }
   .app-frame .field :is(input, textarea, select), .app-frame .title-input { border-radius: 10px; }
 
   /* Home (with a project): the same panel, centred, without item chrome */
-  .app-frame .editor-home :is(.editor-heading, .director-tabs, .director-job, .director-context-line) { display: none; }
+  .app-frame .editor-home :is(.editor-heading, .director-tabs, .director-job) { display: none; }
   .app-frame .editor-home.surface-dialog { background: transparent; }
   .app-frame .editor-home .director-composer-actions { justify-content: space-between; }
   @media (min-width: 1001px) {
@@ -326,7 +321,6 @@
     .app-frame .editor-home .director-compose-area { display: flex; flex-direction: column; padding: 0 8px; margin: 0; overflow: visible; max-block-size: none; }
     .app-frame .editor-home .director-composer { border-radius: 20px; padding: 4px; box-shadow: 0 1px 2px rgba(42,42,39,.04), 0 12px 40px rgba(42,42,39,.07); }
     .app-frame .editor-home .director-composer textarea { min-block-size: 64px; font-size: 16px; padding: 10px 14px 4px; }
-    .app-frame .editor-home .director-context-line { padding: 10px 14px 0; }
     .app-frame .editor-home .director-suggestions { justify-content: center; gap: 8px; margin: 18px 0 0; }
     .app-frame .editor-home .director-suggestions button { min-block-size: 36px; padding: 0 14px; font-size: 13px; }
     .app-frame .editor-home .director-quick-actions { justify-content: center; margin-block-start: 14px; gap: 4px 20px; }
@@ -546,36 +540,6 @@
     .app-frame .schedule-grant:hover { color: var(--ink); }
   }
 
-  /* ───────────── brand & sources ───────────── */
-  .brand-page { box-sizing: border-box; inline-size: 100%; max-inline-size: 880px; padding: 26px 24px 48px; }
-  .brand-head { display: flex; align-items: center; gap: 16px; }
-  .brand-monogram { flex: 0 0 auto; inline-size: 56px; block-size: 56px; display: grid; place-items: center; border-radius: 16px; background: var(--art-wash); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); font-size: 24px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
-  .brand-head h1 { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.025em; overflow-wrap: anywhere; }
-  .brand-head p { margin-block-start: 4px; max-inline-size: 64ch; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
-  .brand-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 24px; margin: 24px 0 0; padding: 14px 16px; border: 1px solid transparent; border-radius: 14px; background: var(--surface); box-shadow: var(--elev-1); }
-  .brand-facts dt { font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
-  .brand-facts dd { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
-  .brand-page section { margin-block-start: 32px; }
-  .brand-page h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; }
-  .brand-page h2 small { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 400; letter-spacing: 0; color: var(--text-secondary); }
-  .brand-rules { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 8px 12px; margin: 0; padding: 0; }
-  .brand-rules li { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px 11px 12px; border: 1px solid transparent; border-radius: 12px; background: var(--surface); box-shadow: var(--elev-1); font-size: 13.5px; line-height: 1.45; text-wrap: pretty; }
-  .brand-rules li > svg { flex: 0 0 auto; box-sizing: border-box; inline-size: 20px; block-size: 20px; padding: 3.5px; border-radius: 50%; background: var(--subtle); color: var(--ink); }
-  .source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; }
-  .source { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; padding: 16px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); }
-  .source-icon { grid-row: 1 / span 2; align-self: start; inline-size: 34px; block-size: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--subtle); color: var(--ink-secondary); }
-  .source h3 { align-self: end; margin: 0; font-size: 14px; font-weight: 550; line-height: 1.35; letter-spacing: -.01em; overflow-wrap: anywhere; }
-  .source p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
-  .source footer { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-block-start: 14px; }
-  .app-frame .source footer .button { min-block-size: 32px; padding-inline: 12px; gap: 6px; font-size: 13px; text-decoration: none; }
-  .source footer small { font-size: 12px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-  .brand-empty { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
-  .brand-empty-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; padding: 16px; border: 1px dashed var(--border); border-radius: 16px; }
-  .brand-empty-card strong { align-self: end; font-size: 14px; font-weight: 550; line-height: 1.35; }
-  .brand-empty-card p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
-  .brand-brief { margin: 0; max-inline-size: 70ch; font-size: 14px; line-height: 1.6; color: var(--ink-secondary); text-wrap: pretty; }
-  .brand-footnote { margin: 32px 0 0; padding-block-start: 16px; border-block-start: 1px solid var(--border); max-inline-size: 76ch; font-size: 12px; line-height: 1.6; color: var(--text-secondary); text-wrap: pretty; }
-
   /* Activity dialog: the edit count and a manual refresh live with the record they describe */
   .activity-summary { margin: 14px 0 0 40px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
@@ -641,7 +605,6 @@
     .campaign-meta > span + span::before { content: none; }
     .campaign-meta > span:last-child:not(:nth-child(-n+2)) { display: none; }
     .campaign-meta > .sample-chip { justify-self: start; margin: 0 0 2px; }
-    .source p { -webkit-line-clamp: 3; line-clamp: 3; }
     .app-frame .project-actions .button { min-block-size: 44px; }
     .app-frame .tools-toggle { inline-size: 44px; block-size: 44px; }
     .app-frame .canvas { padding: 4px 16px 32px; }
@@ -660,10 +623,6 @@
     .app-frame .schedule-empty-actions .button { flex: 1 1 140px; min-block-size: 44px; }
     .app-frame .schedule-untimed .text-button, .app-frame .job-cancel { min-block-size: 44px; }
     .timeline-time { padding-block: 4px; }
-    .brand-page { padding: 20px 16px 40px; }
-    .brand-monogram { inline-size: 48px; block-size: 48px; border-radius: 14px; font-size: 21px; }
-    .brand-head h1 { font-size: 23px; }
-    .app-frame .source footer .button { min-block-size: 44px; }
   }
   @media (prefers-reduced-motion: no-preference) {
     .day-card { animation: fade-in 220ms ease calc(var(--i, 0) * 40ms) both; }
@@ -672,7 +631,7 @@
     .day-title:hover > svg { transform: none; }
   }
   @media (prefers-contrast: more) {
-    .app-frame :is(.content-select, .day-card, .source, .brand-rules li, .brand-facts) { box-shadow: 0 0 0 1px var(--ink); }
+    .app-frame :is(.content-select, .day-card) { box-shadow: 0 0 0 1px var(--ink); }
   }
 }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }

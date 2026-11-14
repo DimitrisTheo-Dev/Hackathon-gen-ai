@@ -787,8 +787,8 @@ export function Studio({
               </select>
             </div>
           )}
-          <button className="search-box" onClick={() => setCommandOpen(true)} aria-label="Search projects and content" title="Search">
-            <Search size={16} /><span>Search</span><kbd>⌘K</kbd>
+          <button className="search-box" onClick={() => setCommandOpen(true)} aria-label="Search projects and content" aria-keyshortcuts="Meta+K Control+K" title="Search">
+            <Search size={16} /><span>Search</span><kbd aria-hidden="true" data-keys="⌘K" />
           </button>
           <nav aria-label="Studio" className="sidebar-nav">
             <button className={view==="home"?"active":""} aria-current={view==="home"?"page":undefined} title="Create" onClick={()=>go("home")}><Sparkles size={16}/><span>Create</span></button>
@@ -843,7 +843,7 @@ export function Studio({
           <header className="topbar">
             <div className="breadcrumbs">
               <button className="icon-button mobile-menu" aria-label="Toggle navigation" aria-expanded={sidebar} onClick={() => setSidebar(!sidebar)}><Menu size={18} /></button>
-              <button className="mobile-project-switch" onClick={() => setSidebar(true)} aria-label="Switch project"><span>{campaign ? shownTitle(campaign) : "Your projects"}</span><ChevronDown size={15}/></button>
+              <button className="mobile-project-switch" onClick={() => setSidebar(true)} aria-haspopup="dialog"><span>{campaign ? shownTitle(campaign) : "Your projects"}</span><span className="sr-only">, switch project</span><ChevronDown size={15} aria-hidden="true"/></button>
               {/* A project's title lives once, in its own header below; other pages are named here. */}
               {!inProject && <strong>{view === "connect" ? "Agents" : view === "brand" ? "Brand kit" : view === "billing" ? "Billing" : view === "schedule" ? "Schedule" : view === "home" ? "Create" : "Projects"}</strong>}
             </div>
@@ -1036,9 +1036,11 @@ export function Studio({
                               className="content-select"
                               onClick={(e) => select(i, e)}
                               aria-pressed={isSelected}
-                              aria-label={`Edit ${i.title}`}
+                              // Named by its visible title; state, video and time are read as its description.
+                              aria-label={`Edit ${previewItem.title}`}
+                              aria-describedby={`card-${i.id}-state${i.media ? ` card-${i.id}-video` : ""} card-${i.id}-time`}
                             >
-                              <div className="card-preview">
+                              <div className="card-preview" aria-hidden="true">
                                 <Preview
                                   item={previewItem}
                                   index={index}
@@ -1046,9 +1048,9 @@ export function Studio({
                                   brandName={brandName}
                                 />
                                 {/* The engine's state for this draft. While work is in flight the pill above already says so. */}
-                                <span className="card-state">{!live && <span className={`status-pill tone-${badge.tone}`}><i aria-hidden="true" />{badge.label}</span>}</span>
+                                <span className="card-state" id={`card-${i.id}-state`}>{!live && <span className={`status-pill tone-${badge.tone}`}><i aria-hidden="true" />{badge.label}</span>}</span>
                                 {i.media && (
-                                  <span className="has-video-badge">
+                                  <span className="has-video-badge" id={`card-${i.id}-video`}>
                                     <Video size={13} />
                                     Video available
                                   </span>
@@ -1056,7 +1058,7 @@ export function Studio({
                               </div>
                               <h2>{previewItem.title}</h2>
                               {/* One time line: the requested time, or when the draft last changed if none is set. */}
-                              <p className="card-time">{badge.tone === "failed" ? "Render failed · open to retry" : i.targets[0] ? dateLabel(i.targets[0].scheduledAt, campaign.timezone) : `Edited ${timeAgo(i.updatedAt, now)}`}</p>
+                              <p className="card-time" id={`card-${i.id}-time`} aria-hidden="true">{badge.tone === "failed" ? "Render failed · open to retry" : i.targets[0] ? dateLabel(i.targets[0].scheduledAt, campaign.timezone) : `Edited ${timeAgo(i.updatedAt, now)}`}</p>
                             </button>
                           </article>
                         );

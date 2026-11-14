@@ -95,10 +95,13 @@
    nothing beside it to push: it grows and shrinks evenly about the middle of the page. Every line has
    a fixed height and never wraps by itself, so no name (and no late web font) can move the next one. */
 .landing-question { display: grid; justify-items: center; }
-.landing-question-opening, .landing-question-outcome { display: block; white-space: nowrap; }
+/* Each text line is exactly one line-height tall. Safari otherwise sizes a line box from the drawing font's
+   rounded ascent and descent, so the fallback and the web font would differ by a fraction of a pixel. */
+.landing-question-opening, .landing-question-outcome { display: block; height: 1lh; white-space: nowrap; }
 .landing-question-agent { display: flex; align-items: center; justify-content: center; justify-self: stretch; height: 1.34em; margin: .18em 0 .15em; }
 @container (max-width: 700px) {
-  .landing-question-outcome > span { display: block; }
+  .landing-question-outcome { height: auto; }
+  .landing-question-outcome > span { display: block; height: 1lh; }
 }
 /* The chip. Its box is an invisible in-flow copy of the current name, which is what it looks like before
    JavaScript runs. Once the names are measured, the surface is drawn at the widest name's width and cut
@@ -137,7 +140,8 @@
 .landing-demo { position: relative; margin: 0; }
 /* Sunlit art, blurred into a glow: the light the window sits in front of. */
 /* Two passes of the same art: a wide, faint bloom that warms the page, and a tighter one that hugs the window edge. */
-.landing-demo-aura { position: absolute; z-index: -1; inset: -30px -12px 26px; border-radius: 44px; background: var(--art-image, url('/art/grainient-sunlit.webp')) center / cover; filter: blur(20px) saturate(1.06); opacity: .74; pointer-events: none; will-change: transform; }
+/* The glow is the inline low-entropy copy of the art (see --art-glow in design.css): the headline stays the largest paint. */
+.landing-demo-aura { position: absolute; z-index: -1; inset: -30px -12px 26px; border-radius: 44px; background: var(--art-glow) center / cover; filter: blur(20px) saturate(1.06); opacity: .74; pointer-events: none; will-change: transform; }
 .landing-demo-aura::before { content: ""; position: absolute; inset: -14px -40px -30px; border-radius: 90px; background: inherit; filter: blur(44px); opacity: .42; }
 .landing-demo-frame { position: relative; background: var(--l-surface); border: 1px solid #d9d6cc; border-radius: 18px; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 1px 2px rgba(42, 42, 39, .06), 0 14px 30px -14px rgba(42, 42, 39, .22), 0 44px 90px -40px rgba(42, 42, 39, .34); transform-origin: 50% 0; }
 /* Where the browser can tie motion to scrolling, the window tips up to meet the reader, then rests flat and sharp. */
@@ -150,7 +154,7 @@
 .landing-demo-titlebar { height: 38px; padding: 0 14px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; background: #f4f3ee; border-bottom: 1px solid var(--l-border); color: var(--l-text-2); font-size: 11px; }
 .landing-window-controls { display: flex; gap: 6px; }
 .landing-window-controls i { display: block; height: 9px; width: 9px; border-radius: 50%; border: 1px solid #d0cec5; background: #e4e2da; }
-.landing-demo-address { padding: 3px 14px; border-radius: 999px; background: #ebe9e2; font-variant-numeric: tabular-nums; }
+.landing-demo-address { padding: 3px 14px; border-radius: 999px; background: #ebe9e2; color: #66645e; font-variant-numeric: tabular-nums; }
 .landing-demo-badge { justify-self: end; padding: 2px 8px; border: 1px solid #d5d2c8; border-radius: 999px; white-space: nowrap; }
 .landing-demo > figcaption { max-width: 640px; margin: 18px auto 0; text-align: center; font-size: 12.5px; line-height: 1.5; color: var(--l-ink-2); text-wrap: balance; }
 .landing-demo-hold { position: absolute; right: 14px; bottom: 44px; z-index: 3; min-height: 44px; padding: 8px 14px; border: 1px solid var(--l-border); border-radius: 999px; background: var(--l-surface); font-size: 12px; cursor: pointer; opacity: 0; pointer-events: none; }
@@ -170,8 +174,8 @@
 .fd-wordmark .landing-mark i { width: .2em; height: .76em; border-radius: .12em; }
 .fd-wordmark .landing-mark i:nth-child(2) { height: 1.06em; }
 .fd-wordmark .landing-mark i:nth-child(3) { height: .56em; }
-.fd-search { display: flex; align-items: center; gap: .55em; margin-bottom: .7em; padding: .62em .7em; border: 1px solid #e0ded5; border-radius: .75em; background: #eae8e1; color: #77746d; font-size: .9em; }
-.fd-search kbd { margin-left: auto; font-size: .86em; opacity: .8; }
+.fd-search { display: flex; align-items: center; gap: .55em; margin-bottom: .7em; padding: .62em .7em; border: 1px solid #e0ded5; border-radius: .75em; background: #eae8e1; color: #66645e; font-size: .9em; }
+.fd-search kbd { margin-left: auto; font-size: .86em; color: inherit; }
 .fd-nav, .fd-project { display: flex; align-items: center; gap: .65em; padding: .58em .7em; border-radius: .7em; font-size: .95em; color: var(--l-ink-2); transition: background-color 260ms ease, color 260ms ease; }
 .fd-nav b, .fd-project b { margin-left: auto; font-size: .85em; font-weight: 500; color: var(--l-text-2); font-variant-numeric: tabular-nums; }
 .fd-nav.is-active { background: #e3e1d9; color: var(--l-ink); }
@@ -353,9 +357,10 @@
 .fd.is-docked .fd-composer { transform: translate(28em, 19.57em) scale(.6444); box-shadow: 0 .1em .3em rgba(42, 42, 39, .06); }
 .fd-composer-field { position: absolute; inset: 1.15em 1.4em 3.7em; display: grid; font-size: 1.4em; line-height: 1.36; }
 .fd-composer-field > span { grid-area: 1 / 1; transition: opacity 180ms ease-out; }
-.fd-composer-placeholder { color: var(--l-text-2); opacity: 0; }
+/* The placeholder is written in, left to right, rather than faded: it is never drawn at partial strength. */
+.fd-composer-placeholder { color: var(--l-text-2); clip-path: inset(0 100% 0 0); transition: none; }
 .fd.is-docked .fd-composer-typed { opacity: 0; }
-.fd.is-docked .fd-composer-placeholder { opacity: 1; transition-delay: 260ms; }
+.fd.is-docked .fd-composer-placeholder { clip-path: inset(0); transition: clip-path 420ms var(--l-ease-out) 260ms; }
 .fd-caret { display: inline-block; width: .08em; height: 1.05em; margin-left: .06em; vertical-align: -.16em; background: var(--l-ink); animation: fd-caret 1s steps(1) infinite; }
 @keyframes fd-caret { 50% { opacity: 0; } }
 .fd-composer-bar { position: absolute; inset: auto 1.1em .95em 1.2em; display: flex; align-items: center; gap: .8em; color: var(--l-text-2); }

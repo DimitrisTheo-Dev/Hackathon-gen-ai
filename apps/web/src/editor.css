@@ -166,9 +166,6 @@
 .director-panel.is-docked .director-composer select { appearance: none; flex: 0 1 auto; inline-size: auto; max-inline-size: 46%; min-inline-size: 0; block-size: 28px; margin: 0 2px; field-sizing: content; padding: 0 24px 0 10px; border: 0; border-radius: 999px; background: rgba(42,42,39,.055) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236E6C66' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center; color: var(--ink-secondary); font-size: 12px; font-weight: 500; line-height: 28px; text-overflow: ellipsis; cursor: pointer; transition: background-color 160ms ease; }
 .director-tool { display: inline-flex; align-items: center; gap: 5px; flex: 0 1 auto; min-inline-size: 0; overflow: hidden; block-size: 28px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap; transition: background-color 160ms ease, color 160ms ease, transform 120ms var(--ease-out); }
 .director-panel.is-docked .director-send { margin-inline-start: auto; }
-.director-panel.is-docked .director-attachments { padding: 8px 6px 0; font-size: 12.5px; }
-.director-panel.is-docked .director-attachments label { min-block-size: 34px; }
-.director-panel.is-docked .director-attachments small { font-size: 11.5px; color: var(--text-secondary); }
 .director-panel.is-docked .director-sync { margin: 0 4px; padding-block-end: 8px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
 /* One quiet line: what the chat can't do here, and where the conversation is kept. */
 .director-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; min-block-size: 18px; margin: 7px 6px 0; }
@@ -180,7 +177,6 @@
 .director-panel .director-exact-edit textarea { box-sizing: border-box; padding: 11px 12px; border-radius: 14px; line-height: 1.55; min-block-size: 108px; max-block-size: 34dvh; field-sizing: content; resize: none; }
 .director-panel .director-exact-edit > div { align-items: center; margin-block-start: 10px; }
 .director-panel .director-exact-edit .button { min-block-size: 36px; padding-inline: 14px; font-size: 13px; }
-.director-panel.is-home .director-availability { text-wrap: balance; }
 
 /* ───────────── New campaign: three short steps with a live draft beside them ───────────── */
 .surface-dialog.modal:has(.create-flow) { inline-size: min(940px, calc(100% - 32px)); block-size: min(700px, calc(100dvh - 48px)); }
@@ -341,7 +337,6 @@
   .director-context-body { font-size: 14px; }
   .director-panel.is-docked .director-composer select { block-size: 40px; padding-inline: 12px 28px; font-size: 16px; line-height: 40px; }
   .director-tool { block-size: 40px; padding-inline: 10px; font-size: 14px; }
-  .director-panel.is-docked .director-attachments label { min-block-size: 44px; }
   .director-panel .director-exact-edit textarea { font-size: 16px; }
   .director-panel .director-exact-edit .button, .director-panel .director-exact-edit .text-button { min-block-size: 44px; font-size: 15px; }
 }

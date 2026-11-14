@@ -2,14 +2,17 @@ import { test, expect, chromium, webkit, type Page } from '@playwright/test';
 
 // Override to run beside another session's server: FACEFUL_E2E_ORIGIN=http://127.0.0.1:4573
 const origin = process.env.FACEFUL_E2E_ORIGIN ?? 'http://127.0.0.1:4173';
-const evidence = 'docs/demo/evidence/creative-director';
+import { evidence } from './support/evidence';
 async function cleanConsole(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   return errors;
 }
 
-for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native navigation, draft preservation, rollback, history and review`, async () => {
+for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native navigation, draft preservation, rollback, history and review`, async ({browserName}) => {
+  // It launches its own phone browser, so in a multi-engine run it runs once, from the Chromium project.
+  // Firefox has no mobile emulation (isMobile); its phone-width layout is covered by the viewport tests below.
+  test.skip(browserName !== 'chromium', 'Launches its own Chromium and WebKit phones; runs once, from the Chromium project.');
   const browser = await engine.launch();
   const context = await browser.newContext({ viewport: {width:390,height:844}, isMobile:true, hasTouch:true, reducedMotion:'reduce' });
   const page = await context.newPage(); const errors = await cleanConsole(page);
@@ -26,7 +29,7 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
 
     await page.goto(`${origin}/dev/studio/?view=canvas`);
     await expect(page.locator('.content-card')).toHaveCount(3);
-    await page.screenshot({path:`${evidence}/${engine.name()}-phone-initial.png`});
+    await page.screenshot({path:evidence(`${engine.name()}-phone-initial.png`)});
     // Search, filter and sort only exist once a project has more than six drafts.
     await expect(page.getByRole('button',{name:'Filter and sort content'})).toHaveCount(0);
     await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);const items=state.campaigns[0].items;for(let n=4;n<=7;n++)items.push({...structuredClone(items[0]),id:`fixture-extra-${n}`,title:`Extra draft ${n}`});localStorage.setItem(key,JSON.stringify(state));});
@@ -36,10 +39,10 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     await expect(page.getByRole('heading',{name:'No matching content'})).toBeVisible();
     await page.getByRole('button',{name:'Clear search'}).click();
     await page.getByRole('button',{name:'Filter and sort content'}).click();
-    await page.getByRole('button',{name:'Switch project',exact:true}).click();
+    await page.getByRole('button',{name:/switch project$/}).click();
     const projects = page.getByRole('dialog',{name:'Your projects'});
     await expect(projects).toBeVisible();
-    await page.screenshot({path:`${evidence}/${engine.name()}-projects.png`});
+    await page.screenshot({path:evidence(`${engine.name()}-projects.png`)});
     await page.goBack(); await expect(projects).toHaveCount(0);
     await page.locator('.content-select').first().click();
     const editor = page.getByRole('dialog',{name:'Content editor'});
@@ -65,7 +68,7 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     await expect(editor.getByRole('alert')).toContainText('could not be saved');
     await expect(page.locator('.save-state')).toContainText('Unsaved changes');
     await expect(page.locator('.content-card').first().locator('h2')).toHaveText('Find your next moment');
-    await page.screenshot({path:`${evidence}/${engine.name()}-save-error.png`});
+    await page.screenshot({path:evidence(`${engine.name()}-save-error.png`)});
     await page.evaluate(()=>(window as unknown as {restoreStorage:()=>void}).restoreStorage());
     await page.getByRole('button',{name:'Save changes',exact:true}).click();
     await expect(page.locator('.save-state')).toContainText('version 2');
@@ -89,7 +92,8 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
   } finally { await context.close(); await browser.close(); }
 });
 
-test('Chromium synthesized touch: sheet tracks, reverses, dismisses, restores focus; content scroll stays native', async ({browser}) => {
+test('Chromium synthesized touch: sheet tracks, reverses, dismisses, restores focus; content scroll stays native', async ({browser, browserName}) => {
+  test.skip(browserName !== 'chromium', 'Synthesizes touch through the Chromium DevTools Protocol (Input.dispatchTouchEvent), which WebKit and Firefox do not expose.');
   const context = await browser.newContext({viewport:{width:390,height:844}, isMobile:true, hasTouch:true, reducedMotion:'no-preference'});
   const page = await context.newPage(); const errors = await cleanConsole(page);
   const session = await context.newCDPSession(page);
@@ -115,7 +119,7 @@ test('Chromium synthesized touch: sheet tracks, reverses, dismisses, restores fo
     await expect(editor).toHaveCount(0);
     await expect(page.locator('.content-select').first()).toBeFocused();
     // A bottom sheet follows the same handle gesture and restores the native page lock.
-    await page.getByRole('button',{name:'Switch project',exact:true}).click();
+    await page.getByRole('button',{name:/switch project$/}).click();
     const sheet=page.getByRole('dialog',{name:'Your projects'});
     await expect.poll(()=>sheet.evaluate(el=>getComputedStyle(el).transform)).toBe('matrix(1, 0, 0, 1, 0, 0)');
     const grip=await sheet.locator('.sheet-grip').boundingBox();
@@ -126,7 +130,7 @@ test('Chromium synthesized touch: sheet tracks, reverses, dismisses, restores fo
   } finally { await context.close(); }
 });
 
-test('phone loading, empty, failed workspace and expired media are explicit and usable',async({page})=>{
+test('phone loading, empty, failed workspace and expired media are explicit and usable',async({page,browserName})=>{
   await page.setViewportSize({width:375,height:812});
   let release!:()=>void;
   const paused=new Promise<void>(resolve=>release=resolve);
@@ -135,22 +139,23 @@ test('phone loading, empty, failed workspace and expired media are explicit and 
   // One loading visual: the skeleton of the studio shell, already in the static page. No sentence screen.
   await expect(page.getByRole('status',{name:'Opening your studio'})).toBeVisible();
   await expect(page.locator('.boot-shell')).toBeVisible();await expect(page.locator('.loading-page')).toHaveCount(0);
-  await page.screenshot({path:`${evidence}/loading-375.png`});
+  // Playwright's WebKit screenshot waits for every intercepted request, so the held state is asserted there, not captured.
+  if(browserName!=='webkit')await page.screenshot({path:evidence(`loading-375.png`)});
   release();await expect(page.locator('.content-card')).toHaveCount(3);
   await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);state.campaigns[0].items[0].media={id:'expired-media',url:'https://example.com/expired.mp4',expiresAt:'2020-01-01T00:00:00.000Z',sha256:'example',revision:1,durationSeconds:20,hasAudio:true};localStorage.setItem(key,JSON.stringify(state));});
   await page.reload();await page.locator('.content-select').first().click();
   await expect(page.getByRole('dialog',{name:'Content editor'})).toContainText('Preview expired');
-  await page.screenshot({path:`${evidence}/expired-preview-375.png`});
+  await page.screenshot({path:evidence(`expired-preview-375.png`)});
   await page.getByRole('button',{name:'Return to campaign'}).click();
   await page.evaluate(()=>localStorage.setItem('castroom-development-v1',JSON.stringify({version:1,campaigns:[],operations:{}})));
   await page.reload();await page.getByRole('navigation',{name:'Workspace shortcuts'}).getByRole('button',{name:'Canvas',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Your first campaign belongs here.'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Create a campaign',exact:true})).toBeVisible();
-  await page.screenshot({path:`${evidence}/empty-375.png`});
+  await page.screenshot({path:evidence(`empty-375.png`)});
   await page.evaluate(()=>localStorage.setItem('castroom-development-v1','invalid'));await page.reload();
   await expect(page.getByRole('heading',{name:'We couldn’t open your workspace.'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Try again'})).toBeVisible();
-  await page.screenshot({path:`${evidence}/workspace-error-375.png`});
+  await page.screenshot({path:evidence(`workspace-error-375.png`)});
 });
 
 test('mobile project selection rolls back when the refreshed project is unavailable',async({page})=>{
@@ -164,7 +169,7 @@ test('mobile project selection rolls back when the refreshed project is unavaila
   });
   await page.reload();await expect(page.locator('.content-card')).toHaveCount(3);
   await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);state.campaigns=state.campaigns.filter((c:{id:string})=>c.id!=='fixture-second');localStorage.setItem(key,JSON.stringify(state));});
-  await page.getByRole('button',{name:'Switch project',exact:true}).click();
+  await page.getByRole('button',{name:/switch project$/}).click();
   await page.getByRole('dialog',{name:'Your projects'}).getByRole('button',{name:/A second project/}).click();
   await expect(page.getByRole('heading',{name:'A week of BeWell',exact:true})).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('was not found');

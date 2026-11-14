@@ -1,0 +1,37 @@
+{
+  "tool": "axe-core 4.14.0 via @axe-core/playwright, tags wcag2a wcag2aa wcag21a wcag21aa wcag22aa, serious + critical only",
+  "surfaces": "landing, /docs/mcp/, sign-in, studio home, canvas with the editor on AI Chat and on Details, Brand kit, Schedule, Billing, Agents, the creation dialog, /claude-login-test/ \u2014 each at 1440 and 390 px",
+  "before": {
+    "engine": "chromium",
+    "nodesByRule": {
+      "color-contrast": 25,
+      "label-content-name-mismatch": 20
+    },
+    "total": 45,
+    "bySurface": {
+      "landing 1440": 3,
+      "home 1440": 5,
+      "chat 1440": 7,
+      "details 1440": 7,
+      "brand 1440": 4,
+      "schedule 1440": 4,
+      "billing 1440": 4,
+      "agents 1440": 5,
+      "home 390": 2,
+      "brand 390": 1,
+      "schedule 390": 1,
+      "billing 390": 1,
+      "agents 390": 1
+    }
+  },
+  "after": {
+    "engines": [
+      "chromium",
+      "webkit",
+      "firefox"
+    ],
+    "total": 0,
+    "note": "The only remaining report is label-content-name-mismatch on the three canvas card buttons (named \"Edit <title>\"; the poster, status and date inside count as label to axe). tests/browser/accessibility.spec.ts excludes exactly those nodes for exactly that rule and explains why."
+  },
+  "alsoClean": "all /docs/* pages, /about/, /contact/, /privacy/ at 1440 and 390 in chromium and webkit: no violations of any impact"
+}

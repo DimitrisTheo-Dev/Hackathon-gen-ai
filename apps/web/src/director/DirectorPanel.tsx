@@ -220,7 +220,7 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
           </div>
           {!entries.length&&<div className="director-suggestions home-chips">{starters.map((prompt,index)=>{const Icon=starterIcon[prompt];return <button key={prompt} style={{'--i':index} as CSSProperties} onClick={()=>suggest(prompt)}>{Icon&&<Icon size={15} aria-hidden="true"/>}<span>{prompt}</span></button>;})}</div>}
           <div className="director-quick-actions"><button className="text-button" onClick={onCreate}><PenLine size={13} aria-hidden="true"/>Create with my own script</button></div>
-          {!entries.length&&campaign.items.length>0&&<button type="button" className="home-continue" aria-label={`Open ${campaign.title}, ${count(campaign.items.length,'draft')}`} onClick={onShowContent}>
+          {!entries.length&&campaign.items.length>0&&<button type="button" className="home-continue" onClick={onShowContent}>
             <span className="home-continue-thumbs" aria-hidden="true">{campaign.items.slice(0,3).map((other,index)=><span key={other.id}><Preview item={other} index={index} compact passive brandName={brand}/></span>)}</span>
             <span className="home-continue-text"><small>Pick up where you left off</small><strong>{campaign.title}</strong><span>{count(campaign.items.length,'draft')}</span></span>
             <ArrowRight size={16} aria-hidden="true"/>

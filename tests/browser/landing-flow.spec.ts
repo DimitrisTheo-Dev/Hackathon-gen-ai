@@ -135,6 +135,8 @@ test('the agent name rotates quickly through every client, each with its own mar
   await expect(current).toHaveText(turn(AGENTS.length + 2));
   // A pause exists for anyone who needs it, out of sight until hover or keyboard focus.
   const pause = page.getByRole('button', { name: 'Pause agent rotation' });
+  // The press left the pointer over the headline, which is a hover that shows the control (WebKit applies it at once).
+  await page.mouse.move(1, 1);
   await expect(pause).toHaveCSS('opacity', '0');
   await pause.focus();
   await expect(pause).toHaveCSS('opacity', '1');
@@ -180,10 +182,12 @@ for (const width of [1440, 768, 390, 320]) {
       const r = document.querySelector(selector)!.getBoundingClientRect();
       return `${selector} y ${r.y} h ${r.height}`;
     }));
-    expect(await page.evaluate(() => document.fonts.check('500 20px InterVariable'))).toBe(false);
+    // Read the face's own status: WebKit's fonts.check() answers true for a face it has given up waiting on.
+    const interLoaded = () => [...document.fonts].some((face) => face.family.replace(/"/g, '') === 'InterVariable' && face.status === 'loaded');
+    expect(await page.evaluate(interLoaded)).toBe(false);
     const before = await blocks();
     release();
-    await page.waitForFunction(() => document.fonts.check('500 20px InterVariable'));
+    await page.waitForFunction(interLoaded);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(400);
     expect(await blocks()).toEqual(before);
@@ -268,15 +272,16 @@ test('the demo plays by itself, tells the studio story in order, loops, and hold
   await expect(demo).toHaveAttribute('data-playing', 'false');
 });
 
-test('the Codex setup command is real text that copies exactly', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('the Codex setup command is real text that copies exactly', async ({ page, context, browserName }) => {
+  // Only Chromium lets a test grant clipboard read; elsewhere the copy is checked by its confirmation.
+  if (browserName === 'chromium') await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
   const agents = page.locator('#agents');
   await expect(agents.locator('pre')).toContainText(COMMAND);
   await expect(agents).toContainText(TESTED_NOTE);
   await agents.getByRole('button', { name: 'Copy the Codex setup command' }).click();
   await expect(agents.getByRole('button', { name: 'Copy the Codex setup command' })).toContainText('Copied');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(COMMAND);
+  if (browserName === 'chromium') expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(COMMAND);
   await expect(agents.getByRole('link', { name: 'Agent setup guide' })).toHaveAttribute('href', '/docs/mcp/');
 });
 

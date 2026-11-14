@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { evidence } from './support/evidence';
 
 test('landing is useful without JavaScript and exposes genuine discovery metadata', async ({ browser, request }) => {
   const context = await browser.newContext({javaScriptEnabled:false});const page=await context.newPage();
@@ -76,14 +77,14 @@ for(const width of [1440,1280,1024,768,430,390,375,320]) test(`responsive ${widt
   await page.setViewportSize({width,height:900});await page.goto('/');await page.evaluate(()=>document.fonts.ready);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(await page.evaluate(()=>document.fonts.check('500 16px InterVariable'))).toBe(true);
-  await page.screenshot({path:`docs/demo/evidence/creative-director/landing-${width}.png`,fullPage:width===390});
+  await page.screenshot({path:evidence(`landing-${width}.png`),fullPage:width===390});
   await page.goto('/dev/studio/?view=canvas');await expect(page.locator('.content-card')).toHaveCount(3);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if(width<=1220 && width>1000) await page.getByRole('button',{name:'Return to campaign'}).click();
-  if(width<=1220){await page.getByRole('button',{name:width<=760?'Switch project':'Toggle navigation',exact:true}).click();await expect(page.getByRole('dialog',{name:'Your projects'}).getByRole('navigation',{name:'Projects',exact:true})).toBeVisible();await page.keyboard.press('Escape');}
+  if(width<=1220){await page.getByRole('button',{name:width<=760?/switch project$/:'Toggle navigation',exact:true}).click();await expect(page.getByRole('dialog',{name:'Your projects'}).getByRole('navigation',{name:'Projects',exact:true})).toBeVisible();await page.keyboard.press('Escape');}
   await page.locator('.content-select').first().click();await page.getByRole('button',{name:'Details',exact:true}).click();await expect(page.locator('#script')).toBeVisible();
   if(width<=1000){await expect(page.getByRole('dialog',{name:'Content editor',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Return to campaign'})).toBeVisible();}
-  await page.screenshot({path:`docs/demo/evidence/creative-director/editor-${width}.png`});
-  await page.getByRole('button',{name:'Return to campaign'}).click();await page.screenshot({path:`docs/demo/evidence/creative-director/canvas-${width}.png`});
+  await page.screenshot({path:evidence(`editor-${width}.png`)});
+  await page.getByRole('button',{name:'Return to campaign'}).click();await page.screenshot({path:evidence(`canvas-${width}.png`)});
 });
 
 test('long content, scroll ownership and keyboard shortcuts remain usable at 200% equivalent reflow',async({page})=>{
@@ -97,5 +98,5 @@ test('long content, scroll ownership and keyboard shortcuts remain usable at 200
   expect(geometry.overflow).toBeLessThanOrEqual(1);
   // Nothing has been rendered, scheduled or published, so the header states no counts for them.
   await expect(page.locator('.campaign-meta')).toContainText('3 drafts');await expect(page.locator('.campaign-meta')).not.toContainText(/ready|scheduled|published/);await expect(page.locator('.run-summary')).toHaveCount(0);
-  await page.locator('.workspace-main').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.content-card').last()).toBeInViewport();await page.screenshot({path:'docs/demo/evidence/creative-director/mobile-scroll-end.png'});
+  await page.locator('.workspace-main').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.content-card').last()).toBeInViewport();await page.screenshot({path:evidence('mobile-scroll-end.png')});
 });

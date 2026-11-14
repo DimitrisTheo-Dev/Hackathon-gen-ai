@@ -1,0 +1,304 @@
+{
+  "tool": "lighthouse 13.6.0, headless Chrome for Testing (Playwright chromium-1255); default run = mobile (simulated slow 4G, 4x CPU), --preset=desktop for desktop",
+  "build": "private build of this branch with CASTROOM_ENABLE_FIXTURES=true, prerendered by scripts/prerender.ts",
+  "servers": {
+    "local": "scripts/serve-built.ts as is: no compression and no cache headers, so transfer sizes are 3-4x production",
+    "production-like": "same build behind a measurement-only server with brotli and immutable /assets, shaped like the Vercel deployment"
+  },
+  "before": "tonight's branch before the performance change (the aura behind the landing demo loaded the full art image and was the largest paint)",
+  "after": "with the inline 312-byte low-entropy art (--art-glow) for the blurred washes; the headline / chip text is now the largest paint",
+  "runs": {
+    "production-like": {
+      "landing-desktop": {
+        "after": {
+          "scores": {
+            "performance": 100,
+            "accessibility": 96,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 492,
+            "LCP_ms": 492,
+            "TBT_ms": 0,
+            "CLS": 0.001,
+            "SpeedIndex_ms": 515
+          },
+          "lcpElement": null
+        },
+        "before": {
+          "scores": {
+            "performance": 97,
+            "accessibility": 96,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 521,
+            "LCP_ms": 1201,
+            "TBT_ms": 0,
+            "CLS": 0.001,
+            "SpeedIndex_ms": 586
+          },
+          "lcpElement": "main > div.landing-wide > figure.landing-demo > span.landing-demo-aura"
+        }
+      },
+      "landing-mobile": {
+        "after": {
+          "scores": {
+            "performance": 100,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 1051,
+            "LCP_ms": 1051,
+            "TBT_ms": 2,
+            "CLS": 0.003,
+            "SpeedIndex_ms": 1051
+          },
+          "lcpElement": "span.landing-agent-chip > span.landing-agent-material > span.landing-agent-face > span.landing-agent-name"
+        },
+        "before": {
+          "scores": {
+            "performance": 90,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 1052,
+            "LCP_ms": 3677,
+            "TBT_ms": 4,
+            "CLS": 0.003,
+            "SpeedIndex_ms": 1052
+          },
+          "lcpElement": "main > div.landing-wide > figure.landing-demo > span.landing-demo-aura"
+        }
+      },
+      "studio-desktop": {
+        "after": {
+          "scores": {
+            "performance": 99,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 377,
+            "LCP_ms": 895,
+            "TBT_ms": 0,
+            "CLS": 0,
+            "SpeedIndex_ms": 426
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        },
+        "before": {
+          "scores": {
+            "performance": 99,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 390,
+            "LCP_ms": 908,
+            "TBT_ms": 0,
+            "CLS": 0,
+            "SpeedIndex_ms": 486
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        }
+      },
+      "studio-mobile": {
+        "after": {
+          "scores": {
+            "performance": 84,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 1051,
+            "LCP_ms": 4501,
+            "TBT_ms": 0,
+            "CLS": 0,
+            "SpeedIndex_ms": 1095
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        },
+        "before": {
+          "scores": {
+            "performance": 84,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 1202,
+            "LCP_ms": 4502,
+            "TBT_ms": 1,
+            "CLS": 0,
+            "SpeedIndex_ms": 1423
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        }
+      }
+    },
+    "local": {
+      "landing-desktop": {
+        "after": {
+          "scores": {
+            "performance": 98,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 694,
+            "LCP_ms": 1062,
+            "TBT_ms": 0,
+            "CLS": 0.001,
+            "SpeedIndex_ms": 694
+          },
+          "lcpElement": "span.landing-agent-chip > span.landing-agent-material > span.landing-agent-face > span.landing-agent-name"
+        },
+        "before": {
+          "scores": {
+            "performance": 93,
+            "accessibility": 96,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 485,
+            "LCP_ms": 1105,
+            "TBT_ms": 159,
+            "CLS": 0.001,
+            "SpeedIndex_ms": 1437
+          },
+          "lcpElement": "main > div.landing-wide > figure.landing-demo > span.landing-demo-aura"
+        }
+      },
+      "landing-mobile": {
+        "after": {
+          "scores": {
+            "performance": 98,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 1951,
+            "LCP_ms": 1951,
+            "TBT_ms": 0,
+            "CLS": 0.003,
+            "SpeedIndex_ms": 1951
+          },
+          "lcpElement": "span.landing-agent-chip > span.landing-agent-material > span.landing-agent-face > span.landing-agent-name"
+        },
+        "before": {
+          "scores": {
+            "performance": 77,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 2102,
+            "LCP_ms": 5702,
+            "TBT_ms": 38,
+            "CLS": 0.003,
+            "SpeedIndex_ms": 2599
+          },
+          "lcpElement": "main > div.landing-wide > figure.landing-demo > span.landing-demo-aura"
+        }
+      },
+      "studio-desktop": {
+        "after": {
+          "scores": {
+            "performance": 95,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 603,
+            "LCP_ms": 1537,
+            "TBT_ms": 0,
+            "CLS": 0,
+            "SpeedIndex_ms": 707
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        },
+        "before": {
+          "scores": {
+            "performance": 94,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 645,
+            "LCP_ms": 1620,
+            "TBT_ms": 0,
+            "CLS": 0,
+            "SpeedIndex_ms": 856
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        }
+      },
+      "studio-mobile": {
+        "after": {
+          "scores": {
+            "performance": 74,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 1801,
+            "LCP_ms": 8768,
+            "TBT_ms": 0,
+            "CLS": 0,
+            "SpeedIndex_ms": 1801
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        },
+        "before": {
+          "scores": {
+            "performance": 73,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 63,
+            "agentic-browsing": 100
+          },
+          "metrics": {
+            "FCP_ms": 1801,
+            "LCP_ms": 8905,
+            "TBT_ms": 0,
+            "CLS": 0,
+            "SpeedIndex_ms": 3075
+          },
+          "lcpElement": "body > div#root > div.auth-page"
+        }
+      }
+    }
+  }
+}

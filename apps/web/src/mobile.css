@@ -41,21 +41,16 @@
   .poster-2 { background-position: 95% center; }
   .empty-state > svg { padding: 24px; border-radius: 20px; background: var(--art-wash); color: var(--ink); margin-bottom: 20px; }
   .loading-page .castroom-mark { padding: 20px; border-radius: 18px; background: var(--art-wash); }
-  .fixture-banner > .fixture-detail { font-weight: 400; }
 
   @media (hover: hover) and (pointer: fine) {
     .mobile-project-list > button:hover { background: var(--subtle); }
     .project-quick-links > :is(button,a):hover { color: var(--ink); background: var(--subtle); }
   }
   @media (pointer: coarse) {
-    .button, .icon-button, .text-button, .sidebar nav button, .segmented button, .editor-tabs button, .platform-tabs button, .setup-tabs button, .agent-card, .source-detail summary { min-height: 44px; }
+    .button, .icon-button, .text-button, .sidebar nav button, .segmented button { min-height: 44px; }
     .icon-button { min-width: 44px; }
     .field input:not([type="checkbox"]), .field select, .field textarea, .title-input, .canvas-tools input, .canvas-tools select { font-size: 16px; }
     .check-label { min-height: 44px; gap: 12px; }
-  }
-  @media (max-width: 1220px) {
-    /* Compact rail stays on tablet; navigation now opens the project dialog. */
-    .nav-open .sidebar { position: static; box-shadow: none; width: auto; z-index: auto; }
   }
   @media (min-width: 761px) and (max-width: 1000px) {
     .studio-shell.has-editor { grid-template-columns: 72px minmax(0,1fr); }
@@ -77,24 +72,16 @@
     .editor-scroll { width: 100%; max-width: 620px; padding: 20px max(20px,env(safe-area-inset-left)) 24px; scroll-padding-block: 24px; }
     .editor-preview { width: min(220px, calc(var(--surface-height, 100dvh) * .43 * 9 / 16)); }
     .editor-preview .poster { min-height: 0; }
-    .preview-description { white-space: normal; text-align: center; font-size: 12px; line-height: 1.5; }
-    .editor-title-row { margin-top: 24px; }
     .editor .title-input { font-size: 20px; line-height: 1.35; min-height: 44px; }
-    .editor-tabs { position: sticky; top: -1px; z-index: 2; }
     .editor-footer { padding: 10px max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); max-height: 42%; overflow: auto; overscroll-behavior: contain; }
     .editor-actions { margin-top: 6px; }
     .editor-actions .button { font-size: 14px; min-height: 46px; }
-    .editor-history-actions .icon-button { min-height: 44px; min-width: 44px; }
     .editor-footer small { line-height: 1.4; }
   }
   @media (max-width: 760px) {
     .app-frame { padding: env(safe-area-inset-top,0px) 0 0; }
     .studio-shell, .studio-shell.has-editor { grid-template-columns: minmax(0,1fr); }
-    .sidebar, .nav-open .sidebar, .has-editor .sidebar { display: none; }
-    .fixture-banner { padding: 4px 16px; min-height: 28px; flex-shrink: 0; align-items: center; justify-content: center; background: var(--subtle); }
-    .fixture-banner .fixture-detail { display: none; }
-    .fixture-banner > a { display: inline-flex; margin: 0; min-height: 32px; }
-    .fixture-banner > span { font-size: 11px; font-weight: 500; }
+    .sidebar, .has-editor .sidebar { display: none; }
     .topbar { padding: 6px max(16px,env(safe-area-inset-right)) 6px max(16px,env(safe-area-inset-left)); min-height: 52px; flex-shrink: 0; background: var(--background); }
     .breadcrumbs > .mobile-menu { display: none; }
     .breadcrumbs > svg, .breadcrumbs > span, .breadcrumbs > strong { display: none; }
@@ -115,7 +102,6 @@
     .canvas-tools { gap: 8px; }
     .canvas-tools label { flex: 1 1 0; min-width: 0; }
 
-
     .surface-dialog.modal { position: fixed; inset: auto 0 max(0px, calc(100dvh - var(--surface-top, 0px) - var(--surface-height, 100dvh))); width: 100%; max-width: none; max-height: calc(var(--surface-height, 100dvh) - env(safe-area-inset-top,0px) - 12px); border: 0; border-radius: 20px 20px 0 0; margin: 0; padding: 0 0 env(safe-area-inset-bottom,0px); box-shadow: 0 -8px 40px rgba(42,42,39,.08); }
     .surface-dialog.modal .sheet-grip { display: flex; }
     .modal-header { padding: 0 20px 12px; min-height: 48px; gap: 12px; }
@@ -126,7 +112,6 @@
     .modal-content .button { min-height: 44px; }
     .modal-actions { flex-wrap: wrap; }
     .modal-actions .button { flex: 1; }
-    .source-detail summary { min-height: 44px; align-content: center; }
     .auth-page { padding-top: max(32px,env(safe-area-inset-top)); padding-bottom: max(32px,env(safe-area-inset-bottom)); }
   }
   @media (max-width: 370px) {

@@ -2,7 +2,7 @@
 :root {
   --font-inter: InterVariable, Inter, system-ui, -apple-system, sans-serif;
   --ink: #2A2A27; --ink-secondary: #45434A;
-  --text-secondary: #6E6C66; --text-muted: #8A8880;
+  --text-secondary: #6E6C66; --text-muted: #75736C;
   --background: #FAFAF7; --surface: #FFFFFF; --sidebar: #F1F0EB;
   --subtle: #F0EFEA; --muted-surface: #ECEAE4; --border: #E4E2DA;
   --green: #3AA676; --positive-ink: #246B4C; --positive-surface: #EDF5EF;
@@ -28,6 +28,9 @@
   --art-gold: #F6C404; --art-amber: #EEA902; --art-cream: #DDCB9F; --art-sky: #88B4C5;
   --art-wash: radial-gradient(ellipse at 24% 0%, var(--art-gold) 0%, transparent 60%), linear-gradient(140deg, var(--art-amber), var(--art-cream) 48%, var(--art-sky));
   --art-image: url('/art/grainient-sunlit.webp');
+  /* The same art at 128 × 72, inline (312 bytes), for washes blurred past any detail: it needs no request and,
+     as a low-entropy image, is never taken for a page's largest paint (the headline or the sign-in card is). */
+  --art-glow: url("data:image/webp;base64,UklGRjABAABXRUJQVlA4ICQBAADQBwCdASqAAEgAPxF6s1K4p6qjqzpKwxAiCWIG+Bop1lhEtvLngenPn8tiKat3/0f/M9anH8y/cRB1n2Jns5kvqg/IT2EB4AD+6ir/0eavqQJwXAK1+9s22T19kYh9tMbuJDodPQNRoCA643C+b/r/4MTvBvacq9Qlve0fVW8HRNcKdrx+DGwQfLPbABFGll231kY36za4p7+gi28KkD1tD3lBaCt8vZQ5J4KPA1u0M9w/YsYLKiZiGjfhXZcVYsCzCeSCzF3Xn6uG3ehkR8GM3EWlFWb5V+66/SQkPskO2tnkJIplhTDFaAcD6HsWAovQHcRSQPI1cwGxAo1piF2BKu1V3PKv0mAFaKVJU0zPtXlqdfuGqPBuA2YD2sYI2Orf4oAA");
   color-scheme: light; font-family: var(--font-inter);
   color: var(--ink); background: var(--background);
   font-synthesis: none; font-kerning: normal; text-rendering: optimizeLegibility;
