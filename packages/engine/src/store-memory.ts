@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { StoreConflict } from "./errors.js";
-import type { Condition, Filter, MediaStorage, Row, SelectOptions, Store } from "./store.js";
+import type { Condition, Filter, MediaStorage, RateLimitHit, Row, SelectOptions, Store } from "./store.js";
 
 /** Mirrors the unique constraints in supabase/migrations/20261114190000_engine_core.sql. */
 const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => boolean }>> = {
@@ -120,5 +120,34 @@ export class MemoryStore implements Store {
     if (balance < amount) return null;
     this.rows("credit_ledger").push({ id: crypto.randomUUID(), org_id: orgId, delta: -amount, reason: "render_hold", ref, created_at: new Date().toISOString() });
     return balance - amount;
+  }
+
+  /** Fixed-window buckets keyed by (key, window start), mirroring `rate_limit_buckets`. */
+  readonly rateLimitBuckets = new Map<string, { key: string; windowStart: number; count: number; expiresAt: number }>();
+  /** The database clock in production; tests point this at their own controllable clock. */
+  clock: () => Date = () => new Date();
+  async consumeRateLimit(key: string, limit: number, windowSeconds: number, cost = 1): Promise<RateLimitHit> {
+    // Same argument checks as engine_rate_limit_hit, so a bad caller fails in tests the way it would in SQL.
+    if (!key || key.length > 200) throw new Error("invalid rate limit key");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1_000_000) throw new Error("invalid rate limit");
+    if (!Number.isInteger(windowSeconds) || windowSeconds < 1 || windowSeconds > 86_400) throw new Error("invalid rate limit window");
+    if (!Number.isInteger(cost) || cost < 1 || cost > 1000) throw new Error("invalid rate limit cost");
+    const now = this.clock().getTime();
+    const windowMs = windowSeconds * 1000;
+    const windowStart = Math.floor(now / windowMs) * windowMs;
+    const id = `${key}\u0000${windowStart}`;
+    const bucket = this.rateLimitBuckets.get(id) ?? { key, windowStart, count: 0, expiresAt: windowStart + windowMs };
+    bucket.count += cost;
+    this.rateLimitBuckets.set(id, bucket);
+    // Housekeeping like the SQL function: each call removes up to 20 expired buckets.
+    let pruned = 0;
+    for (const [other, entry] of this.rateLimitBuckets) {
+      if (pruned >= 20) break;
+      if (entry.expiresAt < now) {
+        this.rateLimitBuckets.delete(other);
+        pruned++;
+      }
+    }
+    return { allowed: bucket.count <= limit, remaining: Math.max(0, limit - bucket.count), resetSeconds: Math.ceil((bucket.expiresAt - now) / 1000) };
   }
 }

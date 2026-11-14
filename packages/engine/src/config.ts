@@ -25,6 +25,33 @@ export interface YoutubeConfig {
   /** 32 raw bytes. Encrypts stored channel refresh tokens (AES-256-GCM). */
   encryptionKey: Uint8Array;
 }
+/** One fixed-window limit. `name` appears in the RateLimit-Policy / RateLimit response headers. */
+export interface RateLimitPolicy {
+  name: "principal" | "director" | "costly" | "anonymous" | "failed_auth";
+  limit: number;
+  windowSeconds: number;
+}
+export interface RateLimitConfig {
+  enabled: boolean;
+  /**
+   * Whether `x-forwarded-for` / `x-real-ip` describe the real client. True only behind Vercel's edge, which
+   * overwrites both headers with the connecting client's address, so a client cannot choose its own bucket.
+   * Elsewhere (local dev, tests) the client address is unknown and per-IP limits are skipped rather than
+   * shared by every caller.
+   */
+  trustProxyHeaders: boolean;
+  /** Every authenticated `/v1/studio/*` and `/mcp` request, per principal (user, OAuth agent or workspace token). */
+  principal: RateLimitPolicy;
+  /** `POST /v1/studio/director/turn`: each model-backed turn costs money. Per principal. */
+  director: RateLimitPolicy;
+  /** Operations that spend money or call providers: render, checkout, channel connection. Per principal. */
+  costly: RateLimitPolicy;
+  /** Requests that present no credential at all. Per client IP. */
+  anonymous: RateLimitPolicy;
+  /** Requests whose credential was rejected. Per client IP. */
+  failedAuth: RateLimitPolicy;
+}
+
 export interface EngineConfig {
   appBaseUrl: string;
   supabaseUrl: string;
@@ -50,6 +77,12 @@ export interface EngineConfig {
   /** Model-backed director turns allowed per organization per 24 hours. */
   directorDailyTurns: number;
   mediaUrlTtlSeconds: number;
+  /**
+   * Whether forwarded headers (`x-forwarded-for`, `x-forwarded-host`, `x-forwarded-proto`) were set by a proxy we
+   * trust. True on Vercel, whose edge overwrites them; false elsewhere unless TRUST_PROXY_HEADERS says otherwise.
+   */
+  trustProxyHeaders: boolean;
+  rateLimit: RateLimitConfig;
 }
 
 const avatarsSchema = z.array(
@@ -89,6 +122,46 @@ function llmFrom(env: Record<string, string | undefined>): LlmConfig | null {
   return null;
 }
 
+function flag(value: string | undefined, fallback: boolean) {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return fallback;
+}
+
+/**
+ * Defaults are sized for real use: the studio polls an open project every five seconds (12 requests a
+ * minute per tab), a model turn takes several seconds, and a hackathon venue puts many people behind one
+ * public IP. Each value can be overridden per deployment.
+ */
+function rateLimitFrom(env: Record<string, string | undefined>, trustProxyHeaders: boolean): RateLimitConfig {
+  const perMinute = (name: RateLimitPolicy["name"], key: string, fallback: number, max: number): RateLimitPolicy => ({ name, limit: integer(env[key], fallback, 1, max), windowSeconds: 60 });
+  return {
+    enabled: flag(env.RATE_LIMIT_ENABLED, true),
+    trustProxyHeaders,
+    principal: perMinute("principal", "RATE_LIMIT_PRINCIPAL_PER_MINUTE", 240, 100_000),
+    director: perMinute("director", "RATE_LIMIT_DIRECTOR_PER_MINUTE", 10, 10_000),
+    costly: perMinute("costly", "RATE_LIMIT_COSTLY_PER_MINUTE", 10, 10_000),
+    anonymous: perMinute("anonymous", "RATE_LIMIT_ANONYMOUS_PER_MINUTE", 120, 100_000),
+    failedAuth: perMinute("failed_auth", "RATE_LIMIT_FAILED_AUTH_PER_MINUTE", 60, 100_000),
+  };
+}
+
+/** The renderer API host is fixed; an override may only point at another Humanlike HTTPS host. */
+const DEFAULT_HUMANLIKE_API_URL = "https://api.humanlike.co";
+function humanlikeUrlFrom(value: string | undefined): string {
+  const raw = value?.trim().replace(/\/$/, "");
+  if (!raw) return DEFAULT_HUMANLIKE_API_URL;
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:" && !url.username && !url.password && (url.hostname === "humanlike.co" || url.hostname.endsWith(".humanlike.co"))) return url.origin;
+  } catch {
+    /* fall through */
+  }
+  console.error(JSON.stringify({ level: "error", event: "config_invalid", key: "HUMANLIKE_API_URL" }));
+  return DEFAULT_HUMANLIKE_API_URL;
+}
+
 function youtubeFrom(env: Record<string, string | undefined>): { youtube: YoutubeConfig | null; problem: string | null } {
   const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim();
   const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
@@ -116,6 +189,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   const { stripe, problem } = stripeFrom(env);
   const channels = youtubeFrom(env);
+  // Vercel sets VERCEL=1 in every function, and its edge overwrites x-forwarded-for with the connecting client.
+  const trustProxyHeaders = flag(env.TRUST_PROXY_HEADERS, env.VERCEL === "1");
   return {
     appBaseUrl,
     supabaseUrl,
@@ -128,7 +203,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     renderAvatars,
     avatarLanguages: (env.AVATAR_LANGUAGES ?? "en,el").split(",").map((value) => value.trim()).filter(Boolean),
     humanlikeApiKey: env.HUMANLIKE_API_KEY?.trim().startsWith("hk_live_") ? env.HUMANLIKE_API_KEY.trim() : null,
-    humanlikeApiUrl: (env.HUMANLIKE_API_URL ?? "https://api.humanlike.co").trim().replace(/\/$/, ""),
+    humanlikeApiUrl: humanlikeUrlFrom(env.HUMANLIKE_API_URL),
     cronSecret: env.CRON_SECRET?.trim() || null,
     stripe,
     stripeProblem: problem,
@@ -137,5 +212,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     youtubeProblem: channels.problem,
     directorDailyTurns: integer(env.DIRECTOR_DAILY_TURNS, 100, 1, 10_000),
     mediaUrlTtlSeconds: 3600,
+    trustProxyHeaders,
+    rateLimit: rateLimitFrom(env, trustProxyHeaders),
   };
 }

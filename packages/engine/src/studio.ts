@@ -416,6 +416,8 @@ export async function createProject(deps: EngineDeps, ctx: Ctx, seed: ProjectSee
 }
 
 export async function startCampaign(deps: EngineDeps, ctx: Ctx, raw: unknown): Promise<Campaign> {
+  // Permission first, so a caller who cannot edit never writes an idempotency record.
+  requireScope(ctx, "content:edit");
   const input = parse(startCampaignInputSchema, raw);
   return idempotent(deps, ctx, "start_campaign", input.operationKey, input, async () => {
     const now = deps.now().toISOString();
@@ -557,10 +559,29 @@ async function applyRevision(deps: EngineDeps, ctx: Ctx, current: Row, expectedR
   return getItem(deps, ctx, item.id);
 }
 
+/** Upper bound on posting times per item: three destinations, nine slots each (the MCP proposal limit). */
+export const MAX_TARGETS_PER_ITEM = 27;
+/**
+ * Bounds the shared patch contract leaves open, so a single edit cannot store an arbitrarily long language
+ * code, duplicate per-platform copy, or thousands of posting times.
+ */
+function assertPatchBounds(patch: Record<string, unknown>) {
+  if (typeof patch.language === "string" && (patch.language.trim().length < 2 || patch.language.length > 12))
+    throw new EngineError("validation_error", "The request does not match the studio contract (patch.language: use a language code of 2 to 12 characters).");
+  if (Array.isArray(patch.variants)) {
+    const platforms = (patch.variants as Array<{ platform: string }>).map((variant) => variant.platform);
+    if (platforms.length > PLATFORMS.length || new Set(platforms).size !== platforms.length)
+      throw new EngineError("validation_error", "The request does not match the studio contract (patch.variants: one entry per platform).");
+  }
+  if (Array.isArray(patch.targets) && patch.targets.length > MAX_TARGETS_PER_ITEM)
+    throw new EngineError("validation_error", `The request does not match the studio contract (patch.targets: at most ${MAX_TARGETS_PER_ITEM} posting times per item).`);
+}
+
 export async function reviseContent(deps: EngineDeps, ctx: Ctx, raw: unknown, summary = "Saved content changes"): Promise<ContentItem> {
   requireScope(ctx, "content:edit");
   const input = parse(reviseInputSchema, raw);
   if (!Object.keys(input.patch).length) throw new EngineError("validation_error", "The edit contains no changes.");
+  assertPatchBounds(input.patch);
   return idempotent(deps, ctx, "revise_content", input.operationKey, input, async () =>
     applyRevision(deps, ctx, await loadItem(deps, ctx, input.contentId), input.expectedRevision, input.patch, summary),
   );

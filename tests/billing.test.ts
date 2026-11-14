@@ -460,6 +460,37 @@ test("webhook: portal changes and cancellation are reflected; a stale deletion c
   assert.equal((await t.state(orgId)).status, "cancelled");
 });
 
+test("webhook: a portal cancellation recorded as cancel_at (newer API versions) is shown as ending, with the real end date", async () => {
+  const t = setup();
+  const { customerId, orgId, ctx } = await subscribed(t);
+  const now = Math.floor(Date.now() / 1000);
+  t.subscriptions.set("sub_1", subscription("sub_1", customerId, "active"));
+  await deliver(t, "customer.subscription.created", { id: "sub_1", customer: customerId }, { created: now });
+  assert.equal((await getBillingStatus(t.deps, ctx)).cancelAtPeriodEnd, false);
+  // What production returned after a Customer Portal cancellation on API 2026-10-28.endive: the legacy flag is false,
+  // and `cancel_at` holds the period end (2026-12-14T...Z).
+  const cancelAt = 1_797_269_994;
+  t.subscriptions.set("sub_1", subscription("sub_1", customerId, "active", { cancelAtPeriodEnd: false, cancelAt, currentPeriodEnd: cancelAt }));
+  const updated = await deliver(t, "customer.subscription.updated", { id: "sub_1", customer: customerId, cancel_at_period_end: false, cancel_at: cancelAt }, { created: now + 5 });
+  assert.equal(updated.body.outcome, "subscription_active", "still active until Stripe actually ends it");
+  let status = await getBillingStatus(t.deps, ctx);
+  assert.equal(status.status, "active");
+  assert.equal(status.cancelAtPeriodEnd, true, "a scheduled cancel_at counts as cancelling");
+  assert.equal(status.currentPeriodEnd, new Date(cancelAt * 1000).toISOString());
+  // A cancellation scheduled for a date other than the period end: the plan ends at cancel_at, not the period end.
+  const earlier = cancelAt - 7 * 24 * 3600;
+  t.subscriptions.set("sub_1", subscription("sub_1", customerId, "active", { cancelAt: earlier, currentPeriodEnd: cancelAt }));
+  await deliver(t, "customer.subscription.updated", { id: "sub_1", customer: customerId }, { created: now + 6 });
+  assert.equal((await getBillingStatus(t.deps, ctx)).currentPeriodEnd, new Date(earlier * 1000).toISOString());
+  // The person resumes the plan in the portal: Stripe clears cancel_at, and so do we.
+  t.subscriptions.set("sub_1", subscription("sub_1", customerId, "active", { cancelAt: null, currentPeriodEnd: cancelAt }));
+  await deliver(t, "customer.subscription.updated", { id: "sub_1", customer: customerId }, { created: now + 10 });
+  status = await getBillingStatus(t.deps, ctx);
+  assert.equal(status.cancelAtPeriodEnd, false);
+  assert.equal(status.currentPeriodEnd, new Date(cancelAt * 1000).toISOString());
+  assert.equal((await t.state(orgId)).status, "active");
+});
+
 test("webhook: delayed-payment checkout stays pending until Stripe confirms, and a failed one returns to free", async () => {
   const t = setup();
   const { checkout, customerId, orgId } = await subscribed(t);

@@ -1,7 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { operationSchema, type Operation } from "../../contracts/src/index.js";
-import { audit, idempotent, requireScope, type Ctx, type EngineDeps } from "./access.js";
+import { audit, bearerMatches, idempotent, requireScope, type Ctx, type EngineDeps } from "./access.js";
 import { EngineError, StoreConflict } from "./errors.js";
 import { selectOne, type Filter, type Row } from "./store.js";
 import { listAvatars, loadItem, loadProject, parse, renderBlocker } from "./studio.js";
@@ -207,12 +206,8 @@ export async function sweepRenderJobs(deps: EngineDeps, scope: { orgId?: string 
 /* ───────────────────────── renderer worker protocol ───────────────────────── */
 
 export function authenticateWorker(deps: EngineDeps, authorization: string | null): string {
-  const expected = deps.config.renderWorkerToken;
-  const supplied = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
-  if (!expected || !supplied) throw new EngineError("unauthenticated", "A render worker credential is required.");
-  const a = Buffer.from(supplied);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) throw new EngineError("unauthenticated", "A render worker credential is required.");
+  // Digest-then-compare: constant time, and the configured token's length is not observable either.
+  if (!bearerMatches(authorization, deps.config.renderWorkerToken)) throw new EngineError("unauthenticated", "A render worker credential is required.");
   return "render-worker";
 }
 

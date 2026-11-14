@@ -37,7 +37,7 @@ const errorByCode: Record<string, { code: "provider_unavailable" | "quota_exceed
 
 export function normalizeHumanlikeError(status: number, body: unknown): EngineError {
   const code = typeof body === "object" && body !== null ? (body as { error?: { code?: unknown } }).error?.code : undefined;
-  const known = typeof code === "string" ? errorByCode[code] : undefined;
+  const known = typeof code === "string" && Object.hasOwn(errorByCode, code) ? errorByCode[code] : undefined;
   if (known) return new EngineError(known.code, known.message, { retryAfterSeconds: code === "rate_limited" ? 60 : null });
   return new EngineError("provider_unavailable", `Humanlike returned an unexpected response (${status}). No avatar work was started.`);
 }

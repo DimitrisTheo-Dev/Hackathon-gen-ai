@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { EngineError, StoreConflict } from "./errors.js";
 import type { EngineConfig } from "./config.js";
 import { selectOne, type Row, type Store } from "./store.js";
@@ -69,6 +69,21 @@ export function hashToken(token: string) {
 }
 export function newAgentToken() {
   return TOKEN_PREFIX + randomBytes(32).toString("base64url");
+}
+/**
+ * Constant-time equality for shared secrets (render worker token, scheduler secret). Both sides are hashed to
+ * fixed-length digests first, so neither the content nor the length of the expected secret leaks through timing.
+ */
+export function constantTimeEqual(supplied: string, expected: string): boolean {
+  const a = createHash("sha256").update(supplied).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b) && supplied.length === expected.length;
+}
+/** `Authorization: Bearer <secret>` checked in constant time against a configured secret. False when none is configured. */
+export function bearerMatches(authorization: string | null, expected: string | null): boolean {
+  const supplied = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  if (!expected || !supplied) return false;
+  return constantTimeEqual(supplied, expected);
 }
 
 export async function authenticate(deps: EngineDeps, authorization: string | null): Promise<Principal> {

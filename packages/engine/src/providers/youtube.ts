@@ -54,6 +54,16 @@ export interface YoutubeVideoStatus {
   failureReason: string | null;
 }
 
+/** A resumable-upload session URL must be HTTPS on a googleapis.com host, with no embedded credentials. */
+export function isGoogleUploadUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && (url.hostname === "www.googleapis.com" || url.hostname.endsWith(".googleapis.com"));
+  } catch {
+    return false;
+  }
+}
+
 function reasonOf(body: unknown): string | null {
   const error = (body as { error?: { errors?: Array<{ reason?: unknown }>; status?: unknown; details?: Array<{ reason?: unknown }> } } | null)?.error;
   const reason = error?.errors?.[0]?.reason ?? error?.details?.find((detail) => typeof detail?.reason === "string")?.reason ?? error?.status;
@@ -155,7 +165,8 @@ export function createYoutubeClient(options: { clientId: string; clientSecret: s
       });
       if (!session.ok) throw youtubeApiError(session.status, await session.json().catch(() => null));
       const location = session.headers.get("location");
-      if (!location || !location.startsWith("https://")) throw new EngineError("provider_unavailable", "YouTube did not open an upload session. Nothing was posted.");
+      // The video bytes go only to a Google upload host, never to wherever a response header points.
+      if (!location || !isGoogleUploadUrl(location)) throw new EngineError("provider_unavailable", "YouTube did not open an upload session. Nothing was posted.");
 
       const idFrom = async (response: Response) => {
         const body = (await response.json().catch(() => null)) as { id?: unknown } | null;
