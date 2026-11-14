@@ -1,16 +1,31 @@
-import { directorPlanSchema, localDirectorPlan, validateDirectorPlan, type DirectorScope } from './model';
-import type { Campaign, ContentItem, StudioContext } from '@castroom/contracts';
-import { supabase } from '../lib/supabase';
-export async function planDirection(instruction:string,campaign:Campaign,item:ContentItem,context:StudioContext,scope:DirectorScope,sourceIds:string[]) {
+import { localDirectorPlan, validateDirectorPlan, type DirectorEntry, type DirectorPlan, type DirectorScope } from './model';
+import type { Campaign, ContentItem, DirectorTurnInput, DirectorTurnResult, StudioContext } from '@castroom/contracts';
+
+export type DirectorTurn = (input: DirectorTurnInput) => Promise<DirectorTurnResult>;
+export type DirectorOutcome = {
+  /** "local": matched an exact instruction in the browser. Otherwise whatever the engine reported. */
+  mode: 'local' | 'ai' | 'basic';
+  summary: string;
+  plan: DirectorPlan | null;
+  created: Campaign | null;
+  open: DirectorTurnResult['open'];
+  assets: DirectorTurnResult['assets'];
+  suggestions: string[];
+};
+/** Earlier turns give the director continuity. They are conversation, never authority. */
+export function recentHistory(entries: DirectorEntry[], limit = 6): DirectorTurnInput['history'] {
+  return entries.filter(entry=>entry.summary&&entry.summary!=='Preparing your request…').slice(-limit).map(entry=>({instruction:entry.instruction.slice(0,5000),summary:entry.summary.slice(0,1000)}));
+}
+/**
+ * Exact instructions are planned instantly in the browser. Everything else goes to the shared engine,
+ * which may save drafts or open existing content, and returns any change as a plan for review.
+ */
+export async function planDirection(instruction:string,campaign:Campaign,item:ContentItem,context:StudioContext,scope:DirectorScope,sourceIds:string[],turn:DirectorTurn,history:DirectorTurnInput['history'],operationKey:string):Promise<DirectorOutcome> {
   const local=localDirectorPlan(instruction,campaign,item,context,scope);
-  if(local)return validateDirectorPlan(local,campaign,item,scope,context);
+  if(local){const plan=validateDirectorPlan(local,campaign,item,scope,context);return {mode:'local',summary:plan.summary,plan,created:null,open:null,assets:[],suggestions:[]};}
   if(!context.capabilities.canPlanWithDirector)throw new Error('AI direction is not connected yet. You can apply exact script, title or caption edits here, or continue with your connected agent.');
-  const base=import.meta.env.VITE_CASTROOM_API_URL;
-  if(!base||!supabase)throw new Error('The creative service is unavailable. Your content is unchanged.');
-  const origin=new URL(base);if(origin.protocol!=='https:'||origin.username||origin.password||origin.search||origin.hash)throw new Error('The creative service address is not secure.');
-  const {data}=await supabase.auth.getSession();
-  if(!data.session)throw new Error('Sign in to continue.');
-  const response=await fetch(`${base.replace(/\/$/,'')}/v1/studio/director/plan`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${data.session.access_token}`},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(30000),body:JSON.stringify({campaignId:campaign.id,itemId:item.id,expectedRevision:item.revision,scope,instruction,sourceIds,operationKey:crypto.randomUUID()})});
-  if(!response.ok)throw new Error('The creative service could not prepare a plan. Nothing was changed. Try again.');
-  return validateDirectorPlan(directorPlanSchema.parse(await response.json()),campaign,item,scope,context);
+  const result=await turn({campaignId:campaign.id,itemId:item.id,scope,instruction,sourceIds,history,operationKey});
+  // The engine already authorised the plan; this re-check guards against a project that changed while it was drafted.
+  const plan=result.plan?validateDirectorPlan(result.plan,campaign,item,scope,context):null;
+  return {mode:result.mode,summary:result.summary,plan,created:result.created,open:result.open,assets:result.assets,suggestions:result.suggestions};
 }

@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Check,
   Circle,
+  CreditCard,
   Clock3,
   FileText,
   Folder,
@@ -28,6 +29,7 @@ import {
 import type {
   Campaign,
   ContentItem,
+  DirectorTurnResult,
   ScheduleManifest,
   StudioContext,
 } from "@castroom/contracts";
@@ -48,10 +50,14 @@ import { Review, Grant } from "./Review";
 import { CreateCampaign } from "./CreateCampaign";
 import { operationKey } from "../lib/operation-key";
 import { CommandPalette } from "../components/CommandPalette";
+import { Billing } from "./Billing";
+import { Templates } from "./Templates";
+import { itemBadge } from "../lib/status";
 
 import { useDirectorHistory } from '../director/use-history';
 import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
-type View = "home" | "canvas" | "schedule" | "connect" | "brand";
+type View = "home" | "canvas" | "schedule" | "connect" | "brand" | "billing";
+const VIEWS = ["home", "canvas", "schedule", "connect", "brand", "billing"];
 export function Studio({
   client,
   onSignOut,
@@ -63,7 +69,7 @@ export function Studio({
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [view, setView] = useState<View>(
-    ["home", "canvas", "schedule", "connect", "brand"].includes(
+    VIEWS.includes(
       new URLSearchParams(location.search).get("view") ?? "",
     )
       ? (new URLSearchParams(location.search).get("view") as View)
@@ -87,6 +93,20 @@ export function Studio({
   const [showActivity, setShowActivity] = useState(false);
   const [homeIdea,setHomeIdea]=useState("");
   const [homeReply,setHomeReply]=useState("");
+  // First-run conversation, before any project exists to hold it.
+  const [homeTurn,setHomeTurn]=useState<{text:string;suggestions:string[]}|null>(null);
+  const [homeBusy,setHomeBusy]=useState(false);
+  const homeAttempt=useRef<{text:string;key:string}|null>(null);
+  const sampleKey=useRef(crypto.randomUUID());
+  const [templatesOpen,setTemplatesOpen]=useState(false);
+  const [focusDirector,setFocusDirector]=useState(false);
+  const [playItem,setPlayItem]=useState<string|null>(null);
+  const [errorBilling,setErrorBilling]=useState(false);
+  const [loadFailure,setLoadFailure]=useState("");
+  const [checkoutReturn,setCheckoutReturn]=useState<"success"|"cancelled"|null>(()=>{
+    const value=new URLSearchParams(location.search).get("checkout");
+    return value==="success"||value==="cancelled"?value:null;
+  });
   const [creating, setCreating] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -97,14 +117,22 @@ export function Studio({
   const director = useDirectorHistory(context,campaign);
   const previousEditorRect=useRef<{view:View;rect:DOMRect}|null>(null);
   useLayoutEffect(()=>{
-    const el=document.querySelector<HTMLElement>('.editor');if(!el)return;
+    const el=document.querySelector<HTMLElement>('.editor');
+    if(!el){
+      // Remember where the first-run composer sat, so the conversation can dock from there.
+      const form=view==='home'?document.querySelector<HTMLElement>('.home-idea-form'):null;
+      if(form)previousEditorRect.current={view,rect:form.getBoundingClientRect()};
+      return;
+    }
     const rect=el.getBoundingClientRect(),previous=previousEditorRect.current;
     previousEditorRect.current={view,rect};
     if(previous?.view==='home'&&view==='canvas'&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&!matchMedia('(max-width: 1000px)').matches){
       const dx=previous.rect.left-rect.left,dy=previous.rect.top-rect.top;
       if(Number.isFinite(dx)&&Number.isFinite(dy))el.animate([{transform:`translate(${dx}px,${dy}px)`,opacity:.65},{transform:'translate(0,0)',opacity:1}],{duration:360,easing:'cubic-bezier(.22,.8,.26,1)'});
     }
-  },[view,loading]);
+  },[view,loading,campaign?.id]);
+  // One-shot: the composer takes focus only on the mount that follows a create.
+  useEffect(()=>{if(!focusDirector)return;const timer=window.setTimeout(()=>setFocusDirector(false),0);return()=>window.clearTimeout(timer);},[focusDirector,selected]);
   const busyRef = useRef(false);
   const campaignRequest = useRef(0);
   const initialLocation = useRef(new URLSearchParams(location.search));
@@ -172,7 +200,11 @@ export function Studio({
           );
 
       })
-      .catch((e) => active && setError(e.message))
+      .catch((e) => {
+        if (!active) return;
+        setError(e.message);
+        setLoadFailure(e instanceof ApiError ? e.code : "unknown");
+      })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -198,7 +230,7 @@ export function Studio({
     if (selected) url.searchParams.set("item", selected);
     else url.searchParams.delete("item");
     history.replaceState(history.state, "", url);
-    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : (campaign?.title ?? "Studio")} · Faceful`;
+    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "billing" ? "Billing" : (campaign?.title ?? "Studio")} · Faceful`;
   }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
@@ -234,6 +266,7 @@ export function Studio({
     if(next==="home")setSelected(current=>current??campaign?.items[0]?.id??null);
     setSidebar(false);
     setError("");
+    setErrorBilling(false);
     setNotice("");
   }
   function select(
@@ -266,11 +299,13 @@ export function Studio({
     busyRef.current = true;
     setBusy(true);
     setError("");
+    setErrorBilling(false);
     setNotice("");
     try {
       await fn();
     } catch (e) {
       const code = e instanceof ApiError ? e.code : "";
+      setErrorBilling(e instanceof ApiError && Boolean(e.reviewUrl?.includes("view=billing")));
       setError(
         `${e instanceof Error ? e.message : "The operation failed."}${code === "revision_conflict" ? " Your local draft has been kept. Refresh the campaign to compare the latest version." : ""}`,
       );
@@ -321,6 +356,15 @@ export function Studio({
   }
   async function executeDirector(planAction:DirectorAction, intentKey:string, reconcile=false):Promise<DirectorEntry['results'][string]> {
     if(!context||!campaign||busyRef.current||offline)throw new Error('Wait for the current action or reconnect before continuing.');
+    if(planAction.kind==='checkout'){
+      // Runs only from an explicit click on the reviewed action. Payment happens on Stripe's hosted page.
+      busyRef.current=true;setBusy(true);setError('');
+      try{
+        const checkout=await client.createCheckout({priceKey:planAction.priceKey,confirmationGranted:true,operationKey:await directorOperationKey(`${context.workspace.id}:checkout:${intentKey}`)});
+        location.assign(checkout.checkoutUrl);
+        return {state:'review',message:'Opening Stripe’s test checkout. Your plan changes only after Stripe confirms the payment.'};
+      }finally{busyRef.current=false;setBusy(false);}
+    }
     const target=planAction.kind==='review_schedule'?campaign.items[0]:campaign.items.find(i=>i.id===planAction.itemId);
     if(!target)throw new Error('This storyboard is no longer available.');
     validateDirectorPlan({summary:'Reviewed instruction',actions:[reconcile&&planAction.kind==='revise'?{...planAction,expectedRevision:target.revision}:planAction]},campaign,target,'project',context);
@@ -393,6 +437,95 @@ export function Studio({
       catch (error) { setCampaign(previous); setSelected(previousSelected); throw error; }
     });
   }
+  /** Makes a just-created project the current one and docks the conversation beside it. */
+  function adoptCampaign(next: Campaign, message: string) {
+    campaignRequest.current++;
+    setCampaigns((all) => [next, ...all.filter((c) => c.id !== next.id)]);
+    setCampaign(next);
+    setSelected(next.items[0]?.id ?? null);
+    setSearch(""); setStatusFilter("all");
+    setCreating(false); setTemplatesOpen(false);
+    go("canvas");
+    setNotice(message);
+  }
+  function directorCreated(next: Campaign, entry: DirectorEntry) {
+    const first = next.items[0];
+    adoptCampaign(next, "Drafts saved. Nothing has been rendered or scheduled.");
+    setFocusDirector(true);
+    setMobileChatOpen(true);
+    // The request becomes the first turn of the project it created.
+    if (first) void director.recordFor(next.id, { ...entry, itemId: first.id, itemTitle: first.title.slice(0, 120) });
+  }
+  function directorOpen(target: NonNullable<DirectorTurnResult["open"]>) {
+    setPlayItem(target.play ? target.itemId : null);
+    setMobileChatOpen(true);
+    openCampaign(target.campaignId, target.itemId ?? undefined);
+  }
+  async function submitHomeIdea() {
+    const text = homeIdea.trim();
+    if (!text || homeBusy || offline || !context) return;
+    if (!context.capabilities.canPlanWithDirector) {
+      setHomeReply('AI production is not connected yet. Your idea is kept here. Add your own script to create an editable storyboard.');
+      return;
+    }
+    // One key per attempt: retrying after an interrupted response cannot create a second project.
+    if (homeAttempt.current?.text !== text) homeAttempt.current = { text, key: crypto.randomUUID() };
+    const key = homeAttempt.current.key;
+    setHomeBusy(true); setHomeReply(""); setHomeTurn({ text, suggestions: [] });
+    try {
+      const result = await client.directorTurn({ campaignId: null, itemId: null, scope: "item", instruction: text, sourceIds: [], history: [], operationKey: key });
+      homeAttempt.current = null;
+      if (result.created) {
+        setHomeIdea(""); setHomeTurn(null);
+        directorCreated(result.created, { id: key, at: new Date().toISOString(), itemId: "pending", itemTitle: "", scope: "item", instruction: text, sourceIds: [], summary: result.summary.slice(0, 2000), plan: null, results: {}, mode: result.mode, ...(result.suggestions.length ? { suggestions: result.suggestions } : {}) });
+        return;
+      }
+      setHomeReply(result.summary);
+      setHomeTurn({ text, suggestions: result.suggestions });
+    } catch (e) {
+      setHomeReply(e instanceof Error ? e.message : "Your request could not be sent. Nothing was created.");
+    } finally {
+      setHomeBusy(false);
+    }
+  }
+  function startSample() {
+    void action(async () => {
+      adoptCampaign(await client.createSampleProject({ operationKey: sampleKey.current }), "Sample project added. It is seeded demonstration content; nothing in it was rendered or published.");
+    });
+  }
+  function homeSuggestion(prompt: string) {
+    if (prompt === "Choose a template") setTemplatesOpen(true);
+    else if (prompt === "Create with my own script") setCreating(true);
+    else { setHomeIdea(prompt); document.getElementById("home-idea")?.focus(); }
+  }
+  function switchWorkspace(id: string) {
+    if (!context || id === context.workspace.id) return;
+    if (unsaved) { setError("Save or discard your edits before switching workspace."); return; }
+    void action(async () => {
+      const nextContext = await client.selectWorkspace(id);
+      const list = await client.listCampaigns();
+      campaignRequest.current++;
+      setContext(nextContext); setCampaigns(list); setCampaign(list[0] ?? null);
+      setSelected(list[0]?.items[0]?.id ?? null);
+      setDrafts({}); setManifest(null); setView("home");
+    });
+  }
+  async function restoreVersion(revision: number) {
+    if (!item || !campaign || !context) throw new Error("Select an item first.");
+    const saved = await client.restoreVersion({
+      contentId: item.id,
+      revision,
+      expectedRevision: item.revision,
+      operationKey: await operationKey(context.workspace.id, "restore-version", { id: item.id, revision, expected: item.revision }),
+    });
+    const apply = (current: Campaign) => current.id === campaign.id ? { ...current, items: current.items.map((i) => (i.id === saved.id ? saved : i)) } : current;
+    setCampaign((current) => (current ? apply(current) : current));
+    setCampaigns((all) => all.map(apply));
+    setManifest(null);
+    setDrafts((prev) => { const next = { ...prev }; delete next[saved.id]; return next; });
+    void fetchCampaign(campaign.id).catch(() => undefined);
+    return saved;
+  }
   if (loading)
     return (
       <div className="loading-page" role="status">
@@ -409,13 +542,23 @@ export function Studio({
           Faceful
         </a>
         <main className="auth-card">
-          <h1>We couldn’t open your workspace.</h1>
-          <Notice error>
-            {error || "No workspace is available for this session."}
-          </Notice>
+          {loadFailure === "provider_unavailable" || loadFailure === "not_found" ? <>
+            <h1>The studio service isn’t available yet.</h1>
+            <p>You’re signed in, but this deployment’s studio service did not respond, so there is no workspace to open. Nothing was lost, and no sample content was substituted.</p>
+          </> : loadFailure === "unauthenticated" ? <>
+            <h1>Your session has ended.</h1>
+            <p>Sign out and sign in again to reopen your workspace.</p>
+          </> : <>
+            <h1>We couldn’t open your workspace.</h1>
+            <Notice error>
+              {error || "No workspace is available for this session."}
+            </Notice>
+          </>}
           <button className="button primary" onClick={() => location.reload()}>
             Try again
           </button>
+          <a className="button secondary" href="/docs/">View integration status</a>
+          {onSignOut && <button className="text-button" onClick={onSignOut}>Sign out</button>}
           <a href="/docs/errors/">Troubleshooting</a>
         </main>
       </div>
@@ -464,7 +607,11 @@ export function Studio({
                   : "Workspace"}
               </small>
             </div>
-            <ChevronDown size={14} />
+            {context.workspaces.length > 1 ? (
+              <select className="workspace-select" aria-label="Switch workspace" value={context.workspace.id} disabled={busy} onChange={(event) => switchWorkspace(event.target.value)}>
+                {context.workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+              </select>
+            ) : <ChevronDown size={14} />}
           </div>
           <button className="search-box" onClick={() => setCommandOpen(true)} aria-label="Search projects and content">
             <Search size={17} /><span>Search studio</span><kbd>⌘ K</kbd>
@@ -491,6 +638,16 @@ export function Studio({
               <FileText size={17} />
               Brand & sources
             </button>
+            {!fixture && (
+              <button
+                className={view === "billing" ? "active" : ""}
+                onClick={() => go("billing")}
+              >
+                <CreditCard size={17} />
+                Billing
+                <span className="nav-count" title="Videos you can still render">{context.capabilities.renderUnitsRemaining}</span>
+              </button>
+            )}
           </nav>
           <div className="projects-heading">
             <span>Projects</span>
@@ -511,7 +668,7 @@ export function Studio({
                 title={c.title}
               >
                 <span className="project-dot" />
-                <span className="project-name">{c.title}</span><small>{c.items.length}</small>
+                <span className="project-name">{c.title}</span>{c.origin === "sample" && <span className="sample-chip">Sample</span>}<small>{c.items.length}</small>
               </button>
             ))}
           </nav>
@@ -585,7 +742,9 @@ export function Studio({
                   ? "Agent connections"
                   : view === "brand"
                     ? "Brand & sources"
-                    : (campaign?.title ?? "Your campaigns")}
+                    : view === "billing"
+                      ? "Billing"
+                      : (campaign?.title ?? "Your campaigns")}
               </strong>
             </div>
             <div className="topbar-right">
@@ -614,6 +773,11 @@ export function Studio({
                 {error && (
                   <Notice error>
                     {error}
+                    {errorBilling && (
+                      <button className="text-button" onClick={() => go("billing")}>
+                        Open billing
+                      </button>
+                    )}
                     <button
                       className="text-button"
                       onClick={() => setError("")}
@@ -637,7 +801,40 @@ export function Studio({
                 )}
               </div>
             )}
-            {view === "home" && !campaign ? (<div className="empty-state studio-first"><h1>What will we create today?</h1><p>Describe your idea. Shape it with Faceful.</p><form className="home-idea-form" onSubmit={e=>{e.preventDefault();setHomeReply('AI production is not connected yet. Your idea is kept here. Add your own script to create an editable storyboard.');}}><label className="sr-only" htmlFor="home-idea">What would you like to create?</label><textarea id="home-idea" value={homeIdea} onChange={e=>setHomeIdea(e.target.value)} rows={4} maxLength={1500} placeholder="A 20-second introduction to our new idea…"/><button className="button primary" disabled={!homeIdea.trim()||offline}>Start creating</button></form>{homeReply&&<p role="status">{homeReply}</p>}<button className="text-button" onClick={()=>setCreating(true)}>Create with my own script</button><button className="text-button" onClick={()=>go("connect")}>Connect your agent</button></div>) : view === "home" ? null : view === "connect" ? (
+            {view === "home" && !campaign ? (<div className="empty-state studio-first">
+              <h1>What will we create today?</h1>
+              <p>Describe your idea. Shape it with Faceful.</p>
+              <form className="home-idea-form" aria-busy={homeBusy} onSubmit={e=>{e.preventDefault();void submitHomeIdea();}}>
+                <label className="sr-only" htmlFor="home-idea">What would you like to create?</label>
+                <textarea id="home-idea" value={homeIdea} onChange={e=>setHomeIdea(e.target.value)} rows={4} maxLength={1500} placeholder="A 20-second introduction to our new idea…" enterKeyHint="send" disabled={homeBusy} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void submitHomeIdea();}}}/>
+                <button className="button primary" disabled={!homeIdea.trim()||offline||homeBusy}>{homeBusy?"Drafting…":"Start creating"}</button>
+              </form>
+              <div className="home-turn" role="status">
+                {homeTurn&&<p className="home-turn-request"><small>You</small>{homeTurn.text}</p>}
+                {homeBusy&&<p className="home-turn-working"><LoaderCircle size={14} className="spin" aria-hidden="true"/>Preparing your first drafts…</p>}
+                {homeReply&&<p className="home-turn-reply">{homeReply}</p>}
+              </div>
+              {!!homeTurn?.suggestions.length&&!homeBusy&&<div className="director-suggestions home-suggestions" aria-label="Suggested next steps">{homeTurn.suggestions.filter(prompt=>prompt!=="Show my content").map(prompt=><button key={prompt} onClick={()=>homeSuggestion(prompt)}>{prompt}</button>)}</div>}
+              <div className="home-actions" aria-label="Other ways to start">
+                {!fixture&&<button className="text-button" disabled={busy||homeBusy} onClick={()=>setTemplatesOpen(true)}>Choose a template</button>}
+                {!fixture&&<button className="text-button" disabled={busy||homeBusy} onClick={startSample}>Try the BeWell sample</button>}
+                <button className="text-button" onClick={()=>setCreating(true)}>Create with my own script</button>
+                <button className="text-button" onClick={()=>go("connect")}>Connect your agent</button>
+              </div>
+            </div>) : view === "home" ? null : view === "billing" ? (
+              <Billing
+                client={client}
+                context={context}
+                checkoutReturn={checkoutReturn}
+                onReturnHandled={() => {
+                  setCheckoutReturn(null);
+                  const url = new URL(location.href);
+                  url.searchParams.delete("checkout");
+                  history.replaceState(history.state, "", url);
+                  void refreshContext().catch(() => undefined);
+                }}
+              />
+            ) : view === "connect" ? (
               <Connect
                 context={context}
                 client={client}
@@ -737,6 +934,7 @@ export function Studio({
                       <span className="campaign-dot" />
                       Campaign <span>/</span>{" "}
                       {fixture ? "Local workspace" : "Shared workspace"}
+                      {campaign.origin === "sample" && <span className="sample-chip" title="Seeded demonstration content. Nothing in it was rendered or published.">Sample</span>}
                     </div>
                     <h1>{campaign.title}</h1>
                     <p>
@@ -871,7 +1069,7 @@ export function Studio({
                               </div>
                               <div className="card-state">
                                 <span className={`state-dot ${i.status}`} />
-                                {optimisticItems[i.id] ? "Saving draft…" : i.status.replaceAll("_", " ")}
+                                {optimisticItems[i.id] ? "Saving draft…" : itemBadge(i, campaign.jobs).label}
                                 <span>v{i.revision}</span>
                               </div>
                             </button>
@@ -1096,6 +1294,15 @@ export function Studio({
             key={item.id}
             campaign={campaign!}
             director={director}
+            onDirectorTurn={client.directorTurn}
+            onDirectorCreated={directorCreated}
+            onDirectorOpen={directorOpen}
+            onTemplates={fixture?undefined:()=>setTemplatesOpen(true)}
+            onBilling={fixture?undefined:()=>go("billing")}
+            focusDirector={focusDirector}
+            playOnOpen={playItem===item.id}
+            onPlayed={()=>setPlayItem(null)}
+            versions={fixture?undefined:{load:client.listVersions,restore:restoreVersion}}
             directorInstruction={directorDrafts[item.id]??""}
             onDirectorInstruction={value=>setDirectorDrafts(previous=>({...previous,[item.id]:value}))}
             onDirectorAction={executeDirector}
@@ -1134,11 +1341,12 @@ export function Studio({
         <p className="project-switch-workspace">{context.workspace.name} <span>· {context.workspace.role}</span></p>
         <nav className="mobile-project-list" aria-label="Projects">
           {campaigns.map(c => <button key={c.id} aria-current={campaign?.id === c.id ? "page" : undefined} onClick={() => openCampaign(c.id)}>
-            <span className="project-thumbnail" aria-hidden="true"><Folder size={20}/></span><span><strong>{c.title}</strong><small>{c.items.length} content items</small></span>{campaign?.id === c.id && <Check size={17}/>}</button>)}
+            <span className="project-thumbnail" aria-hidden="true"><Folder size={20}/></span><span><strong>{c.title}</strong><small>{c.items.length} content items{c.origin === "sample" ? " · Sample" : ""}</small></span>{campaign?.id === c.id && <Check size={17}/>}</button>)}
         </nav>
         <button className="button primary project-create" onClick={() => { setSidebar(false); setCreating(true); }}><Plus size={17}/>New campaign</button>
         <nav className="project-quick-links" aria-label="Workspace">
           <button onClick={() => go("brand")}><FileText size={18}/>Brand & sources<ChevronRight size={16}/></button>
+          {!fixture && <button onClick={() => go("billing")}><CreditCard size={18}/>Billing<ChevronRight size={16}/></button>}
           <button onClick={() => go("connect")}><Plug size={18}/>{activeConnections.length ? "Agent connections" : "Connect your agent"}<ChevronRight size={16}/></button>
           <button onClick={() => { setSidebar(false); setCommandOpen(true); }}><Search size={18}/>Search studio<ChevronRight size={16}/></button>
           <a href="/docs/">Help & documentation<ArrowUpRight size={16}/></a>
@@ -1173,6 +1381,13 @@ export function Studio({
                 : "Campaign created. Your agent can read these drafts.",
             );
           }}
+        />
+      )}
+      {templatesOpen && (
+        <Templates
+          client={client}
+          onClose={() => setTemplatesOpen(false)}
+          onCreated={(next) => adoptCampaign(next, "Drafts created from the template. Edit any line; nothing has been rendered.")}
         />
       )}
       {manifest && campaign && (

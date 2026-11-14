@@ -17,7 +17,8 @@
     "check:proxy": "tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs",
     "dev:api": "node --env-file=.env.local --import tsx scripts/dev-api.ts",
     "smoke:engine": "node --env-file=.env.local --import tsx scripts/smoke-engine.ts",
-    "check:api": "tsc --project tsconfig.api.json && node scripts/check-api.mjs"
+    "check:api": "tsc --project tsconfig.api.json && node scripts/check-api.mjs",
+    "test:ui:live": "playwright test -c tests/browser/live.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

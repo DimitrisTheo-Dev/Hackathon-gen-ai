@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { forgetMedia, stableMedia } from "../lib/media-url";
 import { SurfaceDialog } from "./SurfaceDialog";
 import {
   X,
@@ -145,22 +146,32 @@ export function Preview({
   passive?: boolean;
   brandName?: string;
 }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [item.media?.url]);
-  const expired =
-    item.media?.expiresAt &&
-    new Date(item.media.expiresAt).getTime() <= Date.now();
-  if (item.media && !expired && !failed)
+  // The src that failed to play. Compared by URL, so a fresh URL for the same media gets one more try.
+  const [failed, setFailed] = useState<string | null>(null);
+  useEffect(() => setFailed(null), [item.media?.id]);
+  const media = item.media;
+  // Polling returns a new signed URL on some reads; the player keeps one per media id so playback is never reset.
+  let playable = media ? stableMedia(media) : null;
+  if (media && playable && failed === playable.url && media.url !== playable.url) {
+    // The remembered URL failed and the server has since issued a different one: try that.
+    forgetMedia(media.id);
+    playable = stableMedia(media);
+  }
+  const expired = playable?.expiresAt != null && playable.expiresAt <= Date.now();
+  if (media && playable && !expired && failed !== playable.url)
     return (
       <div className="video-wrap">
         <video
-          key={item.media.id}
+          key={media.id}
           controls={!passive}
           tabIndex={passive ? -1 : undefined}
           playsInline
           preload="metadata"
-          src={item.media.url}
-          onError={() => setFailed(true)}
+          src={playable.url}
+          onError={() => {
+            forgetMedia(media.id);
+            setFailed(playable.url);
+          }}
           aria-label={`${item.title} video preview`}
         />
         {item.renderRevision === null && (
