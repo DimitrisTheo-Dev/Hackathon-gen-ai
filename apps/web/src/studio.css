@@ -201,8 +201,10 @@
   .app-frame .studio-first { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 24px 20px 9vh; text-align: center; }
   .app-frame .studio-first > h1 { font-size: clamp(28px, 3.1vw, 40px); line-height: 1.08; font-weight: 550; letter-spacing: -.035em; text-wrap: balance; }
   .app-frame .studio-first > p { margin-block: 12px 28px; font-size: 16px; line-height: 1.5; color: var(--text-secondary); max-inline-size: 46ch; text-wrap: pretty; }
-  .app-frame .home-idea-form { inline-size: min(100%, 680px); padding: 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); box-shadow: 0 1px 2px rgba(42,42,39,.04), 0 12px 40px rgba(42,42,39,.07); text-align: start; transition: border-color var(--dur-fast) ease, box-shadow var(--dur-base) ease; }
-  .app-frame .home-idea-form:focus-within { border-color: var(--focus); box-shadow: 0 1px 2px rgba(42,42,39,.05), 0 16px 48px rgba(42,42,39,.10); }
+  /* First-run composer: the same card as the project home composer (editor.css) — lifts 1px and gains a soft ring on focus. */
+  .app-frame .home-idea-form { inline-size: min(100%, 680px); padding: 6px; border: 1px solid var(--border); border-radius: 22px; background: var(--surface); box-shadow: 0 1px 2px rgba(42,42,39,.04), 0 12px 40px rgba(42,42,39,.07); text-align: start; transition: border-color var(--dur-fast) ease, box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+  .app-frame .home-idea-form:focus-within { border-color: var(--focus); box-shadow: 0 0 0 4px rgba(42,42,39,.055), 0 2px 4px rgba(42,42,39,.05), 0 20px 52px rgba(42,42,39,.11); transform: translateY(-1px); }
+  @media (prefers-reduced-motion: reduce) { .app-frame .home-idea-form:focus-within { transform: none; } }
   .app-frame .home-idea-form textarea { display: block; inline-size: 100%; min-block-size: 76px; margin: 0; padding: 14px 16px 6px; border: 0; border-radius: 14px; background: transparent; resize: none; font-size: 16px; line-height: 1.5; color: var(--ink); }
   .home-idea-form textarea:focus, .home-idea-form textarea:focus-visible { outline: none; box-shadow: none; }
   .home-idea-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 4px 4px 14px; }
@@ -242,7 +244,6 @@
   .app-frame .editor .director-intro h3 { margin: 14px 0 6px; font-size: 19px; font-weight: 550; line-height: 1.2; letter-spacing: -.025em; text-wrap: balance; }
   .app-frame .director-intro p { font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); text-wrap: pretty; }
   .app-frame .director-context { margin-inline: 2px; }
-  .app-frame .director-availability { margin: 12px 2px 0; padding: 9px 11px; border-radius: 10px; background: var(--warning-surface); color: var(--warning-ink); font-size: 12.5px; line-height: 1.5; }
 
   .app-frame .director-turn { display: flex; flex-direction: column; padding-block-start: 22px; }
   .app-frame .director-user { align-self: flex-end; max-inline-size: 86%; margin: 0; padding: 9px 13px; border-radius: 17px 17px 5px 17px; background: var(--subtle); color: var(--ink); font-size: 14px; line-height: 1.5; }
@@ -309,7 +310,7 @@
   .app-frame .field :is(input, textarea, select), .app-frame .title-input { border-radius: 10px; }
 
   /* Home (with a project): the same panel, centred, without item chrome */
-  .app-frame .editor-home :is(.editor-heading, .director-tabs, .director-job, .director-context-line, #director-scope) { display: none; }
+  .app-frame .editor-home :is(.editor-heading, .director-tabs, .director-job, .director-context-line) { display: none; }
   .app-frame .editor-home.surface-dialog { background: transparent; }
   .app-frame .editor-home .director-composer-actions { justify-content: space-between; }
   @media (min-width: 1001px) {
@@ -323,13 +324,12 @@
     .app-frame .editor-home .director-intro p { font-size: 16px; }
     .app-frame .editor-home .director-context { display: none; }
     .app-frame .editor-home .director-compose-area { display: flex; flex-direction: column; padding: 0 8px; margin: 0; overflow: visible; max-block-size: none; }
-    .app-frame .editor-home .director-composer { order: 1; border-radius: 20px; padding: 4px; box-shadow: 0 1px 2px rgba(42,42,39,.04), 0 12px 40px rgba(42,42,39,.07); }
+    .app-frame .editor-home .director-composer { border-radius: 20px; padding: 4px; box-shadow: 0 1px 2px rgba(42,42,39,.04), 0 12px 40px rgba(42,42,39,.07); }
     .app-frame .editor-home .director-composer textarea { min-block-size: 64px; font-size: 16px; padding: 10px 14px 4px; }
     .app-frame .editor-home .director-context-line { padding: 10px 14px 0; }
-    .app-frame .editor-home .director-suggestions { order: 2; justify-content: center; gap: 8px; margin: 18px 0 0; }
+    .app-frame .editor-home .director-suggestions { justify-content: center; gap: 8px; margin: 18px 0 0; }
     .app-frame .editor-home .director-suggestions button { min-block-size: 36px; padding: 0 14px; font-size: 13px; }
-    .app-frame .editor-home .director-attachments { order: 2; }
-    .app-frame .editor-home .director-quick-actions { order: 3; justify-content: center; margin-block-start: 14px; gap: 4px 20px; }
+    .app-frame .editor-home .director-quick-actions { justify-content: center; margin-block-start: 14px; gap: 4px 20px; }
     .app-frame .editor-home .director-storage { flex-basis: 100%; margin: 6px 0 0; text-align: center; }
     .app-frame .editor-home .director-send { inline-size: 36px; block-size: 36px; }
   }
@@ -577,9 +577,60 @@
   .brand-footnote { margin: 32px 0 0; padding-block-start: 16px; border-block-start: 1px solid var(--border); max-inline-size: 76ch; font-size: 12px; line-height: 1.6; color: var(--text-secondary); text-wrap: pretty; }
 
   /* Activity dialog: the edit count and a manual refresh live with the record they describe */
-  .activity-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-end: 14px; }
-  .activity-tools p { margin: 0; font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-  .app-frame .activity-tools .button { min-block-size: 34px; padding-inline: 12px; gap: 6px; font-size: 13px; }
+  .activity-summary { margin: 14px 0 0 40px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+  /* Activity: a calm timeline. One icon per kind of action, who and when on one quiet line, outcome as a chip. */
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline-entry { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding-block: 0 18px; }
+  .timeline-entry:last-child { padding-block-end: 2px; }
+  /* The thread between entries, drawn under the icons. */
+  .timeline-entry:not(:last-child)::before { content: ""; position: absolute; inset-block: 32px 2px; inset-inline-start: 13.5px; inline-size: 1px; background: var(--border); }
+  .timeline-icon { display: grid; place-items: center; inline-size: 28px; block-size: 28px; border-radius: 50%; background: var(--subtle); color: var(--ink-secondary); }
+  .timeline-body { display: grid; gap: 4px; min-inline-size: 0; padding-block-start: 4px; }
+  .timeline-action { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0; font-size: 13.5px; font-weight: 500; line-height: 1.4; color: var(--ink); text-wrap: pretty; overflow-wrap: anywhere; }
+  .timeline-count { padding: 0 6px; border-radius: 999px; background: rgba(42,42,39,.055); font-size: 11.5px; font-weight: 500; line-height: 1.6; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+  .timeline-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+  .timeline-actor { display: inline-flex; align-items: center; gap: 6px; min-inline-size: 0; max-inline-size: 100%; color: var(--ink-secondary); }
+  .timeline-avatar { display: grid; place-items: center; flex: 0 0 auto; inline-size: 18px; block-size: 18px; border-radius: 50%; background: var(--muted-surface); font-size: 10px; font-weight: 600; line-height: 1; color: var(--ink); }
+  .timeline-avatar.is-you { background: var(--art-wash); }
+  .timeline-avatar.is-agent { background: var(--ink); color: var(--surface); }
+  .timeline-avatar.is-system { background: transparent; box-shadow: inset 0 0 0 1px var(--border); color: var(--ink-secondary); }
+  .timeline-time { position: relative; border-radius: 4px; font-variant-numeric: tabular-nums; cursor: default; }
+  /* The exact time: a small tooltip on hover (after a short delay) and at once on keyboard focus. */
+  .timeline-time::after { content: attr(data-exact); position: absolute; inset: auto auto calc(100% + 6px) 50%; z-index: 3; translate: -50% 2px; padding: 4px 8px; border-radius: 7px; background: var(--ink); color: var(--surface); font-size: 11.5px; line-height: 1.4; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 120ms ease, translate 120ms var(--ease-out); }
+  .timeline-time:focus-visible::after { opacity: 1; translate: -50% 0; }
+  .timeline-chip { padding: 0 7px; border-radius: 999px; background: rgba(42,42,39,.055); font-size: 11.5px; line-height: 1.6; color: var(--ink-secondary); white-space: nowrap; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .timeline-version { padding: 0 4px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--border); font-size: 10.5px; font-weight: 500; line-height: 1.6; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .timeline-empty { margin: 4px 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  @media (hover: hover) and (pointer: fine) {
+    .timeline-time:hover::after { opacity: 1; translate: -50% 0; transition-delay: 350ms; }
+  }
+  .activity-jobs { margin-block-start: 20px; padding-block-start: 16px; border-block-start: 1px solid var(--border); }
+  .activity-jobs h3 { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; line-height: 1.4; color: var(--ink-secondary); }
+  .job-list { list-style: none; display: grid; gap: 2px; margin: 0; padding: 0; }
+  .job-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; min-block-size: 36px; }
+  .job-body p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-secondary); overflow-wrap: anywhere; }
+  .job-body strong { font-weight: 550; color: var(--ink); }
+  .job-body .job-error { font-size: 12px; color: var(--danger); }
+  .app-frame .job-cancel { grid-column: 1 / -1; justify-self: start; min-block-size: 28px; padding: 0; font-size: 12.5px; color: var(--text-secondary); }
+
+  /* Schedule with no requested times: one empty state, two ways forward. */
+  .schedule-empty { display: grid; justify-items: start; gap: 6px; max-inline-size: 760px; box-sizing: border-box; padding: 22px 24px 24px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); }
+  .schedule-empty-icon { display: grid; place-items: center; inline-size: 40px; block-size: 40px; margin-block-end: 8px; border-radius: 12px; background: var(--art-wash); color: var(--ink); }
+  .schedule-empty h2 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.3; letter-spacing: -.015em; }
+  .schedule-empty p { margin: 0; max-inline-size: 52ch; font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .schedule-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 12px; }
+  .app-frame .schedule-empty-actions .button { min-block-size: 36px; padding-inline: 14px; gap: 7px; font-size: 13px; }
+  /* Some drafts timed, some not: one quiet line under the week. */
+  .schedule-untimed { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; max-inline-size: 1120px; margin: 14px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  .app-frame .schedule-untimed .text-button { min-block-size: 28px; padding: 0; font-size: 13px; color: var(--ink); text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+  @media (hover: hover) and (pointer: fine) {
+    .app-frame .schedule-untimed .text-button:hover { text-decoration-color: currentColor; }
+    .app-frame .job-cancel:hover { color: var(--ink); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .timeline-time::after { transition: opacity 120ms ease; translate: -50% 0; }
+  }
 
   @media (max-width: 760px) {
     /* The top bar already names the project (it is the project switcher), so the heading is kept for assistive tech only. */
@@ -604,6 +655,11 @@
     .app-frame .day-title { min-block-size: 44px; margin: -6px 0 -4px; }
     .day-targets > li { min-block-size: 40px; }
     .app-frame .schedule-grant { min-block-size: 44px; }
+    .schedule-empty { padding: 18px 16px 18px; }
+    .schedule-empty-actions { inline-size: 100%; }
+    .app-frame .schedule-empty-actions .button { flex: 1 1 140px; min-block-size: 44px; }
+    .app-frame .schedule-untimed .text-button, .app-frame .job-cancel { min-block-size: 44px; }
+    .timeline-time { padding-block: 4px; }
     .brand-page { padding: 20px 16px 40px; }
     .brand-monogram { inline-size: 48px; block-size: 48px; border-radius: 14px; font-size: 21px; }
     .brand-head h1 { font-size: 23px; }

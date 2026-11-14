@@ -62,6 +62,9 @@ type Props = {
   onDirectorOpen?: (target: NonNullable<DirectorTurnResult["open"]>) => void;
   onTemplates?: () => void;
   onBilling?: () => void;
+  /** Optional: switch the studio to Agents / Brand & sources in place. Without them those links navigate. */
+  onAgents?: () => void;
+  onSources?: () => void;
   focusDirector?: boolean;
   /** Open Details and start the saved video once, e.g. after "find … and play it". */
   playOnOpen?: boolean;
@@ -94,7 +97,7 @@ type Props = {
 
 export function Editor({
   campaign, director, onDirectorAction, directorInstruction, onDirectorInstruction, home=false, open=true, onStart, onCreate, onShowContent,
-  onDirectorTurn, onDirectorCreated, onDirectorOpen, onDirectorBusy, channels, onTemplates, onBilling, focusDirector=false, playOnOpen=false, onPlayed, versions,
+  onDirectorTurn, onDirectorCreated, onDirectorOpen, onDirectorBusy, channels, onTemplates, onBilling, onAgents, onSources, focusDirector=false, playOnOpen=false, onPlayed, versions,
   item,
   index,
   context,
@@ -416,7 +419,7 @@ export function Editor({
       </div>
       {/* Kept mounted while Details is open so an in-flight plan, the scope and attachments are not lost. */}
       <div className="editor-chat" hidden={mode!=='chat'}>
-        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');scroller.current?.scrollTo({top:0});}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>reveal('versions'):undefined} onPresenter={()=>reveal('presenter')} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
+        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');scroller.current?.scrollTo({top:0});}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>reveal('versions'):undefined} onPresenter={()=>reveal('presenter')} onAgents={onAgents} onSources={onSources} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
       </div>
       <div className="editor-details" hidden={mode!=='details'}>
       <div className="editor-scroll" ref={scroller}>

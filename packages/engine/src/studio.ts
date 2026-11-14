@@ -1,11 +1,17 @@
 import {
+  addSourceInputSchema,
+  brandSchema,
   campaignSchema,
   contentSchema,
   contextSchema,
+  removeSourceInputSchema,
   reviseInputSchema,
   restoreInputSchema,
+  SOURCE_LIMITS,
   startCampaignInputSchema,
+  updateBrandInputSchema,
   versionSchema,
+  type Brand,
   type Campaign,
   type ContentItem,
   type ContentVersion,
@@ -65,6 +71,19 @@ export async function creditBalance(deps: EngineDeps, orgId: string): Promise<nu
 
 /* ───────────────────────── context ───────────────────────── */
 
+const DEFAULT_BRAND_COLOR = "#5F6C66";
+/** The brand kit as every reader sees it. An unnamed brand falls back to the workspace name. */
+function brandContract(row: Row | null, orgName: string): Brand {
+  return parse(brandSchema, {
+    name: row?.name || orgName,
+    description: row?.description ?? "",
+    rules: Array.isArray(row?.rules) ? row.rules.filter((rule: unknown): rule is string => typeof rule === "string") : [],
+    color: row?.color || DEFAULT_BRAND_COLOR,
+    tone: row?.tone ?? "",
+    audience: row?.audience ?? "",
+  });
+}
+
 export async function getContext(deps: EngineDeps, ctx: Ctx): Promise<StudioContext> {
   requireScope(ctx, "campaign:read");
   const [brand, avatars, connections, providerConnections, balance, workspaces] = await Promise.all([
@@ -82,12 +101,7 @@ export async function getContext(deps: EngineDeps, ctx: Ctx): Promise<StudioCont
   return parse(contextSchema, {
     workspace: { id: ctx.org.id, name: ctx.org.name, timezone: ctx.org.timezone, role: ctx.role, type: ctx.org.type },
     principal: { id: ctx.actorId, kind: ctx.actorKind, scopes: [...ctx.scopes] },
-    brand: {
-      name: brand?.name || ctx.org.name,
-      description: brand?.description ?? "",
-      rules: Array.isArray(brand?.rules) ? brand.rules : [],
-      color: brand?.color ?? "#5F6C66",
-    },
+    brand: brandContract(brand, ctx.org.name),
     avatars,
     channels: [
       ...providerConnections.map((row) => ({ id: row.id, platform: row.platform, displayName: row.display_name, state: row.state })),
@@ -471,11 +485,16 @@ export async function addDraft(deps: EngineDeps, ctx: Ctx, raw: unknown): Promis
 const RENDER_FIELDS = ["script", "avatarId", "language", "style"] as const;
 const columnFor: Record<string, string> = { title: "title", script: "script", avatarId: "avatar_id", language: "language", style: "style", variants: "variants", targets: "targets" };
 
-export async function bumpProject(deps: EngineDeps, ctx: Ctx, projectId: string, human: boolean) {
+/**
+ * `change` (optional) derives extra project columns from the row it is about to replace, so a
+ * read-modify-write such as editing `sources` commits atomically with the revision bump.
+ */
+export async function bumpProject(deps: EngineDeps, ctx: Ctx, projectId: string, human: boolean, change?: (project: Row) => Row) {
   // Optimistic loop: the project revision is a monotonic change counter shared by concurrent item edits.
   for (let attempt = 0; attempt < 5; attempt++) {
     const project = await loadProject(deps, ctx, projectId);
     const updated = await deps.store.update("projects", { id: projectId, org_id: ctx.org.id, revision: project.revision }, {
+      ...change?.(project),
       revision: project.revision + 1,
       human_interventions: project.human_interventions + (human ? 1 : 0),
       updated_at: deps.now().toISOString(),
@@ -589,6 +608,92 @@ export async function restoreVersion(deps: EngineDeps, ctx: Ctx, raw: unknown): 
       return getItem(deps, ctx, item.id);
     }
     return restored;
+  });
+}
+
+/* ───────────────────────── brand kit and project sources ───────────────────────── */
+
+const BRAND_FIELD_LABELS: Record<string, string> = { name: "name", description: "description", tone: "tone", audience: "audience", color: "colour", rules: "guardrails" };
+
+/**
+ * Edits the workspace brand kit. Every later draft — written by a person, the Director or a connected
+ * agent — reads it as data inside the workspace context. It is never treated as instructions.
+ */
+export async function updateBrand(deps: EngineDeps, ctx: Ctx, raw: unknown): Promise<Brand> {
+  requireScope(ctx, "content:edit");
+  const input = parse(updateBrandInputSchema, raw);
+  return idempotent(deps, ctx, "update_brand", input.operationKey, input, async () => {
+    const { operationKey: _key, ...patch } = input;
+    const columns: Row = {};
+    for (const [field, value] of Object.entries(patch)) if (value !== undefined) columns[field] = field === "color" ? String(value).toUpperCase() : value;
+    const changed = Object.keys(columns).map((field) => BRAND_FIELD_LABELS[field] ?? field);
+    columns.updated_at = deps.now().toISOString();
+    // One profile per workspace, keyed by the organization from the credential, never by anything in the request.
+    let rows = await deps.store.update("brand_profiles", { org_id: ctx.org.id }, columns);
+    if (!rows.length) {
+      const fresh = { org_id: ctx.org.id, name: "", description: "", rules: [], color: DEFAULT_BRAND_COLOR, tone: "", audience: "", preferred_avatar_id: null, ...columns };
+      try {
+        rows = [await deps.store.insert("brand_profiles", fresh)];
+      } catch (error) {
+        if (!(error instanceof StoreConflict)) throw error;
+        rows = await deps.store.update("brand_profiles", { org_id: ctx.org.id }, columns);
+      }
+    }
+    await audit(deps, ctx, { action: "Updated the brand kit", objectId: ctx.org.id, outcome: `Changed ${changed.join(", ")}` });
+    return brandContract(rows[0] ?? null, ctx.org.name);
+  });
+}
+
+/**
+ * Sources never change a video, caption, account or time, but they do change what the drafts may cite,
+ * and the revision bump below already makes any open review unusable (approval compares the project
+ * revision). The stored review state says so too, rather than showing an approval that can no longer be
+ * committed. Posts already committed to a destination are untouched.
+ */
+async function staleOpenReviews(deps: EngineDeps, ctx: Ctx, projectId: string) {
+  await deps.store.update("schedule_manifests", { org_id: ctx.org.id, project_id: projectId, state: { in: ["required", "approved"] } }, { state: "stale" });
+}
+const sourcesOf = (project: Row): Row[] => (Array.isArray(project.sources) ? project.sources : []);
+
+/** Adds a source to one project. The link is a reference only — nothing fetches it. The excerpt is the text drafts may use. */
+export async function addSource(deps: EngineDeps, ctx: Ctx, raw: unknown): Promise<Campaign> {
+  requireScope(ctx, "content:edit");
+  const input = parse(addSourceInputSchema, raw);
+  return idempotent(deps, ctx, "add_source", input.operationKey, input, async () => {
+    const project = await loadProject(deps, ctx, input.campaignId);
+    // Supplied text is stored as data. It is never fetched, executed or treated as instructions.
+    const source = { id: crypto.randomUUID(), title: input.title, url: input.url ?? null, excerpt: input.excerpt, permittedAssetIds: [], retrievedAt: deps.now().toISOString() };
+    const updated = await bumpProject(deps, ctx, project.id, ctx.actorKind === "human", (current) => {
+      const sources = sourcesOf(current);
+      if (sources.length >= SOURCE_LIMITS.perProject) throw new EngineError("quota_exceeded", `A project holds up to ${SOURCE_LIMITS.perProject} sources. Remove one before adding another.`);
+      return { sources: [...sources, source] };
+    });
+    await staleOpenReviews(deps, ctx, project.id);
+    await audit(deps, ctx, { projectId: project.id, action: "Added a source", objectId: source.id, revision: updated.revision, outcome: source.url ? "Saved · the link is a reference and was not fetched" : "Saved" });
+    return getCampaign(deps, ctx, project.id);
+  });
+}
+
+/** Removes a source from a project and from every draft in it that cited it. */
+export async function removeSource(deps: EngineDeps, ctx: Ctx, raw: unknown): Promise<Campaign> {
+  requireScope(ctx, "content:edit");
+  const input = parse(removeSourceInputSchema, raw);
+  return idempotent(deps, ctx, "remove_source", input.operationKey, input, async () => {
+    const project = await loadProject(deps, ctx, input.campaignId);
+    if (!sourcesOf(project).some((source) => source.id === input.sourceId)) throw new EngineError("not_found", "This source was not found in the project.");
+    // Drafts stop citing it first, so a retry after an interruption still finds the source and finishes.
+    const items = await deps.store.select("content_items", { org_id: ctx.org.id, project_id: project.id });
+    let cited = 0;
+    for (const item of items) {
+      const ids: string[] = Array.isArray(item.source_ids) ? item.source_ids : [];
+      if (!ids.includes(input.sourceId)) continue;
+      cited++;
+      await deps.store.update("content_items", { id: item.id, org_id: ctx.org.id }, { source_ids: ids.filter((id) => id !== input.sourceId) });
+    }
+    const updated = await bumpProject(deps, ctx, project.id, ctx.actorKind === "human", (current) => ({ sources: sourcesOf(current).filter((source) => source.id !== input.sourceId) }));
+    await staleOpenReviews(deps, ctx, project.id);
+    await audit(deps, ctx, { projectId: project.id, action: "Removed a source", objectId: input.sourceId, revision: updated.revision, outcome: cited ? `No longer cited by ${cited} draft${cited === 1 ? "" : "s"}` : "Removed" });
+    return getCampaign(deps, ctx, project.id);
   });
 }
 

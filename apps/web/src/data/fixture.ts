@@ -1,11 +1,17 @@
 import { z } from "zod";
 import {
+  addSourceInputSchema,
+  brandSchema,
+  removeSourceInputSchema,
   startCampaignInputSchema,
+  updateBrandInputSchema,
+  SOURCE_LIMITS,
   campaignSchema,
   contextSchema,
   contentSchema,
   manifestSchema,
   reviseInputSchema,
+  type Brand,
   type Campaign,
   type ContentItem,
   type Platform,
@@ -142,6 +148,8 @@ const context: StudioContext = contextSchema.parse({
       "Keep the tone clear, inviting and calm.",
     ],
     color: "#5F6C66",
+    tone: "Clear, inviting, calm",
+    audience: "Festival visitors",
   },
   avatars: [],
   channels: platforms.map((platform) => ({
@@ -179,6 +187,8 @@ const context: StudioContext = contextSchema.parse({
 
 const stateSchema = z.object({
   version: z.literal(1),
+  /** The brand kit as edited on this device. Absent until the first edit; older saved states have none. */
+  brand: brandSchema.optional(),
   campaigns: z.array(campaignSchema),
   operations: z.record(
     z.string(),
@@ -302,6 +312,21 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     write(state);
     return structuredClone(result);
   }
+  /** A project-level change: the revision moves on, and the activity says it stayed on this device. */
+  function touch(campaign: Campaign, now: string, action: string, objectId: string) {
+    campaign.revision += 1;
+    campaign.updatedAt = now;
+    campaign.humanInterventions += 1;
+    campaign.activity.push({
+      id: crypto.randomUUID(),
+      actor: "You · development fixture",
+      action,
+      objectId,
+      revision: campaign.revision,
+      at: now,
+      outcome: "Saved in this browser only",
+    });
+  }
   async function unavailable(): Promise<never> {
     throw new ApiError(
       "unsupported",
@@ -376,7 +401,7 @@ export function createFixtureClient(storage?: Storage): StudioClient {
             targets: [],
             style: {
               captions: true,
-              brandColor: context.brand.color,
+              brandColor: (state.brand ?? context.brand).color,
               captionPosition: "bottom",
             },
             sourceIds: source.map((s) => s.id),
@@ -387,7 +412,7 @@ export function createFixtureClient(storage?: Storage): StudioClient {
         return campaign;
       });
     },
-    getContext: async () => structuredClone(context),
+    getContext: async () => ({ ...structuredClone(context), brand: structuredClone(read().brand ?? context.brand) }),
     listCampaigns: async () => structuredClone(read().campaigns),
     getCampaign: async (id) => structuredClone(campaignFrom(read(), id)),
     reviseContent: async (raw) => {
@@ -525,5 +550,57 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     getChannels: unavailable,
     connectChannel: unavailable,
     disconnectChannel: unavailable,
+    updateBrand: async (raw) => {
+      const input = validate(updateBrandInputSchema, raw);
+      return mutate("update_brand", input, brandSchema, (state) => {
+        const { operationKey: _key, ...patch } = input;
+        const brand: Brand = { ...(state.brand ?? context.brand) };
+        if (patch.name !== undefined) brand.name = patch.name;
+        if (patch.description !== undefined) brand.description = patch.description;
+        if (patch.tone !== undefined) brand.tone = patch.tone;
+        if (patch.audience !== undefined) brand.audience = patch.audience;
+        if (patch.color !== undefined) brand.color = patch.color.toUpperCase();
+        if (patch.rules !== undefined) brand.rules = patch.rules;
+        state.brand = brand;
+        return brand;
+      });
+    },
+    addSource: async (raw) => {
+      const input = validate(addSourceInputSchema, raw);
+      return mutate("add_source", input, campaignSchema, (state) => {
+        const campaign = campaignFrom(state, input.campaignId);
+        if (campaign.sources.length >= SOURCE_LIMITS.perProject)
+          throw new ApiError(
+            "quota_exceeded",
+            `A project holds up to ${SOURCE_LIMITS.perProject} sources. Remove one before adding another.`,
+          );
+        const now = new Date().toISOString();
+        // A link is a reference only: the fixture, like the engine, never fetches it.
+        const source = {
+          id: `source-${crypto.randomUUID()}`,
+          title: input.title,
+          url: input.url ?? null,
+          excerpt: input.excerpt,
+          permittedAssetIds: [],
+          retrievedAt: now,
+        };
+        campaign.sources.push(source);
+        touch(campaign, now, "Added a source", source.id);
+        return campaign;
+      });
+    },
+    removeSource: async (raw) => {
+      const input = validate(removeSourceInputSchema, raw);
+      return mutate("remove_source", input, campaignSchema, (state) => {
+        const campaign = campaignFrom(state, input.campaignId);
+        if (!campaign.sources.some((source) => source.id === input.sourceId))
+          throw new ApiError("not_found", "This source was not found in the project.");
+        campaign.sources = campaign.sources.filter((source) => source.id !== input.sourceId);
+        for (const item of campaign.items)
+          item.sourceIds = item.sourceIds.filter((id) => id !== input.sourceId);
+        touch(campaign, new Date().toISOString(), "Removed a source", input.sourceId);
+        return campaign;
+      });
+    },
   };
 }

@@ -18,6 +18,10 @@ import {
   type RestoreInput,
   type Template,
   type TemplateInput,
+  type AddSourceInput,
+  type Brand,
+  type RemoveSourceInput,
+  type UpdateBrandInput,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -192,6 +196,12 @@ export interface StudioClient {
   getChannels(): Promise<ChannelStatus>;
   connectChannel(input: ConnectChannelInput): Promise<ChannelConnection>;
   disconnectChannel(input: DisconnectChannelInput): Promise<DisconnectChannelResult>;
+  /** The workspace brand kit every draft starts from. Only the fields sent change. */
+  updateBrand(input: UpdateBrandInput): Promise<Brand>;
+  /** Adds a source to one project. The link is a reference only; nothing fetches it. */
+  addSource(input: AddSourceInput): Promise<Campaign>;
+  /** Removes a source from a project and from every draft that cited it. */
+  removeSource(input: RemoveSourceInput): Promise<Campaign>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {

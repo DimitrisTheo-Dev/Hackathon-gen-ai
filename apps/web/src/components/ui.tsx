@@ -78,12 +78,15 @@ export function Modal({
   onClose,
   wide = false,
   animateEntry = true,
+  actions,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
   animateEntry?: boolean;
+  /** Small header controls shown before the close button (e.g. a refresh). */
+  actions?: ReactNode;
 }) {
   return (
     <SurfaceDialog title={title} className={`modal ${wide ? "wide" : ""} ${animateEntry ? "" : "instant"}`} animateEntry={animateEntry} onClose={onClose}>
@@ -91,14 +94,17 @@ export function Modal({
       {grip}
       <header className="modal-header">
         <h2>{title}</h2>
-        <button
-          className="icon-button"
-          data-surface-focus
-          aria-label="Close dialog"
-          onClick={close}
-        >
-          <X size={19} />
-        </button>
+        <div className="modal-header-actions">
+          {actions}
+          <button
+            className="icon-button"
+            data-surface-focus
+            aria-label="Close dialog"
+            onClick={close}
+          >
+            <X size={19} />
+          </button>
+        </div>
       </header>
       <div className="modal-content">{children}</div>
       </>}

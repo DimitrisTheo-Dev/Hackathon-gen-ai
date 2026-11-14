@@ -96,6 +96,62 @@ for(const width of [390,320])test(`new campaign sheet ${width}px: no sideways sc
  expect(await page.locator('#draft-script-0').evaluate(el=>getComputedStyle(el).fontSize)).toBe('16px');
  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);
 });
+test('schedule review is a readiness checklist: what holds it back, for how many drafts, and a guarded approval',async({page})=>{
+ await page.goto('/dev/studio/?view=canvas');await page.locator('#workspace-content').getByRole('button',{name:'Review schedule',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Review schedule'});await expect(dialog.getByRole('heading',{name:'Not ready to schedule'})).toBeVisible();
+ const steps=dialog.locator('.review-step');await expect(steps).toHaveCount(3);
+ await expect(steps.nth(0)).toContainText('Videos rendered');await expect(steps.nth(0)).toContainText('0 of 3');await expect(steps.nth(0)).toContainText('All 3 drafts');
+ await expect(steps.nth(1)).toContainText('Posting times and channels');await expect(steps.nth(1)).toContainText('cannot be approved or published');
+ await expect(steps.nth(2)).toContainText('Your approval');
+ // Every server blocker is still listed; nothing is shown as scheduled; the one approve action explains why it waits.
+ await expect(dialog.locator('.review-blockers li')).toHaveCount(2);await expect(dialog.locator('.review-entries')).toHaveCount(0);
+ const approve=dialog.getByRole('button',{name:'Approve exact schedule'});await expect(approve).toBeDisabled();await expect(approve).toHaveAccessibleDescription('Finish the steps above first.');
+ await expect(dialog).toContainText('Approval covers exactly these videos, captions, accounts and times');
+ await dialog.getByRole('button',{name:'Keep editing'}).click();await expect(dialog).toHaveCount(0);
+});
+test('project sources attach as cards and show as removable pills in the composer',async({page})=>{
+ await page.goto('/dev/studio/?view=canvas');const clip=page.getByRole('button',{name:'Attach project sources'});await clip.click();
+ const card=page.getByRole('button',{name:'BeWell Festival · Quintessential case study',exact:true});await expect(card).toHaveAttribute('aria-pressed','false');await expect(card).toHaveAccessibleDescription(/quintessential\.gr/);
+ await expect(page.locator('.source-tray').getByRole('link',{name:'Add sources'})).toHaveAttribute('href',/\?view=brand$/);
+ await card.click();await expect(card).toHaveAttribute('aria-pressed','true');
+ const pills=page.locator('.director-composer').getByRole('list',{name:'Attached sources'});await expect(pills).toContainText('BeWell Festival');
+ await pills.getByRole('button',{name:'Remove BeWell Festival · Quintessential case study'}).click();await expect(pills).toHaveCount(0);await expect(card).toHaveAttribute('aria-pressed','false');
+ await card.focus();await page.keyboard.press('Space');await page.keyboard.press('Escape');await expect(page.locator('.source-tray')).toHaveCount(0);await expect(clip).toBeFocused();
+ await page.getByLabel('Direction for your content').fill('Set title: A sourced title');await page.getByRole('button',{name:'Prepare action plan'}).click();
+ await expect(page.locator('.director-user-meta').last()).toContainText('1 source attached');
+});
+test('without a model, a writing request hands off to the person’s own agent with a ready prompt',async({page,context,browserName})=>{
+ if(browserName==='chromium')await context.grantPermissions(['clipboard-read','clipboard-write']);
+ await page.goto('/dev/studio/?view=canvas');await expect(page.locator('.director-status')).toContainText('AI isn’t connected');
+ await expect(page.locator('.director-status').getByRole('link',{name:'Use your own agent'})).toHaveAttribute('href',/\?view=connect$/);
+ await page.getByLabel('Direction for your content').fill('Rewrite the opening so it feels warmer');await page.getByRole('button',{name:'Prepare action plan'}).click();
+ const card=page.locator('.director-turn').last().locator('.agent-handoff');await expect(card).toContainText('Your own Claude Code can write this');
+ const prompt=card.getByLabel('Prompt for your agent');await expect(prompt).toContainText('revise the draft “Find your next moment”: Rewrite the opening so it feels warmer.');await expect(prompt).toContainText('Don’t render, schedule or publish anything');
+ await expect(card.getByRole('link',{name:'Open Agents'})).toHaveAttribute('href',/\?view=connect$/);await expect(card).not.toContainText('Your agent is connected');
+ await card.getByRole('button',{name:'Copy prompt'}).click();await expect(card.getByRole('button',{name:/Copied|Selected/})).toBeVisible();
+ if(browserName==='chromium')expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain('revise_draft');
+ // An exact edit is not a writing request: no hand-off for it.
+ await page.getByLabel('Direction for your content').fill('Set title: Exact words');await page.getByRole('button',{name:'Prepare action plan'}).click();await expect(page.locator('.director-turn').last().locator('.agent-handoff')).toHaveCount(0);
+});
+test('home composer: preference pills feed the request as plain words; an exact instruction is sent untouched',async({page})=>{
+ await page.goto('/dev/studio/');const input=page.getByLabel('Direction for your content');await expect(page.getByRole('heading',{name:'What will we create today?'})).toBeVisible();
+ await expect(page.locator('.director-availability')).toHaveCount(0);await expect(page.locator('.home-meta .director-status')).toContainText('AI writing isn’t connected');
+ await expect(page.locator('.home-chips').getByRole('button')).toHaveText(['Create a video','Choose an avatar','Plan a campaign','Show my content']);
+ await page.getByLabel('Format').selectOption('reel');await page.getByLabel('Length').selectOption('15');await page.getByLabel('Language').selectOption('el');
+ await expect(page.locator('.home-token[data-set]')).toHaveCount(3);
+ await input.fill('Set title: Exactly this');await input.press('Enter');await expect(page.locator('.director-plan')).toContainText('Exactly this');await expect(page.locator('.director-user').last()).toHaveText('Set title: Exactly this');
+ await page.goto('/dev/studio/');await page.getByLabel('Format').selectOption('reel');await page.getByLabel('Length').selectOption('15');await page.getByLabel('Language').selectOption('el');
+ await page.getByLabel('Direction for your content').fill('A launch video for our lunch box');await page.getByLabel('Direction for your content').press('Enter');
+ await expect(page.locator('.director-user').last()).toHaveText('A launch video for our lunch box — an Instagram Reel, 15 seconds, in Greek');
+ await expect(page.locator('.director-turn').last().locator('.agent-handoff')).toContainText('create a project for this request: A launch video for our lunch box — an Instagram Reel, 15 seconds, in Greek.');
+});
+for(const width of [390,320])test(`home, sources and review fit at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:844});const fits=()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);
+ await page.goto('/dev/studio/');await expect(page.getByRole('heading',{name:'What will we create today?'})).toBeVisible();expect(await fits()).toBe(true);
+ expect(await page.locator('.home-chips button').evaluateAll(els=>els.every(el=>el.getBoundingClientRect().height>=44))).toBe(true);
+ await page.goto('/dev/studio/?view=canvas');await page.locator('.content-select').first().click();await page.getByRole('button',{name:'Attach project sources'}).click();await expect(page.locator('.source-card')).toBeVisible();expect(await fits()).toBe(true);
+ await page.getByRole('button',{name:'Return to campaign'}).click();await page.getByRole('button',{name:'Review schedule',exact:true}).click();await expect(page.getByRole('heading',{name:'Not ready to schedule'})).toBeVisible();expect(await fits()).toBe(true);
+});
 test('OTP screens verify code, cooldown and failure without sending a real email',async({page})=>{
  const calls:string[]=[];
  await page.route('https://hgsgvdujzatfhsjoojll.supabase.co/auth/v1/**',async route=>{
