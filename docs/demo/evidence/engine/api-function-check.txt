@@ -1,0 +1,4 @@
+# corepack pnpm check:api · 2026-11-14T16:29:09Z
+$ tsc --project tsconfig.api.json && node scripts/check-api.mjs
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+API function check: compiled engine and MCP entries load in plain Node; health 200, unauthenticated 401, MCP resource metadata served.

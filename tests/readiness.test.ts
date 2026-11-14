@@ -6,7 +6,15 @@ import { z } from "zod";
 import {
   handlePublicRequest, openApiDocument, publicDocuments, publicOrigin,
   statusSchema, permissionsSchema, documentIndexSchema, documentSchema, problemSchema,
+  buildPublicStatus, buildPublicPermissions, deploymentFacts, type PublicEnv,
 } from "../packages/public-api/src/index";
+import { ALL_SCOPES, AGENT_GRANTABLE_SCOPES } from "../packages/engine/src/access";
+import { loadConfig } from "../packages/engine/src/config";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
+
+/** Placeholder configuration. Only presence and format matter; none of these values may ever appear in a response. */
+const engineEnv: PublicEnv = { SUPABASE_URL: "https://project.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_placeholder_value" };
+const fullEnv: PublicEnv = { ...engineEnv, RENDER_WORKER_TOKEN: "worker-token-placeholder-0123456789abcdef", ANTHROPIC_API_KEY: "model-key-placeholder", STRIPE_SECRET_KEY: "sk_test_placeholder", STRIPE_WEBHOOK_SECRET: "whsec_placeholder", STRIPE_PRICE_ID_DEMO: "price_placeholder" };
 
 const request = (path: string, method = "GET") => new Request(`${publicOrigin}${path}`, { method });
 const routes = [
@@ -17,7 +25,7 @@ const routes = [
 
 test("public discovery routes return valid typed JSON without authentication or private state", async () => {
   for (const [path, schema] of routes) {
-    const response = handlePublicRequest(request(path));
+    const response = handlePublicRequest(request(path), {});
     assert.ok(response); assert.equal(response.status, 200);
     assert.match(response.headers.get("Content-Type")!, /^application\/json/);
     assert.equal(response.headers.get("Cache-Control"), "public, max-age=60, stale-while-revalidate=300");
@@ -25,14 +33,71 @@ test("public discovery routes return valid typed JSON without authentication or 
     assert.ok(schema.safeParse(await response.json()).success, path);
     assert.equal(response.headers.get("Set-Cookie"), null);
   }
-  const body = await handlePublicRequest(request("/api/public/status"))!.json();
-  assert.ok(Object.values(body.engine).every((value) => value === false));
+  // A deployment without engine credentials: every capability is off, and the reason is stated.
+  const body = await handlePublicRequest(request("/api/public/status"), {})!.json();
+  const { billing, director, ...flags } = body.engine;
+  assert.deepEqual(Object.keys(flags).sort(), ["agentTokenIssuance", "campaignApi", "humanlikeRendering", "mcp", "publishing"]);
+  assert.ok(Object.values(flags).every((value) => value === false));
+  assert.equal(billing, "not_configured"); assert.equal(director, "basic");
+  assert.ok(body.blockers.some((blocker: string) => blocker.startsWith("Domain engine:")));
+  assert.ok(body.blockers.some((blocker: string) => blocker.startsWith("Publishing:")));
+  assert.equal(body.stage, "development");
   assert.equal(body.publicApi.authenticationRequired, false);
   assert.equal(body.studio.developmentFixturesAreLiveResults, false);
 });
 
+test("status describes the deployment it runs on: configured capabilities turn on, publishing never does", async () => {
+  // Engine only: the API, workspace tokens and MCP are on; rendering, billing and AI drafting are still off.
+  const engineOnly = buildPublicStatus(engineEnv);
+  assert.deepEqual(engineOnly.engine, { campaignApi: true, agentTokenIssuance: true, mcp: true, humanlikeRendering: false, publishing: false, billing: "not_configured", director: "basic" });
+  assert.ok(!engineOnly.blockers.some((blocker) => blocker.startsWith("Domain engine:")));
+  for (const prefix of ["Video rendering:", "Publishing:", "Billing:", "Creative Director:"]) assert.ok(engineOnly.blockers.some((blocker) => blocker.startsWith(prefix)), prefix);
+  // Everything configurable is configured: only publishing remains, because no adapter exists.
+  const full = buildPublicStatus(fullEnv);
+  assert.deepEqual(full.engine, { campaignApi: true, agentTokenIssuance: true, mcp: true, humanlikeRendering: true, publishing: false, billing: "sandbox", director: "ai" });
+  assert.equal(full.blockers.length, 1); assert.match(full.blockers[0], /^Publishing: no destination has approved API access/);
+  // The HTTP route serves the same per-deployment document, valid against the public schema.
+  const served = statusSchema.parse(await handlePublicRequest(request("/api/public/status"), fullEnv)!.json());
+  assert.deepEqual(served, full);
+  // Presence and format only: no configuration value reaches a public response.
+  for (const env of [engineEnv, fullEnv]) {
+    const text = JSON.stringify([buildPublicStatus(env), buildPublicPermissions(env)]);
+    for (const value of Object.values(env)) assert.ok(!text.includes(value!), "configuration values must never be emitted");
+  }
+  // Nothing is available without the engine, whatever else is set.
+  const { SUPABASE_SECRET_KEY: _secret, ...withoutSecret } = fullEnv;
+  assert.deepEqual(buildPublicStatus(withoutSecret).engine, buildPublicStatus({}).engine);
+  assert.equal(buildPublicStatus({ VITE_SUPABASE_URL: "https://project.supabase.co", SUPABASE_SECRET_KEY: "x" }).engine.mcp, true);
+  // Rejected or incomplete configuration is not reported as available.
+  assert.equal(buildPublicStatus({ ...fullEnv, RENDER_WORKER_TOKEN: "x".repeat(31) }).engine.humanlikeRendering, false);
+  assert.equal(buildPublicStatus({ ...fullEnv, STRIPE_SECRET_KEY: "sk_live_never" }).engine.billing, "not_configured");
+  assert.equal(buildPublicStatus({ ...fullEnv, STRIPE_MODE: "live" }).engine.billing, "not_configured");
+  assert.equal(buildPublicStatus({ ...fullEnv, STRIPE_WEBHOOK_SECRET: "" }).engine.billing, "not_configured");
+  assert.equal(buildPublicStatus({ ...engineEnv, AI_GATEWAY_API_KEY: "gateway" }).engine.director, "ai");
+});
+
+test("public status agrees with what the engine itself accepts as configuration", () => {
+  const variants: PublicEnv[] = [
+    {}, engineEnv, fullEnv,
+    { ...fullEnv, RENDER_WORKER_TOKEN: "too-short" }, { ...fullEnv, RENDER_WORKER_TOKEN: `  ${"y".repeat(32)}  ` },
+    { ...fullEnv, STRIPE_SECRET_KEY: "rk_test_restricted" }, { ...fullEnv, STRIPE_SECRET_KEY: "sk_live_x" }, { ...fullEnv, STRIPE_MODE: "production" },
+    { ...fullEnv, STRIPE_PRICE_ID_DEMO: "prod_wrong_object" }, { ...fullEnv, STRIPE_WEBHOOK_SECRET: "not-a-signing-secret" },
+    { ...fullEnv, ANTHROPIC_API_KEY: "   " }, { ...engineEnv, AI_GATEWAY_API_KEY: "gateway" },
+  ];
+  for (const env of variants) {
+    const config = loadConfig(env);
+    const facts = deploymentFacts(env);
+    const label = JSON.stringify(Object.keys(env));
+    assert.equal(facts.engine, Boolean(config.supabaseUrl) && Boolean(env.SUPABASE_SECRET_KEY?.trim()), label);
+    if (!facts.engine) continue;
+    assert.equal(facts.rendering, config.renderWorkerToken !== null, label);
+    assert.equal(facts.billing, config.stripe ? "sandbox" : "not_configured", label);
+    assert.equal(facts.director, config.llm ? "ai" : "basic", label);
+  }
+});
+
 test("permission definitions distinguish proposed scopes from a live grant or OAuth metadata", async () => {
-  const body = await handlePublicRequest(request("/api/public/permissions"))!.json();
+  const body = await handlePublicRequest(request("/api/public/permissions"), {})!.json();
   assert.equal(body.authenticationStatus, "awaiting_engine");
   assert.equal(body.liveGrantAvailable, false);
   assert.equal(body.publishingAuthorityIncluded, false);
@@ -40,6 +105,22 @@ test("permission definitions distinguish proposed scopes from a live grant or OA
   assert.ok(body.scopes.every((scope: { authority: string }) => scope.authority === "proposed_not_issued"));
   assert.ok(!("scopes_supported" in body));
   assert.ok(!("authorization_servers" in body));
+});
+
+test("with a configured engine, permissions are the ones it enforces for agents and nothing reserved for people", async () => {
+  const body = permissionsSchema.parse(await handlePublicRequest(request("/api/public/permissions"), engineEnv)!.json());
+  assert.equal(body.authenticationStatus, "live");
+  assert.equal(body.liveGrantAvailable, true);
+  assert.equal(body.publishingAuthorityIncluded, false);
+  assert.ok(body.scopes.every((scope) => scope.authority === "enforced"));
+  // The public list is exactly what the engine will grant an agent, and the remainder stays with people.
+  assert.deepEqual(body.scopes.map((scope) => scope.name), AGENT_GRANTABLE_SCOPES);
+  assert.deepEqual([...body.humanOnlyPermissions].sort(), ALL_SCOPES.filter((scope) => !AGENT_GRANTABLE_SCOPES.includes(scope)).sort());
+  for (const reserved of ["schedule:approve", "schedule:commit", "billing:manage", "connections:manage"]) assert.ok(!body.scopes.some((scope) => scope.name === reserved), reserved);
+  assert.deepEqual(buildPublicPermissions({}).humanOnlyPermissions, body.humanOnlyPermissions);
+  // Still documentation, never OAuth metadata: that lives on /.well-known/oauth-protected-resource and the issuer.
+  assert.ok(!("scopes_supported" in body)); assert.ok(!("authorization_servers" in body));
+  assert.match(body.note, /not OAuth scopes/);
 });
 
 test("HEAD returns the GET status and headers with an empty body on every public route", async () => {
@@ -179,30 +260,86 @@ test("public presentation links discovery for HTML, Markdown and missing pages w
       assert.equal(response.status, path === "/readiness-missing-page" ? 404 : 200);
     }
   }
-  for (const path of ["/studio/", "/dev/studio/", "/v1/campaigns", "/api/v1/context"]) {
-    const response = proxy(new Request(`${publicOrigin}${path}`));
-    assert.equal(response.headers.get("Link"), null);
-    assert.equal(response.headers.get("x-middleware-next"), "1");
+  // The studio, the domain API, the MCP endpoint, the OAuth consent page and the protected-resource
+  // metadata belong to the engine functions: the public proxy passes them through untouched.
+  for (const path of ["/studio/", "/dev/studio/", "/v1/campaigns", "/v1/stripe/webhook", "/api/v1/context", "/mcp", "/oauth/consent", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]) {
+    for (const method of ["GET", "POST"]) {
+      const response = proxy(new Request(`${publicOrigin}${path}`, { method }));
+      assert.equal(response.headers.get("Link"), null, path);
+      assert.equal(response.headers.get("x-middleware-next"), "1", `${method} ${path}`);
+    }
   }
-  for (const path of ["/mcp", "/.well-known/oauth-authorization-server"]) {
+  // Authorization-server metadata is published by the Supabase issuer, not by this origin.
+  for (const path of ["/api/missing", "/.well-known/oauth-authorization-server", "/.well-known/openid-configuration"]) {
     const response = proxy(new Request(`${publicOrigin}${path}`));
     assert.equal(response.status, 404);
     assert.equal(response.headers.get("Location"), null);
+    const problem = problemSchema.parse(await response.json());
+    assert.equal(problem.code, "endpoint_unavailable");
+    assert.match(problem.detail, /\/\.well-known\/oauth-protected-resource\/mcp/);
+    assert.ok(!/pending/i.test(problem.detail));
   }
 });
 
 test("public discovery does not fabricate quota counters, throttling or a live MCP transport", async () => {
   for (const path of ["/api/public/status", "/openapi.json", "/api/public/missing"]) {
-    const response = handlePublicRequest(request(path))!;
+    const response = handlePublicRequest(request(path), fullEnv)!;
     for (const name of ["RateLimit", "RateLimit-Policy", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"]) {
       assert.equal(response.headers.get(name), null, `${path} ${name}`);
     }
   }
-  const status = await handlePublicRequest(request("/api/public/status"))!.json();
-  assert.equal(status.engine.mcp, false);
+  // MCP is reported only where this deployment can serve it, and the static discovery links never name the transport.
+  assert.equal((await handlePublicRequest(request("/api/public/status"), {})!.json()).engine.mcp, false);
+  const configured = handlePublicRequest(request("/api/public/status"), fullEnv)!;
+  assert.equal((await configured.json()).engine.mcp, true);
+  assert.ok(!configured.headers.get("Link")!.includes(`${publicOrigin}/mcp>`));
+  assert.equal(JSON.stringify(openApiDocument.paths).includes("/mcp\""), false);
   const apiGuide = publicDocuments.find((document) => document.slug === "api")!;
   assert.match(apiGuide.markdown, /No application request quota or remaining-count telemetry is configured/);
   assert.match(apiGuide.markdown, /RateLimit and RateLimit-Policy are therefore not emitted/);
   const cliGuide = publicDocuments.find((document) => document.slug === "cli")!;
   assert.match(cliGuide.markdown, /not published on npm/);
+});
+
+test("the agent guide documents exactly the MCP tools, protocol and SDK the engine ships", async () => {
+  const source = await readFile("packages/engine/src/mcp.ts", "utf8");
+  const registered = [...source.matchAll(/server\.registerTool\(\s*"([a-z_]+)"/g)].map((match) => match[1]);
+  assert.equal(registered.length, 13);
+  const guide = publicDocuments.find((document) => document.slug === "mcp")!;
+  const html = await readFile("apps/web/public/docs/mcp/index.html", "utf8");
+  const documented = [...guide.markdown.matchAll(/^- ([a-z_]+): /gm)].map((match) => match[1]).filter((name) => name.includes("_"));
+  assert.deepEqual(documented, registered, "tool list and order in the Markdown guide");
+  assert.deepEqual([...html.matchAll(/<tr><td><code>([a-z_]+)<\/code><\/td>/g)].map((match) => match[1]), registered, "tool table in the HTML guide");
+  const sdk = JSON.parse(await readFile("node_modules/@modelcontextprotocol/sdk/package.json", "utf8")).version;
+  for (const text of [guide.markdown, html]) {
+    assert.ok(text.includes(LATEST_PROTOCOL_VERSION), "negotiated protocol revision");
+    assert.ok(text.includes(sdk), "installed SDK version");
+    assert.match(text, /2026-07-28 revision is not implemented/);
+    assert.match(text, /FACEFUL_TOKEN/); assert.match(text, /bearer-token-env-var FACEFUL_TOKEN/);
+    assert.match(text, /engine\.mcp/);
+    // Evidence is stated at the level it exists: token auth tried locally; deployed endpoint and OAuth not yet.
+    assert.match(text, /Claude Code 2\.1\.325 and Codex CLI 0\.169\.0/);
+    assert.match(text, /local engine server/);
+    assert.match(text, /OAuth sign-in have not been recorded yet/);
+    assert.match(text, /Cursor, Gemini CLI and other hosts are untested/);
+    assert.match(text, /no application rate limiting/);
+  }
+  assert.equal(guide.title, "Use Faceful with your AI agent");
+});
+
+test("no public page still describes the engine as pending or uses retired names", async () => {
+  const pages = await Promise.all([...publicDocuments.map((document) => `apps/web/public${document.path}index.html`), "apps/web/public/llms.txt"].map((path) => readFile(path, "utf8")));
+  const { default: proxy } = await import("../proxy");
+  const home = await proxy(new Request(`${publicOrigin}/`, { headers: { Accept: "text/markdown" } })).text();
+  for (const text of [...publicDocuments.map((document) => document.markdown), ...pages, home, JSON.stringify(openApiDocument.info)]) {
+    for (const stale of [/CASTROOM_(?:MCP_URL|TOKEN)/, /studio_get_context/, /MCP endpoint is not available yet/, /pending engine integration/, /engine (?:remains|remain) pending/, /No live OAuth issuer/, /token issuer (?:is|are) pending/]) {
+      assert.ok(!stale.test(text), `${stale} still present`);
+    }
+  }
+  // Availability is always tied to the status endpoint rather than asserted for every deployment.
+  for (const slug of ["overview", "mcp", "setup", "api", "capabilities"]) assert.match(publicDocuments.find((document) => document.slug === slug)!.markdown, /\/api\/public\/status/, slug);
+  for (const text of [home, publicDocuments.find((document) => document.slug === "overview")!.markdown]) {
+    assert.match(text, /no destination has approved API access/);
+    assert.match(text, /refused[^.]{0,40}simulated/);
+  }
 });

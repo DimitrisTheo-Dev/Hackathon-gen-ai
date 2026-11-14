@@ -11,7 +11,11 @@ test("public root negotiates Markdown without affecting HTML or private routes",
   assert.equal(md.status, 200);
   assert.match(md.headers.get("content-type")!, /text\/markdown/);
   assert.equal(md.headers.get("vary"), "Accept");
-  assert.match(await md.text(), /not integrated yet/);
+  const home = await md.text();
+  // The home page ties availability to this deployment's status and states what no deployment can do yet.
+  assert.match(home, /\[integration status\]\(\/api\/public\/status\)/);
+  assert.match(home, /Publishing is not available on any deployment/);
+  assert.match(home, /refused, not simulated/);
   const html = proxy(
     new Request("https://castroom.test/", {
       headers: { Accept: "text/html,text/markdown;q=0.1" },
@@ -48,10 +52,13 @@ test("documentation negotiation, HEAD and invalid Accept qualities stay determin
   for(const accept of ['text/markdown;q=0','text/markdown;q=garbage','text/markdown;q=2','text/markdown;q=.2,text/html;q=1']) assert.equal(proxy(new Request('https://castroom.test/',{headers:{Accept:accept}})).headers.get('x-middleware-next'),'1');
 });
 
-test("front-end API and unavailable authentication endpoints return truthful JSON errors",async()=>{
-  for(const path of ['/api/missing','/mcp','/.well-known/oauth-authorization-server','/.well-known/oauth-protected-resource']) {
-    const response=proxy(new Request(`https://castroom.test${path}`));assert.equal(response.status,404);assert.match(response.headers.get('content-type')!,/application\/problem\+json/);const error=await response.json();assert.equal(error.code,'endpoint_unavailable');assert.match(error.resolution,/\/docs/);
+test("paths this origin does not serve return truthful JSON errors, and engine routes pass through",async()=>{
+  // Authorization-server metadata lives on the Supabase issuer; unknown /api routes do not exist here.
+  for(const path of ['/api/missing','/api/engine-not-a-route','/.well-known/oauth-authorization-server','/.well-known/security.txt']) {
+    const response=proxy(new Request(`https://castroom.test${path}`));assert.equal(response.status,404);assert.match(response.headers.get('content-type')!,/application\/problem\+json/);const error=await response.json();assert.equal(error.code,'endpoint_unavailable');assert.match(error.resolution,/\/docs/);assert.match(error.resolution,/\/api\/public\/status/);
   }
+  // The MCP endpoint, its OAuth protected-resource metadata, the consent page and the domain API are the engine's.
+  for(const path of ['/mcp','/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp','/oauth/consent','/v1/studio/context','/v1/health','/api/engine','/api/mcp']) assert.equal(proxy(new Request(`https://castroom.test${path}`,{method:path==='/mcp'?'POST':'GET'})).headers.get('x-middleware-next'),'1',path);
   const response=proxy(new Request('https://castroom.test/',{method:'POST'}));assert.equal(response.status,405);assert.equal(response.headers.get('allow'),'GET, HEAD');
   for(const path of ['/studio/','/dev/studio/','/api/v1/campaigns','/v1/context']) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1');
 });
