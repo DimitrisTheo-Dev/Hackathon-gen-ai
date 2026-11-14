@@ -45,7 +45,7 @@ test('manual campaign saves supplied context and approval never implies publicat
 });
 
 test('offline, corrupt storage and unauthenticated paths do not claim success or fall back',async({page,context})=>{
-  await page.goto('/dev/studio/');await page.locator('#script').fill('Retain this unsaved edit.');await context.setOffline(true);await expect(page.getByText('You’re offline.',{exact:false})).toBeVisible();await expect(page.locator('#script')).toHaveValue('Retain this unsaved edit.');await context.setOffline(false);
+  await page.goto('/dev/studio/');await page.locator('#script').fill('Retain this unsaved edit.');await context.setOffline(true);await expect(page.locator('.editor-offline')).toBeVisible();await expect(page.locator('#script')).toHaveValue('Retain this unsaved edit.');await context.setOffline(false);
   await page.evaluate(()=>localStorage.setItem('castroom-development-v1','broken'));await page.reload();await expect(page.getByRole('heading',{name:'We couldn’t open your workspace.'})).toBeVisible();
   await page.goto('/studio/');await expect(page.locator('.auth-card')).toBeVisible();await expect(page.locator('.content-card')).toHaveCount(0);
 });
@@ -54,14 +54,14 @@ for(const width of [1440,1280,1024,768,430,390,375,320]) test(`responsive ${widt
   await page.setViewportSize({width,height:900});await page.goto('/');await page.evaluate(()=>document.fonts.ready);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(await page.evaluate(()=>document.fonts.check('500 16px InterVariable'))).toBe(true);
-  await page.screenshot({path:`docs/demo/evidence/redesign/landing-${width}.png`,fullPage:width===390});
+  await page.screenshot({path:`docs/demo/evidence/mobile-refinement/landing-${width}.png`,fullPage:width===390});
   await page.goto('/dev/studio/');await expect(page.locator('.content-card')).toHaveCount(3);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if(width<=1220 && width>1000) await page.getByRole('button',{name:'Return to campaign'}).click();
-  if(width<=1220){await page.getByRole('button',{name:'Toggle navigation'}).click();await expect(page.getByRole('navigation',{name:'Projects',exact:true})).toBeVisible();await page.keyboard.press('Escape');}
+  if(width<=1220){await page.getByRole('button',{name:width<=760?'Switch project':'Toggle navigation',exact:true}).click();await expect(page.getByRole('dialog',{name:'Your projects'}).getByRole('navigation',{name:'Projects',exact:true})).toBeVisible();await page.keyboard.press('Escape');}
   await page.locator('.content-select').first().click();await expect(page.locator('#script')).toBeVisible();
-  if(width<=1000){await expect(page.locator('.workspace')).toBeHidden();await expect(page.getByRole('button',{name:'Return to campaign'})).toBeVisible();}
-  await page.screenshot({path:`docs/demo/evidence/redesign/editor-${width}.png`});
-  await page.getByRole('button',{name:'Return to campaign'}).click();await page.screenshot({path:`docs/demo/evidence/redesign/canvas-${width}.png`});
+  if(width<=1000){await expect(page.getByRole('dialog',{name:'Content editor',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Return to campaign'})).toBeVisible();}
+  await page.screenshot({path:`docs/demo/evidence/mobile-refinement/editor-${width}.png`});
+  await page.getByRole('button',{name:'Return to campaign'}).click();await page.screenshot({path:`docs/demo/evidence/mobile-refinement/canvas-${width}.png`});
 });
 
 test('long content, scroll ownership and keyboard shortcuts remain usable at 200% equivalent reflow',async({page})=>{
@@ -72,5 +72,5 @@ test('long content, scroll ownership and keyboard shortcuts remain usable at 200
   await page.setViewportSize({width:390,height:900});await page.reload();await expect(page.locator('.content-card')).toHaveCount(3);
   const geometry=await page.evaluate(()=>{const canvas=document.querySelector('.canvas')!;const grid=document.querySelector('.content-grid')!;const footer=document.querySelector('.run-summary')!;return {overflow:canvas.scrollHeight-canvas.clientHeight,gridEnd:grid.getBoundingClientRect().bottom,footerStart:footer.getBoundingClientRect().top};});
   expect(geometry.overflow).toBeLessThanOrEqual(1);expect(geometry.footerStart).toBeGreaterThan(geometry.gridEnd);
-  await page.locator('.workspace-main').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.run-summary')).toBeVisible();await page.screenshot({path:'docs/demo/evidence/redesign/mobile-scroll-end.png'});
+  await page.locator('.workspace-main').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.run-summary')).toBeVisible();await page.screenshot({path:'docs/demo/evidence/mobile-refinement/mobile-scroll-end.png'});
 });

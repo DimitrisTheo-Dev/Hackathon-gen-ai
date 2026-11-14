@@ -26,7 +26,7 @@ export function CommandPalette({ campaigns, onClose, onCampaign, onItem, onCreat
   ].filter(e => `${e.title} ${e.detail}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [campaigns, query, onCampaign, onItem, onCreate, onConnect, onReview]);
   const chosen = Math.min(active, Math.max(0, entries.length - 1));
   function execute(index: number) { const entry = entries[index]; if (entry) { onClose(); entry.run(); } }
-  return <Modal title="Find in your studio" onClose={onClose}>
+  return <Modal title="Find in your studio" onClose={onClose} animateEntry={false}>
     <div className="command-search"><Search size={18} /><input ref={input} aria-label="Search projects, content and actions" role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" aria-activedescendant={entries.length ? `${listId}-${chosen}` : undefined} value={query} placeholder="Search projects, content, actions…" onChange={e => { setQuery(e.target.value); setActive(0); }} onKeyDown={e => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setActive(n => entries.length ? (n + (e.key === "ArrowDown" ? 1 : -1) + entries.length) % entries.length : 0); }
       if (e.key === "Enter") { e.preventDefault(); execute(chosen); }

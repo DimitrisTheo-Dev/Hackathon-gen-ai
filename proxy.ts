@@ -3,7 +3,7 @@ import { handlePublicRequest, publicDocuments, publicPages, publicProblem } from
 
 // Public presentation/discovery only. Private studio and domain routes pass through.
 const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy"]);
-const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml"]);
+const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml"]);
 const markdown = `# Castroom — content production studio
 
 Create campaigns with your agent. Fine-tune them here.

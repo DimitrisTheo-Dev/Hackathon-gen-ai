@@ -1,0 +1,279 @@
+{
+  "scope": "flow",
+  "candidate": {
+    "apps/web/index.html": "4b2d71cc953b0e069580621c8a753522fd4660d9854e1a02e0de32371d755ad7",
+    "apps/web/package.json": "411f11b6079bf973be279e6e36a42ecd0edb43765c6223737c74e923061c2d4a",
+    "apps/web/vite.config.ts": "aa5c847b0af83b77a338774b4b3bb8e37eaf7ec376c362cc87487fa922d5d42e",
+    "apps/web/public/llms.txt": "40e7b981db2a71c3f38f771537628f77b942b94bbb3218f846fbcba135a1c758",
+    "apps/web/public/design.css": "a24262f3c28267d450c46b1d01981e4b44e7744d066a7c5cdaf1eb405e35ecd5",
+    "apps/web/public/sitemap.xml": "a5a1e49f183a7bdf0addab2e059c46f2499d0a863b1a44b1f6e0f01eaec21115",
+    "apps/web/public/robots.txt": "33067c3b7dfea00abff0a10b2509bbd7f88fc0d73e777f8e6188909de89b8b5e",
+    "apps/web/public/og.png": "f947efa4d35b22996d4f8e030975fc048148dab940cfd5e8002ba92f24878248",
+    "apps/web/public/favicon.svg": "5afa29c538cb6665cda72e61acacacd9135820718b1555728131c9838605c653",
+    "apps/web/src/main.tsx": "52078d66387944318aa6eabe0b64480873e18d84a6e09954f06f443bc4fa0674",
+    "apps/web/src/AuthApp.tsx": "32e19b5ffb879362396d53176f2479809e30aeac6d0f5ffde2904a290c81853a",
+    "apps/web/src/vite-env.d.ts": "eb4b7fce608c65170158a26c0de8710ab0e2fcb64e78c40493d25bd4ed1c89d8",
+    "apps/web/src/style.css": "46cafb1683d9dad8b24137f6818445db911287c3f584d8ee1c9e982e09c7a79d",
+    "apps/web/src/landing/LandingPage.tsx": "4cb1d568af0cf2fec9f6b4390bd8df1bb9eb3852a5918f785bab609f2500a706",
+    "apps/web/src/landing/landing.css": "0233f4402ffcd831e059263d7003089c5c276f09c89a6e9c06484db090305550",
+    "apps/web/src/components/CommandPalette.tsx": "e0cab6f6813a070971ce978b87c6e7aff9eb35b7e226fc93a203d49f36cf48ca",
+    "apps/web/src/components/ui.tsx": "d436798e094ee010da8e068bd8ac5da1de9af973cffe1eec6f55141c6fcdc408",
+    "apps/web/src/lib/operation-key.ts": "ecc8afed0868181b44079150fe862baca6a359dc2b049202bab01d2a4b4ba6be",
+    "apps/web/src/lib/supabase.ts": "e67e9744142db8fe705717cde3b40fe25f9f0c4e5a751768b03d909bce2e68d1",
+    "apps/web/src/lib/time.ts": "47e4cf022c292fd4897732b4ad11fb47d41584b9075c046f0c8515b608a5d272",
+    "apps/web/src/data/live.ts": "ba685d8600b71f123d106815c0445838b1e8a6ce6fc33c6b92455158c68b120a",
+    "apps/web/src/data/client.ts": "f1eae994d858da609a8486ed6b8cf9479b851e99725229154e2c624ea23d0f6b",
+    "apps/web/src/data/fixture.ts": "d103b7fe8505c651fa595a97d09a9da75d51d2056ca6b7a836299743a8e566cf",
+    "apps/web/src/views/Connect.tsx": "743d4427330306af555ecca2def13780db715330905df81468cff94a3a8adb1a",
+    "apps/web/src/views/Studio.tsx": "7cc402afa960cf511fc59fd9e50e9419c3eb3ac3ac2264a28eea6066f06f1cba",
+    "apps/web/src/views/Editor.tsx": "9ba51b88d4af06dd0f0d92345dbb04375c1fde3d49284cee0e82cd78f6ea99a0",
+    "apps/web/src/views/CreateCampaign.tsx": "336ae9f066884cebc098beb1e0bdc99634dced79010a0ef5aeed0597f79da24c",
+    "apps/web/src/views/Review.tsx": "005df7d62795e9d8f5becc4e3fb2e451b743729b7a43f56a1c865480881c1123",
+    "apps/web/src/views/editor/model.ts": "9f591b8062f60e575fbc23f8784fd6ce7b76871be26819b0503242617ade952b",
+    "apps/web/public/contact/index.html": "56165836e77e05b51a08266cf71a15f8a502381da79cf7d39dff9e3a078bb39a",
+    "apps/web/public/privacy/index.html": "2f396694cd930678c5b1563b4ac015ab2c27c0366087a4dc515a0485841c58c4",
+    "apps/web/public/about/index.html": "92dface142ce86f293ae7805984e98da0427cac3121f756ad698a1020b606d34",
+    "apps/web/public/docs/index.html": "f3a85cfb5390af5a0a570aeb26ba4887611e955a35b5b9dd9d7146cb533a1e72",
+    "apps/web/public/docs/docs.css": "b21502a007a34f86d2e18c0ba46d93079f38d874e74465efb7717883d0efdf5a",
+    "apps/web/public/fonts/InterVariable.woff2": "693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3",
+    "apps/web/public/fonts/LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+    "apps/web/public/docs/capabilities/index.html": "706303dc224bbcef02ac92eda9d6d271a9ed62f4abdb0c91f6af5f67e947bdc8",
+    "apps/web/public/docs/security/index.html": "f880084c0bf301d5b332365f44edfa89a4b3619fb37ba4b671a7e3bd5d39415d",
+    "apps/web/public/docs/setup/index.html": "b3f777a9a85e17bc0c25f0606c2bfd429db75150213882627380ca1729ab5ce9",
+    "apps/web/public/docs/mcp/index.html": "f7691d616d748ae150b98b2d9215f88aa57936084c65f05229467a8adbedf712",
+    "apps/web/public/docs/cli/index.html": "014a76b438864d18d8c846ee3c07e1750d82138bad525e4abb87744fa07337d6",
+    "apps/web/public/docs/api/index.html": "8277143a6678bb6b41d63d7acb6963568e945c5eb45e221580c6d4b18fcef6d2",
+    "apps/web/public/docs/errors/index.html": "27dca0b332bc6cc63fdcb9b39775f87057fa55972bf216dbe60d5e3f3a2dd5b7",
+    "packages/contracts/package.json": "a1aa9af3062281debba0f79eeddb52da6d19400ef3479ae09ef9a2be6d0417a9",
+    "packages/contracts/src/index.ts": "f851f725aafc90e0f14beef4992662f78771dd47f4619e03665280a4f8b34314",
+    "packages/public-api/src/documents.ts": "48eb22c2c08b67979b17451721d846b71e89ea890d8caf0ec53553a756e63884",
+    "packages/public-api/src/index.ts": "85b8b2bbaebb81311a599ee362bb56780b63d18d9623c8e0100cac5db5f88037",
+    "packages/cli/examples/three-video-plan.json": "065c499a6c754c39bbc50aa4cd1d202f9b06bb6487a678c585993967d8c869ca",
+    "packages/cli/src/main.ts": "842275d8eb3603b7785fa09f1aafa4621865d4e05d08e6ab96c81f4d204caa79",
+    "packages/cli/src/cli.ts": "949105f3867ea66c647eeae16e4c143dd0855b3cba3b33ef614b5a41dc3d223c",
+    "package.json": "7c222d4e664a26cafa5c49a9b5d1f31bca4c65e19705c7a3804d365cb75148c6",
+    "pnpm-lock.yaml": "f84f01fc8b780e52c4e4269111575e5d874d8546824a9ae33c5bf3fd7e9661ac",
+    "pnpm-workspace.yaml": "dd406511110ef63d88ad787140bdab08ab89f69507e047041806a92d97d684f7",
+    "proxy.ts": "26f4638aa30148febd20326316ab18bfd184a6a9a42f899df8cdb9201148c245",
+    "tsconfig.json": "21037fc0e1e1fd9257faba2948c3cfd169b9a65e493408e56b42e7515b779c9d",
+    "vercel.json": "6b4bf38a0eeb219bbe563dba10b49935bd97db68ccab048c15edad2475ebad50",
+    "scripts/prerender.ts": "02a325bc122c6d4d7acdc1cf94cd6bd1b9dc3ddea148d30b0d96351d6140c8b7",
+    "tsconfig.proxy.json": "96d71d5c3e530dca2342218d0c968485b39d75a10ebc00d73ca5d20b0d7acc89",
+    "scripts/check-proxy.mjs": "99d0fffa21efa2e8b8f9c30b8a562c227c91cba99e31310ce4d4536372b845bb",
+    "scripts/check-prerender.mjs": "ad0f68caca7db8782ec1ebbe3a5a6e115644904890e3b322ab0da0cf7d476a9a",
+    "apps/web/src/mobile.css": "5d4c5747bec1aabf114cb14664340eee012f11dd485edd93b7fd8ecd81ed3805",
+    "apps/web/src/components/SurfaceDialog.tsx": "a19bef5bcd2239c4159b6a2d9d22f84e8f5c7275a1483e0cf5396362e897cfea",
+    "apps/web/src/lib/sheet-motion.ts": "39bebd0002ac0e26a7f93265e39ac974b8bba82a00bf2af037322293db3409f0",
+    "apps/web/public/art/grainient-sunlit.webp": "643fefa4fac65a57d929e12853fd3a5161bf5b6419dbb0d0f5c20720e23320f4",
+    "apps/web/public/art/ATTRIBUTION.txt": "d7faf77ef12d74e2eb32faa087ebbb093cffd2697780b3066c85aabeedc008d5"
+  },
+  "evidence": [
+    {
+      "id": "desktop",
+      "path": "docs/demo/evidence/mobile-refinement/editor-1440.png",
+      "sha256": "c46e1dcf542e2432fb9875f0b74301b35557416f96bb726649d9f78679bc7c80",
+      "kind": "image"
+    },
+    {
+      "id": "mobile",
+      "path": "docs/demo/evidence/mobile-refinement/editor-390.png",
+      "sha256": "18ac7e8f5720afc23a8146358cf946e9d59b82efc108c62d9ea2a55e149958dd",
+      "kind": "image"
+    },
+    {
+      "id": "landing",
+      "path": "docs/demo/evidence/mobile-refinement/landing-390.png",
+      "sha256": "bbae42dbf41b389d38999afd490fa344c1af8b22ad04318befbb8d8bd6f8c1ca",
+      "kind": "image"
+    },
+    {
+      "id": "scroll",
+      "path": "docs/demo/evidence/mobile-refinement/mobile-scroll-end.png",
+      "sha256": "ec15014b4795fdde0d1f2666039501d3dd4bb658505bbe59f7920d267a8bd905",
+      "kind": "image"
+    },
+    {
+      "id": "review",
+      "path": "docs/demo/evidence/mobile-refinement/review-blocked.png",
+      "sha256": "ac7dc4221310a2114522887e188b17ea362ca4b098eccf9a8083b1c61835c382",
+      "kind": "image"
+    },
+    {
+      "id": "journey",
+      "path": "docs/demo/evidence/mobile-refinement/browser-tests.txt",
+      "sha256": "5f24624c20b3b6ab339da074fd0ab8f0d257e961beab3753053dfd8c2e2e0af3",
+      "kind": "interaction"
+    },
+    {
+      "id": "http",
+      "path": "docs/demo/evidence/mobile-refinement/public-local.json",
+      "sha256": "02d1325648447f6114e16bfab7df3f9e9073145f9e94fb5c7555c3623a833dba",
+      "kind": "measurement"
+    }
+  ],
+  "areas": [
+    {
+      "id": "task",
+      "status": "fail",
+      "observation": "Local draft creation, editing and review work. The intended agent\u2192real-video\u2192publish journey cannot run until Minas connects the engine and providers.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "structure",
+      "status": "pass",
+      "observation": "Desktop three-region shell preserved; mobile project switcher, contextual bottom navigation and full-screen selected editor use the same state.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "terminology",
+      "status": "pass",
+      "observation": "Sample storyboard, development preview, draft, provider acceptance and publication are distinguished. No fixture completion or copied-command handshake is claimed.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "typography",
+      "status": "pass",
+      "observation": "Self-hosted Inter Variable renders throughout; metadata12px and compact13px controls remain legible in inspected captures. Greek/long English content and reflow were exercised.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "spacing",
+      "status": "pass",
+      "observation": "Neutral shell separates260px sidebar and360px editor; mobile preview is bounded to leave room for script editing. Card/footer overlap was removed and measured.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "color",
+      "status": "pass",
+      "observation": "Neutral operational UI, charcoal controls and one golden/cream/mist-blue decorative family from licensed Grainient Astral-01. No purple accent.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "components",
+      "status": "pass",
+      "observation": "Cards, pill controls, native dialogs and grouped review blockers share restrained borders and spacing. No dead publication or renderer control is presented as live.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "states",
+      "status": "pass",
+      "observation": "Loading, empty, expired preview, storage failure, offline retained draft, blocked approval and auth boundary tested. Real engine/provider failures remain unavailable.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "interaction",
+      "status": "pass",
+      "observation": "Chromium and WebKit operate Back, save/reload, failed-save and project-selection rollback. CDP synthesized touch verifies tracking/reversal/dismissal and native content scroll. No physical device claim.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "responsive",
+      "status": "pass",
+      "observation": "Eight CSS widths from320 to1440,390\u00d7844 touch contexts and844\u00d7390 landscape passed; no horizontal overflow. Native software keyboard/safe areas remain pending hardware checks.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "accessibility",
+      "status": "pass",
+      "observation": "Keyboard palette/tab/dialog paths, visible focus and reduced-motion mode were exercised. Native phone keyboard, screen-reader behavior and actual browser-menu200% zoom remain unverified;720px equivalent reflow passed.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "character",
+      "status": "pass",
+      "observation": "Moonjar editorial structure retained. Golden/cream/mist-blue preview backplates and storyboard art provide the requested distinct identity; local licensed WebP is11,796bytes.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "LIVE",
+      "areas": [
+        "task"
+      ],
+      "severity": "blocker",
+      "status": "open",
+      "location": "Live campaign pipeline",
+      "observation": "Authenticated MCP, real rendering/composition and publishing receipts cannot be tested without the shared engine/provider access.",
+      "evidence": [
+        "journey"
+      ]
+    },
+    {
+      "id": "M1",
+      "areas": [
+        "interaction"
+      ],
+      "severity": "major",
+      "status": "resolved",
+      "location": "Mobile swipe handle",
+      "observation": "Unlayered button touch-action overrode the handle and the browser cancelled dragging.",
+      "resolution": "Shared controls now use base layer; explicit handle pan-x/pinch-zoom wins. CDP drag reversal, dismissal and native content scroll pass.",
+      "evidence": [
+        "journey",
+        "mobile"
+      ]
+    }
+  ],
+  "verdict": "blocked"
+}

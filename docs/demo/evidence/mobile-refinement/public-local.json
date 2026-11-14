@@ -1,0 +1,677 @@
+{
+  "origin": "http://127.0.0.1:4173",
+  "verifiedAt": "2026-11-14T14:22:30.856Z",
+  "checks": 67,
+  "results": [
+    {
+      "path": "/",
+      "method": "GET",
+      "accept": "text/html",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 40273,
+      "finalUrl": "http://127.0.0.1:4173/"
+    },
+    {
+      "path": "/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 2135,
+      "finalUrl": "http://127.0.0.1:4173/"
+    },
+    {
+      "path": "/docs/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 5348,
+      "finalUrl": "http://127.0.0.1:4173/docs/"
+    },
+    {
+      "path": "/docs/api/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 6465,
+      "finalUrl": "http://127.0.0.1:4173/docs/api/"
+    },
+    {
+      "path": "/docs/cli/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 4943,
+      "finalUrl": "http://127.0.0.1:4173/docs/cli/"
+    },
+    {
+      "path": "/docs/mcp/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 4815,
+      "finalUrl": "http://127.0.0.1:4173/docs/mcp/"
+    },
+    {
+      "path": "/docs/setup/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 6456,
+      "finalUrl": "http://127.0.0.1:4173/docs/setup/"
+    },
+    {
+      "path": "/docs/capabilities/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 5895,
+      "finalUrl": "http://127.0.0.1:4173/docs/capabilities/"
+    },
+    {
+      "path": "/docs/security/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 6465,
+      "finalUrl": "http://127.0.0.1:4173/docs/security/"
+    },
+    {
+      "path": "/docs/errors/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 5844,
+      "finalUrl": "http://127.0.0.1:4173/docs/errors/"
+    },
+    {
+      "path": "/about/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": null,
+      "bytes": 4080,
+      "finalUrl": "http://127.0.0.1:4173/about/"
+    },
+    {
+      "path": "/contact/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": null,
+      "bytes": 3966,
+      "finalUrl": "http://127.0.0.1:4173/contact/"
+    },
+    {
+      "path": "/privacy/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": null,
+      "bytes": 4521,
+      "finalUrl": "http://127.0.0.1:4173/privacy/"
+    },
+    {
+      "path": "/docs/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1259,
+      "finalUrl": "http://127.0.0.1:4173/docs/"
+    },
+    {
+      "path": "/docs/api/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 2270,
+      "finalUrl": "http://127.0.0.1:4173/docs/api/"
+    },
+    {
+      "path": "/docs/cli/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1631,
+      "finalUrl": "http://127.0.0.1:4173/docs/cli/"
+    },
+    {
+      "path": "/docs/mcp/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1643,
+      "finalUrl": "http://127.0.0.1:4173/docs/mcp/"
+    },
+    {
+      "path": "/docs/setup/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1398,
+      "finalUrl": "http://127.0.0.1:4173/docs/setup/"
+    },
+    {
+      "path": "/docs/capabilities/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1667,
+      "finalUrl": "http://127.0.0.1:4173/docs/capabilities/"
+    },
+    {
+      "path": "/docs/security/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1756,
+      "finalUrl": "http://127.0.0.1:4173/docs/security/"
+    },
+    {
+      "path": "/docs/errors/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1480,
+      "finalUrl": "http://127.0.0.1:4173/docs/errors/"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 967,
+      "finalUrl": "http://127.0.0.1:4173/api/public/status"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/status"
+    },
+    {
+      "path": "/api/public/permissions",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1149,
+      "finalUrl": "http://127.0.0.1:4173/api/public/permissions"
+    },
+    {
+      "path": "/api/public/permissions",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/permissions"
+    },
+    {
+      "path": "/api/public/docs",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1828,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs"
+    },
+    {
+      "path": "/api/public/docs",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs"
+    },
+    {
+      "path": "/api/public/docs/overview",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1544,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/overview"
+    },
+    {
+      "path": "/api/public/docs/overview",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/overview"
+    },
+    {
+      "path": "/api/public/docs/api",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 2563,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/api"
+    },
+    {
+      "path": "/api/public/docs/api",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/api"
+    },
+    {
+      "path": "/api/public/docs/cli",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1903,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/cli"
+    },
+    {
+      "path": "/api/public/docs/cli",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/cli"
+    },
+    {
+      "path": "/api/public/docs/mcp",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1928,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/mcp"
+    },
+    {
+      "path": "/api/public/docs/mcp",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/mcp"
+    },
+    {
+      "path": "/api/public/docs/setup",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1709,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/setup"
+    },
+    {
+      "path": "/api/public/docs/setup",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/setup"
+    },
+    {
+      "path": "/api/public/docs/capabilities",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1953,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/capabilities"
+    },
+    {
+      "path": "/api/public/docs/capabilities",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/capabilities"
+    },
+    {
+      "path": "/api/public/docs/security",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 2034,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/security"
+    },
+    {
+      "path": "/api/public/docs/security",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/security"
+    },
+    {
+      "path": "/api/public/docs/errors",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1739,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/errors"
+    },
+    {
+      "path": "/api/public/docs/errors",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/errors"
+    },
+    {
+      "path": "/openapi.json",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 16982,
+      "finalUrl": "http://127.0.0.1:4173/openapi.json"
+    },
+    {
+      "path": "/openapi.json",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "http://127.0.0.1:4173/openapi.json"
+    },
+    {
+      "path": "/api/public/absent",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 250,
+      "finalUrl": "http://127.0.0.1:4173/api/public/absent"
+    },
+    {
+      "path": "/api/public/docs/nope",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 252,
+      "finalUrl": "http://127.0.0.1:4173/api/public/docs/nope"
+    },
+    {
+      "path": "/api/missing",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 348,
+      "finalUrl": "http://127.0.0.1:4173/api/missing"
+    },
+    {
+      "path": "/.well-known/oauth-authorization-server",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 375,
+      "finalUrl": "http://127.0.0.1:4173/.well-known/oauth-authorization-server"
+    },
+    {
+      "path": "/.well-known/oauth-protected-resource",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 373,
+      "finalUrl": "http://127.0.0.1:4173/.well-known/oauth-protected-resource"
+    },
+    {
+      "path": "/mcp",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 340,
+      "finalUrl": "http://127.0.0.1:4173/mcp"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "POST",
+      "accept": null,
+      "status": 405,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 249,
+      "finalUrl": "http://127.0.0.1:4173/api/public/status"
+    },
+    {
+      "path": "/not-a-castroom-page",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 404,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 123,
+      "finalUrl": "http://127.0.0.1:4173/not-a-castroom-page"
+    },
+    {
+      "path": "/not-a-castroom-page",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 505,
+      "finalUrl": "http://127.0.0.1:4173/not-a-castroom-page"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 967,
+      "finalUrl": "http://127.0.0.1:4173/api/public/status"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "GET",
+      "accept": null,
+      "status": 400,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 291,
+      "finalUrl": "http://127.0.0.1:4173/api/public/status"
+    },
+    {
+      "path": "/llms.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 4332,
+      "finalUrl": "http://127.0.0.1:4173/llms.txt"
+    },
+    {
+      "path": "/robots.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 121,
+      "finalUrl": "http://127.0.0.1:4173/robots.txt"
+    },
+    {
+      "path": "/sitemap.xml",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/xml",
+      "vary": null,
+      "bytes": 1359,
+      "finalUrl": "http://127.0.0.1:4173/sitemap.xml"
+    },
+    {
+      "path": "/design.css",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/css; charset=utf-8",
+      "vary": null,
+      "bytes": 2275,
+      "finalUrl": "http://127.0.0.1:4173/design.css"
+    },
+    {
+      "path": "/docs/docs.css",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/css; charset=utf-8",
+      "vary": null,
+      "bytes": 6221,
+      "finalUrl": "http://127.0.0.1:4173/docs/docs.css"
+    },
+    {
+      "path": "/favicon.svg",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/svg+xml",
+      "vary": null,
+      "bytes": 319,
+      "finalUrl": "http://127.0.0.1:4173/favicon.svg"
+    },
+    {
+      "path": "/og.png",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/png",
+      "vary": null,
+      "bytes": 110449,
+      "finalUrl": "http://127.0.0.1:4173/og.png"
+    },
+    {
+      "path": "/fonts/InterVariable.woff2",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "font/woff2",
+      "vary": null,
+      "bytes": 638129,
+      "finalUrl": "http://127.0.0.1:4173/fonts/InterVariable.woff2"
+    },
+    {
+      "path": "/fonts/LICENSE.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 4380,
+      "finalUrl": "http://127.0.0.1:4173/fonts/LICENSE.txt"
+    },
+    {
+      "path": "/art/grainient-sunlit.webp",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/webp",
+      "vary": null,
+      "bytes": 21443,
+      "finalUrl": "http://127.0.0.1:4173/art/grainient-sunlit.webp"
+    },
+    {
+      "path": "/art/ATTRIBUTION.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 699,
+      "finalUrl": "http://127.0.0.1:4173/art/ATTRIBUTION.txt"
+    }
+  ]
+}

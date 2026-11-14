@@ -69,25 +69,47 @@ function Wordmark() {
 function LandingNav() {
   const [open, setOpen] = useState(false);
   const menuId = useId();
+  const menu = useRef<HTMLDialogElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
-    const close = (event: globalThis.KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    const desktop = matchMedia("(min-width: 681px)");
+    const closeOnDesktop = () => { if (desktop.matches) menu.current?.close(); };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => {
+      document.documentElement.style.overflow = previousOverflow;
+      desktop.removeEventListener("change", closeOnDesktop);
+    };
   }, [open]);
+  function closeMenu() { menu.current?.close(); }
+  function restoreFocus() {
+    setOpen(false);
+    if (trigger.current?.offsetParent !== null) trigger.current?.focus({ preventScroll: true });
+  }
   return <header className="landing-header">
     <div className="landing-nav-inner">
       <Wordmark />
-      <nav id={menuId} className={`landing-nav-links ${open ? "is-open" : ""}`} aria-label="Main navigation">
-        <a href="#why-castroom" onClick={() => setOpen(false)}>Why Castroom</a>
-        <a href="#features" onClick={() => setOpen(false)}>Features</a>
-        <a href="#what-works" onClick={() => setOpen(false)}>What works today</a>
+      <nav className="landing-nav-links" aria-label="Main navigation">
+        <a href="#why-castroom">Why Castroom</a>
+        <a href="#features">Features</a>
+        <a href="#what-works">What works today</a>
       </nav>
       <div className="landing-nav-actions">
         <a className="landing-button landing-primary landing-nav-cta" href="/studio/">Open studio <ArrowUpRight size={15} /></a>
-        <button className="landing-menu-toggle" aria-label={open ? "Close navigation" : "Open navigation"} aria-expanded={open} aria-controls={menuId} onClick={() => setOpen(!open)}>{open ? <X size={19} /> : <Menu size={19} />}</button>
+        <button ref={trigger} className="landing-menu-toggle" aria-label="Open navigation" aria-haspopup="dialog" aria-expanded={open} aria-controls={menuId} onClick={() => { menu.current?.showModal(); setOpen(true); }}><Menu size={19} /></button>
       </div>
     </div>
+    <dialog ref={menu} id={menuId} className="landing-mobile-menu" aria-labelledby={`${menuId}-title`} onClose={restoreFocus} onClick={(event) => {
+      if (event.target !== event.currentTarget) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeMenu();
+    }}>
+      <div className="landing-mobile-menu-heading"><span id={`${menuId}-title`}>Explore Castroom</span><button className="landing-menu-toggle" aria-label="Close navigation" onClick={closeMenu}><X size={19} /></button></div>
+      <nav aria-label="Mobile navigation"><a href="#why-castroom" onClick={closeMenu}>Why Castroom <ArrowRight size={16} /></a><a href="#features" onClick={closeMenu}>Features <ArrowRight size={16} /></a><a href="#what-works" onClick={closeMenu}>What works today <ArrowRight size={16} /></a></nav>
+      <a className="landing-button landing-primary" href="/studio/" onClick={closeMenu}>Open studio <ArrowUpRight size={16} /></a>
+    </dialog>
   </header>;
 }
 
@@ -154,6 +176,8 @@ function Storyboard({ item, index, small = false }: { item: typeof sampleItems[n
 
 export function HeroPreviewWindow() {
   const [selected, setSelected] = useState(0);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const editorId = useId();
   const item = sampleItems[selected];
   return <figure className="landing-demo" aria-labelledby="landing-demo-caption">
     <div className="landing-demo-frame">
@@ -181,11 +205,12 @@ export function HeroPreviewWindow() {
               </button>)}
             </div>
             <div className="landing-preview-mobile-selector" aria-label="Example content">{sampleItems.map((entry, index) => <button key={entry.title} onClick={() => setSelected(index)} aria-pressed={selected === index} aria-label={`Show sample ${index + 1}: ${entry.title}`}>{index + 1}</button>)}</div>
+            <button className="landing-preview-inspect" aria-controls={editorId} aria-expanded={editorOpen} onClick={() => setEditorOpen(!editorOpen)}><Settings2 size={16} />{editorOpen ? "Close draft details" : "Inspect this draft"}{editorOpen ? <Minus size={16} /> : <Plus size={16} />}</button>
             <div className="landing-preview-source"><FileText size={13} /><a href="https://www.quintessential.gr/work/bewell-festival" target="_blank" rel="noreferrer">Source: Quintessential’s published BeWell case study</a></div>
           </div>
           <div className="landing-preview-canvas-footer"><span><Circle size={7} />Sample drafts only</span><span>No jobs running</span></div>
         </div>
-        <aside className="landing-preview-editor" aria-label="Selected example content">
+        <aside id={editorId} className={`landing-preview-editor ${editorOpen ? "is-mobile-open" : ""}`} aria-label="Selected example content">
           <div className="landing-preview-editor-title"><Settings2 size={15} /><span>Content details</span><span>v1</span></div>
           <div className="landing-preview-editor-body">
             <div className="landing-preview-mini"><Storyboard item={item} index={selected} small /></div>
@@ -232,7 +257,7 @@ function Features() {
   return <section id="features" className="landing-section landing-features" aria-labelledby="features-heading">
     <div className="landing-section-heading"><h2 id="features-heading">The details belong<br />with the work.</h2><p>A focused editor for people. A shared contract for agents. The same campaign, from either side.</p></div>
     <div className="landing-feature-grid">
-      <article className="landing-feature landing-feature-wide"><div className="landing-feature-copy"><MessageSquareText size={22} /><h3>Small edits.<br />A clear point of view.</h3><p>Change the selected script, keep the draft while you move between pieces, and undo a local edit. Save only when it reads like you.</p></div><div className="landing-edit-example"><div><span>Opening line</span><span>Local draft</span></div><p className="landing-edit-before">Explore everything the festival has to offer.</p><p className="landing-edit-after">A festival day,<br />made for you.</p><footer><History size={14} /><span>Undo stays close at hand.</span></footer></div></article>
+      <article className="landing-feature landing-feature-wide"><div className="landing-feature-copy"><MessageSquareText size={22} /><h3>Small edits.<br />A clear point of view.</h3><p>Change the selected script, keep the draft while you move between pieces, and undo a local edit. Save only when it reads like you.</p></div><div className="landing-edit-backplate"><div className="landing-edit-example"><div><span>Opening line</span><span>Local draft</span></div><p className="landing-edit-before">Explore everything the festival has to offer.</p><p className="landing-edit-after">A festival day,<br />made for you.</p><footer><History size={14} /><span>Undo stays close at hand.</span></footer></div></div></article>
       <article className="landing-feature"><div className="landing-feature-copy"><Folder size={22} /><h3>A home for the<br />whole campaign.</h3><p>Keep source material, scripts, channel copy and requested times in one place. Every piece has its own revision.</p></div><div className="landing-folder-example"><span><Folder size={16} />A week of BeWell <span>3</span></span><div><Video size={15} />Visitor experience<span>Draft</span></div><div><Video size={15} />Engineering<span>Draft</span></div><div><Video size={15} />Brand continuity<span>Draft</span></div></div></article>
       <article className="landing-feature"><div className="landing-feature-copy"><LockKeyhole size={22} /><h3>Permission is<br />part of the product.</h3><p>An edit is not an approval. A queued request is not a published post. The interface keeps those decisions distinct.</p></div><div className="landing-approval-example"><div><LockKeyhole size={17} /><strong>Review required</strong></div><p>Final video · exact copy · named account · requested time</p><span>Publishing unavailable until the engine is connected</span></div></article>
     </div>

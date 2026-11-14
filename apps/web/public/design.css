@@ -14,6 +14,10 @@
   --accent: var(--ink); --accent-dark: #141413; --accent-soft: var(--subtle);
   --shadow: 0 1px 2px rgba(42,42,39,.05), 0 6px 18px rgba(42,42,39,.06);
   --ease: cubic-bezier(.22,.8,.26,1); --radius: 14px;
+  --ease-out: cubic-bezier(.23,1,.32,1);
+  --art-gold: #F6C404; --art-amber: #EEA902; --art-cream: #DDCB9F; --art-sky: #88B4C5;
+  --art-wash: radial-gradient(ellipse at 24% 0%, var(--art-gold) 0%, transparent 60%), linear-gradient(140deg, var(--art-amber), var(--art-cream) 48%, var(--art-sky));
+  --art-image: url('/art/grainient-sunlit.webp');
   color-scheme: light; font-family: var(--font-inter);
   color: var(--ink); background: var(--background);
   font-synthesis: none; font-kerning: normal; text-rendering: optimizeLegibility;
@@ -21,3 +25,12 @@
 }
 ::selection { background: var(--highlight-soft); color: var(--ink); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+  button, a, summary, [role="button"] { touch-action: manipulation; }
+  button, [role="button"] { user-select: none; -webkit-user-select: none; }
+  button:not(:disabled):active, a[class*="button"]:active { transform: scale(.98); }
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
+  }
+}

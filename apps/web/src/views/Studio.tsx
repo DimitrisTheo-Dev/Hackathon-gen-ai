@@ -85,7 +85,9 @@ export function Studio({
   const [commandOpen, setCommandOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [sort, setSort] = useState("campaign");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [optimisticItems, setOptimisticItems] = useState<Record<string, ContentItem>>({});
   const busyRef = useRef(false);
   const campaignRequest = useRef(0);
   const initialLocation = useRef(new URLSearchParams(location.search));
@@ -117,6 +119,15 @@ export function Studio({
     window.addEventListener("online", network);
     window.addEventListener("offline", network);
     return () => { window.removeEventListener("keydown", keys); window.removeEventListener("online", network); window.removeEventListener("offline", network); };
+  }, []);
+  useEffect(() => {
+    const back = () => {
+      const params = new URLSearchParams(location.search);
+      setSelected(params.get("item"));
+    };
+    window.addEventListener("popstate", back);
+    document.documentElement.classList.add("studio-open");
+    return () => { window.removeEventListener("popstate", back); document.documentElement.classList.remove("studio-open"); };
   }, []);
   useEffect(() => {
     let active = true;
@@ -168,7 +179,7 @@ export function Studio({
     else url.searchParams.delete("campaign");
     if (selected) url.searchParams.set("item", selected);
     else url.searchParams.delete("item");
-    history.replaceState(null, "", url);
+    history.replaceState(history.state, "", url);
     document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : (campaign?.title ?? "Studio")} · Castroom`;
   }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
@@ -211,6 +222,10 @@ export function Studio({
     event?: React.MouseEvent<HTMLButtonElement>,
   ) {
     if (event) itemButton.current = event.currentTarget;
+    if (!selected && matchMedia("(max-width: 1000px)").matches) {
+      const url = new URL(location.href); url.searchParams.set("item", next.id);
+      history.pushState({ ...history.state, castroomEditor: true }, "", url);
+    }
     setSelected(next.id);
     setDrafts((prev) => ({
       ...prev,
@@ -219,13 +234,10 @@ export function Studio({
         value: structuredClone(next),
       },
     }));
-    if (matchMedia("(max-width: 1000px)").matches)
-      requestAnimationFrame(() =>
-        document.querySelector<HTMLInputElement>("#item-title")?.focus(),
-      );
   }
   function closeEditor() {
-    setSelected(null);
+    if (history.state?.castroomEditor) history.back();
+    else setSelected(null);
     requestAnimationFrame(() => itemButton.current?.focus());
   }
   async function action(fn: () => Promise<void>) {
@@ -247,10 +259,13 @@ export function Studio({
     }
   }
   async function save() {
-    if (!item || !draft || !campaign) return;
+    if (!item || !draft || !campaign || busyRef.current || offline) return;
     const id = item.id;
+    // Only the reversible preview is optimistic. Revisions, renders and receipts
+    // remain server-owned. On rejection the card rolls back; the draft is kept.
+    setOptimisticItems(previous => ({ ...previous, [id]: draft.value }));
     await action(async () => {
-      await client.reviseContent({
+      const saved = await client.reviseContent({
         contentId: id,
         expectedRevision: draft.baseRevision,
         operationKey: await operationKey(
@@ -264,6 +279,10 @@ export function Studio({
         ),
         patch: contentPatch(item, draft.value),
       });
+      const apply = (current: Campaign) => current.id === campaign.id ? { ...current, items: current.items.map(i => i.id === id ? saved : i) } : current;
+      setCampaign(current => current ? apply(current) : current);
+      setCampaigns(all => all.map(apply));
+      setManifest(null);
       setDrafts((prev) => {
         const next = { ...prev };
         delete next[id];
@@ -277,6 +296,7 @@ export function Studio({
       );
       setManifest(null);
     });
+    setOptimisticItems(previous => { const next = { ...previous }; delete next[id]; return next; });
   }
   async function render() {
     if (!item || !campaign) return;
@@ -309,16 +329,21 @@ export function Studio({
     });
   }
   function openCampaign(id: string, contentId?: string) {
+    if (busyRef.current) return;
+    const previous = campaign;
+    const previousSelected = selected;
+    const cached = campaigns.find(c => c.id === id);
+    if (cached) setCampaign(cached);
+    setSelected(contentId ?? null);
+    setSearch(""); setStatusFilter("all"); go("canvas");
     void action(async () => {
-      await fetchCampaign(id);
-      setSelected(contentId ?? null);
-      setSearch(""); setStatusFilter("all");
-      go("canvas");
+      try { await fetchCampaign(id); }
+      catch (error) { setCampaign(previous); setSelected(previousSelected); throw error; }
     });
   }
   if (loading)
     return (
-      <div className="loading-page">
+      <div className="loading-page" role="status">
         <Mark />
         <p>Opening your studio…</p>
         <LoaderCircle className="spin" />
@@ -369,17 +394,15 @@ export function Studio({
       </a>
       {fixture && (
         <div className="fixture-banner">
-          <span>Development preview</span>Sample drafts saved in this browser.
-          Rendering, agent connections, and publishing are unavailable.
+          <span>Development preview</span><span className="fixture-detail">Sample drafts saved in this browser. Rendering, agent connections, and publishing are unavailable.</span>
           <a href="/docs/capabilities/">
             Integration status <ArrowUpRight size={12} />
           </a>
         </div>
       )}
       <div
-        className={`studio-shell ${sidebar ? "nav-open" : ""} ${item && view === "canvas" ? "has-editor" : ""}`}
+        className={`studio-shell ${item && view === "canvas" ? "has-editor" : ""}`}
       >
-        {sidebar && <button className="nav-backdrop" aria-label="Close navigation" onClick={() => setSidebar(false)} />}
         <aside className="sidebar">
           <a className="wordmark" href="/">
             <Mark />
@@ -509,6 +532,7 @@ export function Studio({
               >
                 <Menu size={18} />
               </button>
+              <button className="mobile-project-switch" onClick={() => setSidebar(true)} aria-label="Switch project"><span>{campaign?.title ?? "Your projects"}</span><ChevronDown size={15}/></button>
               <Folder size={15} />
               <span>Projects</span>
               <ChevronRight size={13} />
@@ -676,6 +700,7 @@ export function Studio({
                         ? `Stories for ${campaign.companyContext.name}. Ready to shape.`
                         : campaign.brief.split(".")[0] + "."}
                     </p>
+                    <details className="mobile-campaign-brief"><summary>Read brief</summary><p>{campaign.brief}</p></details>
                   </div>
                   <div className="campaign-actions">
                     <button
@@ -746,8 +771,10 @@ export function Studio({
                 </div>
                 {view === "canvas" ? (
                   <div className="canvas">
-                    <div className="canvas-tools">
+                    <div className={`canvas-tools ${filtersOpen ? "filters-open" : ""}`}>
                       <label className="canvas-search"><Search size={16}/><input type="search" aria-label="Filter campaign content" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find in this campaign" /></label>
+                      <button className="icon-button mobile-filter-toggle" aria-label="Filter and sort content" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}><Settings2 size={18}/></button>
+                      <button className="icon-button mobile-activity" aria-label="Campaign activity" onClick={() => setShowActivity(true)}><Clock3 size={18}/></button>
                       <select aria-label="Filter by content status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">All content</option><option value="draft">Drafts</option><option value="ready">Ready</option><option value="attention">Needs attention</option></select>
                       <select aria-label="Sort content" value={sort} onChange={e => setSort(e.target.value)}><option value="campaign">Campaign order</option><option value="recent">Recently changed</option><option value="title">Title</option></select>
                     </div>
@@ -761,6 +788,7 @@ export function Studio({
                     <div className="content-grid">
                       {matches.map((i) => {
                         const index = campaign.items.indexOf(i);
+                        const previewItem = optimisticItems[i.id] ?? i;
                         return (
                           <article
                             className={`content-card ${selected === i.id ? "selected" : ""}`}
@@ -774,7 +802,7 @@ export function Studio({
                             >
                               <div className="card-preview">
                                 <Preview
-                                  item={i}
+                                  item={previewItem}
                                   index={index}
                                   passive
                                   brandName={
@@ -790,7 +818,7 @@ export function Studio({
                                 )}
                               </div>
                               <div className="card-heading">
-                                <h2>{i.title}</h2>
+                                <h2>{previewItem.title}</h2>
                                 <span className="card-selection">
                                   {selected === i.id ? (
                                     <Check size={11} />
@@ -799,7 +827,7 @@ export function Studio({
                               </div>
                               <div className="card-state">
                                 <span className={`state-dot ${i.status}`} />
-                                {i.status.replaceAll("_", " ")}
+                                {optimisticItems[i.id] ? "Saving draft…" : i.status.replaceAll("_", " ")}
                                 <span>v{i.revision}</span>
                               </div>
                             </button>
@@ -1007,6 +1035,12 @@ export function Studio({
               </>
             )}
           </main>
+          <nav className="mobile-dock" aria-label="Workspace shortcuts">
+            <button onClick={() => setSidebar(true)}><Folder size={20}/><span>Projects</span></button>
+            <button aria-current={view === "canvas" ? "page" : undefined} onClick={() => go("canvas")}><Grid2X2 size={20}/><span>Canvas</span></button>
+            <button aria-current={view === "schedule" ? "page" : undefined} onClick={() => go("schedule")}><CalendarDays size={20}/><span>Schedule</span></button>
+            <button onClick={() => setCreating(true)}><Plus size={21}/><span>Create</span></button>
+          </nav>
         </div>
         {item && draft && view === "canvas" && (
           <Editor
@@ -1037,9 +1071,27 @@ export function Studio({
             onRender={() => void render()}
             onClose={closeEditor}
             busy={busy}
+            error={error}
+            offline={offline}
           />
         )}
       </div>
+      {sidebar && <Modal title="Your projects" onClose={() => setSidebar(false)}>
+        <p className="project-switch-workspace">{context.workspace.name} <span>· {context.workspace.role}</span></p>
+        <nav className="mobile-project-list" aria-label="Projects">
+          {campaigns.map(c => <button key={c.id} aria-current={campaign?.id === c.id ? "page" : undefined} onClick={() => openCampaign(c.id)}>
+            <span className="project-thumbnail" aria-hidden="true"><Folder size={20}/></span><span><strong>{c.title}</strong><small>{c.items.length} content items</small></span>{campaign?.id === c.id && <Check size={17}/>}</button>)}
+        </nav>
+        <button className="button primary project-create" onClick={() => { setSidebar(false); setCreating(true); }}><Plus size={17}/>New campaign</button>
+        <nav className="project-quick-links" aria-label="Workspace">
+          <button onClick={() => go("brand")}><FileText size={18}/>Brand & sources<ChevronRight size={16}/></button>
+          <button onClick={() => go("connect")}><Plug size={18}/>{activeConnections.length ? "Agent connections" : "Connect your agent"}<ChevronRight size={16}/></button>
+          <button onClick={() => { setSidebar(false); setCommandOpen(true); }}><Search size={18}/>Search studio<ChevronRight size={16}/></button>
+          <a href="/docs/">Help & documentation<ArrowUpRight size={16}/></a>
+          {onSignOut && <button onClick={onSignOut}><LogOut size={18}/>Sign out</button>}
+        </nav>
+        {fixture && <p className="project-fixture-note">Development workspace. Sample drafts stay in this browser; no rendering, agent connections or publishing.</p>}
+      </Modal>}
       {creating && (
         <CreateCampaign
           context={context}
