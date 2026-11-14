@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicDocuments, publicOrigin, publicPages } from "./documents";
+import { publicDocuments, publicOrigin, publicPages } from "./documents.js";
 export { publicDocuments, publicOrigin, publicPages };
 
 const absoluteUrl = z.url({ protocol: /^https$/ });

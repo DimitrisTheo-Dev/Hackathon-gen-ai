@@ -1,5 +1,5 @@
 import { next } from "@vercel/functions";
-import { handlePublicRequest, publicDocuments, publicPages, publicProblem } from "./packages/public-api/src/index";
+import { handlePublicRequest, publicDocuments, publicPages, publicProblem } from "./packages/public-api/src/index.js";
 
 // Public presentation/discovery only. Private studio and domain routes pass through.
 const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy"]);

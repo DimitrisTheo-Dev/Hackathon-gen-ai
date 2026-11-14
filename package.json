@@ -4,16 +4,17 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "vite --config apps/web/vite.config.ts",
-    "build": "tsc --noEmit && vite build --config apps/web/vite.config.ts && tsx scripts/prerender.ts",
+    "build": "tsc --noEmit && tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs && vite build --config apps/web/vite.config.ts && tsx scripts/prerender.ts",
     "preview": "vite preview --config apps/web/vite.config.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "test:ui": "playwright test",
-    "castroom": "tsx packages/cli/src/main.ts"
+    "castroom": "tsx packages/cli/src/main.ts",
+    "check:proxy": "tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs"
   },
   "dependencies": {
     "@castroom/contracts": "workspace:*",

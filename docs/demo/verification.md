@@ -102,3 +102,5 @@ This section supersedes the earlier typography and browser limitations for the t
 - No live MCP handshake, Humanlike video/audio, exported final composition, provider acceptance/publication, RLS/quota-race evidence, or setup/first-video time is available. The real hero workflow remains blocked on the shared engine.
 
 Screenshots and interaction log: `evidence/redesign/` and `evidence/browser-redesign.txt`. Moonjar desktop/mobile home/features and supplied product reference images were inspected; reference media are retained only outside the repository. Mobbin hero search informed composition review; no proprietary images were shipped.
+
+Production smoke test caught a deployment-only failure after merge: Node ESM could not resolve extensionless public-handler imports. Production was rolled back to the prior working deployment while fixing it. Explicit `.js` import specifiers now survive TypeScript emission; `check:proxy` compiles and runs the emitted handler in plain Node, and the production build executes that regression check. Root engine is pinned to24.x so Vercel does not select26 from a broad >=24 range.

@@ -47,17 +47,19 @@
     "packages/contracts/package.json": "a1aa9af3062281debba0f79eeddb52da6d19400ef3479ae09ef9a2be6d0417a9",
     "packages/contracts/src/index.ts": "f851f725aafc90e0f14beef4992662f78771dd47f4619e03665280a4f8b34314",
     "packages/public-api/src/documents.ts": "f9c9e230d18ff07a58344068a1579ff5a3459e4efda3713c2e85f55882e5fc5a",
-    "packages/public-api/src/index.ts": "6ae29021551a987e838b72b5a68a0c167b0240ae8dc11dbb6c5ad8e5018a8a9f",
+    "packages/public-api/src/index.ts": "1741aaf5ddd7e98bc6184c1f34ecd498faa45205b2d2ef8dfebe2a0895718be3",
     "packages/cli/examples/three-video-plan.json": "065c499a6c754c39bbc50aa4cd1d202f9b06bb6487a678c585993967d8c869ca",
     "packages/cli/src/main.ts": "842275d8eb3603b7785fa09f1aafa4621865d4e05d08e6ab96c81f4d204caa79",
     "packages/cli/src/cli.ts": "262bd8846658e01eba2c857d6600ed884a22aa8e41f7e4596d375b43392dca71",
-    "package.json": "9792a5bef23626a83f7cca86c9e12b955a06bcfc3971c9b9ef5df07887e1716f",
+    "package.json": "17f47b5a4e3d3ff7549375925ea50faf3fd2ad234e7102bcd311a8ac43eba1f4",
     "pnpm-lock.yaml": "f84f01fc8b780e52c4e4269111575e5d874d8546824a9ae33c5bf3fd7e9661ac",
     "pnpm-workspace.yaml": "dd406511110ef63d88ad787140bdab08ab89f69507e047041806a92d97d684f7",
-    "proxy.ts": "07ac6067c4983ad56d31fa286164b76c52bf9e99161d61a645187f889533f1b9",
+    "proxy.ts": "5b8f57b991f4c4b516c29e1c286bccc1ed14b20cc78730a11b7459889b0ed3d4",
     "tsconfig.json": "21037fc0e1e1fd9257faba2948c3cfd169b9a65e493408e56b42e7515b779c9d",
     "vercel.json": "3295203d48829202eddefcad4582524bf7ba188342a599f9523971fef4fd2fa6",
-    "scripts/prerender.ts": "4f4cdee633cd0586b556182d23a88d7b5cc79afe25b262e702f16150bb026c71"
+    "scripts/prerender.ts": "4f4cdee633cd0586b556182d23a88d7b5cc79afe25b262e702f16150bb026c71",
+    "tsconfig.proxy.json": "96d71d5c3e530dca2342218d0c968485b39d75a10ebc00d73ca5d20b0d7acc89",
+    "scripts/check-proxy.mjs": "99d0fffa21efa2e8b8f9c30b8a562c227c91cba99e31310ce4d4536372b845bb"
   },
   "evidence": [
     {
