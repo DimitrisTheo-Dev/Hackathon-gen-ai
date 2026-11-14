@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Check, LoaderCircle, Plug, X } from "lucide-react";
+import { ArrowLeftRight, Check, LoaderCircle, Plug, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { Mark, Notice } from "../components/ui";
+import { Mark } from "../components/ui";
 
 type Details = { clientName: string; redirectHost: string; scope: string };
 
@@ -45,45 +45,57 @@ export function OAuthConsent({ authorizationId, email, onSignOut }: { authorizat
       setError(allow ? "Access could not be granted. Nothing was shared. Try again, or restart the connection from your agent." : "The request could not be declined here. You can close this page; no access was granted.");
     }
   }
+  const state = details ? "ask" : error ? "error" : "loading";
   return (
-    <div className="auth-page">
-      <a className="wordmark" href="/"><Mark />Faceful</a>
-      <main className="auth-card consent-card">
-        <span className="auth-symbol"><Plug size={24} aria-hidden="true" /></span>
-        <h1>{details ? `Connect ${details.clientName} to Faceful?` : error ? "This connection can’t continue" : "Checking the connection request…"}</h1>
-        {!details && !error && <LoaderCircle className="spin" aria-label="Loading the connection request" />}
-        {busy === "redirect" && <p role="status">You already approved this application. Returning you to it…</p>}
-        {details && busy !== "redirect" && <>
-          <p><strong>{details.clientName}</strong> wants to work in your Faceful workspace{email ? <> as <strong>{email}</strong></> : null}.{details.redirectHost && <> After you answer, you’ll return to <strong>{details.redirectHost}</strong>.</>}</p>
-          <div className="consent-lists">
-            <section aria-labelledby="consent-can">
-              <h2 id="consent-can">It will be able to</h2>
-              <ul>
-                <li><Check size={15} aria-hidden="true" />Read your projects, drafts and videos</li>
-                <li><Check size={15} aria-hidden="true" />Create and edit drafts</li>
-                <li><Check size={15} aria-hidden="true" />Request renders within your credits</li>
-                <li><Check size={15} aria-hidden="true" />Prepare a schedule for your review</li>
-              </ul>
-            </section>
-            <section aria-labelledby="consent-cannot">
-              <h2 id="consent-cannot">It will not be able to</h2>
-              <ul>
-                <li><X size={15} aria-hidden="true" />Approve or publish posts</li>
-                <li><X size={15} aria-hidden="true" />Manage billing or see payment details</li>
-                <li><X size={15} aria-hidden="true" />Create or revoke access tokens</li>
-              </ul>
-            </section>
+    <div className="auth-page ob-auth">
+      <header className="ob-auth-top"><a className="wordmark" href="/"><Mark />Faceful</a></header>
+      <main className="auth-card consent-card ob-card ob-consent" data-step={state}>
+        <div className="ob-step" key={state}>
+          <div className="ob-pair" aria-hidden="true">
+            <span className="ob-emblem"><Plug size={22} strokeWidth={1.75} /></span>
+            <span className="ob-pair-link"><ArrowLeftRight size={14} strokeWidth={2} /></span>
+            <span className="ob-emblem"><Mark /></span>
           </div>
-          <div className="consent-actions">
-            <button className="button primary" disabled={busy !== null} onClick={() => void decide(true)}>{busy === "allow" ? "Allowing…" : "Allow access"}</button>
-            <button className="button secondary" disabled={busy !== null} onClick={() => void decide(false)}>{busy === "deny" ? "Declining…" : "Deny"}</button>
+          <h1>{details ? `Connect ${details.clientName} to Faceful?` : error ? "This connection can’t continue" : "Checking the connection request…"}</h1>
+          {state === "loading" && busy !== "redirect" && (
+            <div className="ob-skeleton-lines" role="status">
+              <span className="sr-only">Loading the connection request</span>
+              <i /><i /><i />
+            </div>
+          )}
+          {busy === "redirect" && <p className="ob-sub" role="status">You already approved this application. Returning you to it…</p>}
+          {details && busy !== "redirect" && <>
+            <p className="ob-sub"><strong>{details.clientName}</strong> wants to work in your Faceful workspace{email ? <> as <strong>{email}</strong></> : null}.{details.redirectHost && <> After you answer, you’ll return to <strong>{details.redirectHost}</strong>.</>}</p>
+            <div className="ob-consent-lists">
+              <section aria-labelledby="consent-can">
+                <h2 id="consent-can">It will be able to</h2>
+                <ul>
+                  <li><Check size={15} strokeWidth={2.25} aria-hidden="true" />Read your projects, drafts and videos</li>
+                  <li><Check size={15} strokeWidth={2.25} aria-hidden="true" />Create and edit drafts</li>
+                  <li><Check size={15} strokeWidth={2.25} aria-hidden="true" />Request renders within your credits</li>
+                  <li><Check size={15} strokeWidth={2.25} aria-hidden="true" />Prepare a schedule for your review</li>
+                </ul>
+              </section>
+              <section aria-labelledby="consent-cannot" data-tone="denied">
+                <h2 id="consent-cannot">It will not be able to</h2>
+                <ul>
+                  <li><X size={15} strokeWidth={2.25} aria-hidden="true" />Approve or publish posts</li>
+                  <li><X size={15} strokeWidth={2.25} aria-hidden="true" />Manage billing or see payment details</li>
+                  <li><X size={15} strokeWidth={2.25} aria-hidden="true" />Create or revoke access tokens</li>
+                </ul>
+              </section>
+            </div>
+            <div className="ob-consent-actions">
+              <button className="ob-button ob-button-primary" disabled={busy !== null} onClick={() => void decide(true)}>{busy === "allow" ? <><LoaderCircle size={16} className="spin" aria-hidden="true" />Allowing…</> : "Allow access"}</button>
+              <button className="ob-button ob-button-quiet" disabled={busy !== null} onClick={() => void decide(false)}>{busy === "deny" ? "Declining…" : "Deny"}</button>
+            </div>
+            <small className="ob-fine">Only allow applications you started connecting yourself. You can revoke access at any time.</small>
+          </>}
+          {error && <p className="ob-error" role="alert">{error}</p>}
+          <div className="ob-code-actions">
+            <a className="ob-link" href="/docs/mcp/">How agent connections work</a>
+            <button className="ob-link" type="button" onClick={onSignOut}>Use a different account</button>
           </div>
-          <small>Only allow applications you started connecting yourself. You can sign out or revoke access later.</small>
-        </>}
-        {error && <Notice error>{error}</Notice>}
-        <div className="auth-actions">
-          <a className="quiet-link" href="/docs/mcp/">How agent connections work</a>
-          <button className="text-button" type="button" onClick={onSignOut}>Use a different account</button>
         </div>
       </main>
     </div>

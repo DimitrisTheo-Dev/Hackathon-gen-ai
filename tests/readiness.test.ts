@@ -199,8 +199,41 @@ test("public docs have raw text, canonical URLs, semantic code and consistent na
     assert.ok(main.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").length > 500, path);
     assert.ok(!/<h[4-6][ >]/.test(main));
     for (const link of ["/docs/api/", "/docs/mcp/", "/docs/cli/"]) assert.ok(html.includes(`href="${link}"`));
-    for (const block of html.matchAll(/<pre><code([^>]*)>/g)) assert.match(block[1], /class="language-/);
+    for (const block of html.matchAll(/<pre[^>]*><code([^>]*)>/g)) assert.match(block[1], /class="language-/);
+    assert.equal((html.match(/<pre/g) ?? []).length, (html.match(/<pre tabindex="0"><code class="language-/g) ?? []).length, `${path} code blocks are labelled and keyboard-scrollable`);
   }
+});
+
+test("docs pages share one accessible, script-optional chrome", async () => {
+  const docs = publicDocuments.map((document) => document.path);
+  for (const path of [...docs, "/about/", "/contact/", "/privacy/"]) {
+    const html = await readFile(`apps/web/public${path}index.html`, "utf8");
+    // Landmarks and the route to the content.
+    assert.ok(html.includes('<a class="skip" href="#content">Skip to content</a>'), path);
+    assert.equal((html.match(/<main id="content">/g) ?? []).length, 1, path);
+    assert.ok(html.includes('<nav class="sidebar" aria-label="Documentation">') && html.includes('<details class="menu">'), path);
+    assert.ok(html.includes('<nav aria-label="Breadcrumb">'), path);
+    // The current page is marked in both the sidebar and the phone menu, and nowhere on project pages.
+    assert.equal((html.match(new RegExp(`<a href="${path}" aria-current="page">`, "g")) ?? []).length, docs.includes(path) ? 2 : 0, path);
+    // Exactly one "Privacy" link, in the footer, so the label stays unambiguous.
+    assert.equal((html.match(/>Privacy<\/a>/g) ?? []).length, 1, path);
+    // Under the site's CSP only same-origin script files run: one deferred enhancement, JSON-LD data, no handlers or inline styles.
+    const scripts = [...html.matchAll(/<script\b([^>]*)>/g)].map((match) => match[1].trim());
+    assert.deepEqual(scripts.sort(), ['src="/docs/docs.js" defer', 'type="application/ld+json"'], path);
+    assert.ok(!/\son[a-z]+="/.test(html) && !/\sstyle="/.test(html), `${path} has no inline handlers or styles`);
+    assert.ok(html.includes('<link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>'), path);
+    // Status is always a written word next to its marker, never colour alone.
+    for (const chip of html.matchAll(/<span class="chip chip-(live|sandbox|coming|note)"><i aria-hidden="true"><\/i><strong>([^<]+)<\/strong>/g)) {
+      assert.ok(chip[2].trim().length > 2, path);
+      if (chip[1] !== "note") assert.equal(chip[2], { live: "Live", sandbox: "Sandbox", coming: "Coming" }[chip[1]], path);
+    }
+    // Previous/next links follow the sidebar order on documentation pages.
+    assert.equal(html.includes('<nav class="pager"'), docs.includes(path), path);
+  }
+  const { default: proxy } = await import("../proxy");
+  for (const asset of ["/docs/docs.css", "/docs/docs.js"]) assert.equal(proxy(new Request(`${publicOrigin}${asset}`)).headers.get("x-middleware-next"), "1", asset);
+  const script = await readFile("apps/web/public/docs/docs.js", "utf8");
+  assert.ok(!/innerHTML|eval\(|document\.write/.test(script), "the enhancement script builds DOM nodes, never markup strings");
 });
 
 test("agent index and sitemap discover public actions without exposing private paths", async () => {
@@ -309,7 +342,11 @@ test("the agent guide documents exactly the MCP tools, protocol and SDK the engi
   const html = await readFile("apps/web/public/docs/mcp/index.html", "utf8");
   const documented = [...guide.markdown.matchAll(/^- ([a-z_]+): /gm)].map((match) => match[1]).filter((name) => name.includes("_"));
   assert.deepEqual(documented, registered, "tool list and order in the Markdown guide");
-  assert.deepEqual([...html.matchAll(/<tr><td><code>([a-z_]+)<\/code><\/td>/g)].map((match) => match[1]), registered, "tool table in the HTML guide");
+  assert.deepEqual([...html.matchAll(/<tr><th scope="row"><code>([a-z_]+)<\/code><\/th>/g)].map((match) => match[1]), registered, "tool table in the HTML guide");
+  // Every tool row says whether a person is needed, and only approval and checkout answer yes.
+  const needsPerson = [...html.matchAll(/<tr><th scope="row"><code>([a-z_]+)<\/code><\/th><td>[\s\S]*?<\/td><td data-label="Needs a person">(<strong>Yes\.<\/strong>|No)/g)];
+  assert.equal(needsPerson.length, registered.length);
+  assert.deepEqual(needsPerson.filter((match) => match[2] !== "No").map((match) => match[1]), ["approve_schedule", "create_checkout_link"]);
   const sdk = JSON.parse(await readFile("node_modules/@modelcontextprotocol/sdk/package.json", "utf8")).version;
   for (const text of [guide.markdown, html]) {
     assert.ok(text.includes(LATEST_PROTOCOL_VERSION), "negotiated protocol revision");
@@ -317,10 +354,10 @@ test("the agent guide documents exactly the MCP tools, protocol and SDK the engi
     assert.match(text, /2026-07-28 revision is not implemented/);
     assert.match(text, /FACEFUL_TOKEN/); assert.match(text, /bearer-token-env-var FACEFUL_TOKEN/);
     assert.match(text, /engine\.mcp/);
-    // Evidence is stated at the level it exists: token auth tried locally; deployed endpoint and OAuth not yet.
+    // Evidence is stated at the level it exists: token auth with real clients; OAuth with a scripted client only.
     assert.match(text, /Claude Code 2\.1\.325 and Codex CLI 0\.169\.0/);
     assert.match(text, /local engine server/);
-    assert.match(text, /OAuth sign-in have not been recorded yet/);
+    assert.match(text, /OAuth has not yet been tried through a host['’]s own sign-in screen/);
     assert.match(text, /Cursor, Gemini CLI and other hosts are untested/);
     assert.match(text, /no application rate limiting/);
   }

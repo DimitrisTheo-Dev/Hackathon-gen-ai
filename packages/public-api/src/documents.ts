@@ -147,7 +147,7 @@ Claude Code, in a trusted project's .mcp.json (merge it; do not overwrite other 
 
 Start the client from the shell that has FACEFUL_TOKEN. You can revoke the token in the studio at any time; new calls with it are refused. Revoking does not undo work that was already accepted.
 
-## Authorize with OAuth (implemented, not yet trialled)
+## Authorize with OAuth (works with a scripted client; host sign-in screens untried)
 The server publishes OAuth protected-resource metadata at /.well-known/oauth-protected-resource/mcp, and an unauthenticated request to /mcp returns 401 with a WWW-Authenticate header that points to it. The authorization server is the project's Supabase Auth, using OAuth 2.1 with PKCE; its own metadata is served by that issuer, not by this origin. Dynamic client registration is enabled, and the studio has a consent page where a signed-in member allows or denies the client.
 
 Two things to know before relying on it. No end-to-end OAuth trial with a real client has been recorded yet, so treat this path as untested and prefer a workspace token. And access tokens are audience-bound to the Faceful Supabase project rather than to /mcp specifically: there is no resource-specific audience, although signature, issuer, audience and expiry are verified.
@@ -200,7 +200,7 @@ and Wednesday at 09:00 and show me the blockers before anything is approved.
 ## What has been tried
 Claude Code 2.1.325 and Codex CLI 0.169.0 each connected with a scoped workspace token and called tools. Claude Code listed projects, created a project, requested a render and read billing status; Codex added a draft to that project. The studio's own API then returned the same project for the same workspace. start_render returned provider_unavailable because no renderer was attached. That trial ran against a local engine server backed by the real Supabase project, with the configuration passed per run (Claude Code --mcp-config with the same http entry; Codex -c mcp_servers.faceful.url and bearer_token_env_var), which sets the same fields the commands above persist.
 
-A trial against the deployed endpoint and an OAuth sign-in have not been recorded yet. Cursor, Gemini CLI and other hosts are untested.
+On 14 November 2026 Claude Code was run against the production endpoint with a workspace token, and the OAuth path (discovery, client registration, consent page, token, refresh) was completed on production with a scripted client. OAuth has not yet been tried through a host's own sign-in screen. Cursor, Gemini CLI and other hosts are untested.
 `,
   },
   {
@@ -237,7 +237,7 @@ If you open the studio on a different origin, use that origin's /mcp instead.
 Ask the agent to call list_projects and get_billing_status. A real connection returns your workspace's projects and credit balance, and the studio's connection list records when the token was last used. Copying configuration is not connection evidence. Resolve concrete dates and the IANA timezone before proposing a schedule; a signed-in member must approve the exact schedule in the studio. No two-minute setup time has been measured.
 
 ## What has been tried
-Codex CLI 0.169.0 and Claude Code 2.1.325 connected with a workspace token against a local engine server backed by the real Supabase project. The deployed endpoint and OAuth sign-in have not been trialled yet. See [Use Faceful with your AI agent](/docs/mcp/) for the tools, limits and OAuth details.
+Codex CLI 0.169.0 and Claude Code 2.1.325 connected with a workspace token against a local engine server backed by the real Supabase project. Claude Code has been run against the production endpoint with a workspace token; OAuth works on production with a scripted client and has not yet been tried through a host's own sign-in screen. See [Use Faceful with your AI agent](/docs/mcp/) for the tools, limits and OAuth details.
 `,
   },
   {

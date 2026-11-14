@@ -2,11 +2,12 @@ import { connectionSchema } from "../../contracts/src/index.js";
 import { z } from "zod";
 import { audit, authenticate, hashToken, newAgentToken, requireHuman, requireScope, resolveContext, type Ctx, type EngineDeps } from "./access.js";
 import { createCheckout, createPortal, getBillingStatus, handleStripeWebhook } from "./billing.js";
+import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.js";
 import { directorTurn } from "./director.js";
 import { EngineError } from "./errors.js";
 import type { Planner } from "./llm.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
-import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs } from "./schedule.js";
+import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
 import { addDraft, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign } from "./studio.js";
 import { createFromTemplate, createSampleProject, listTemplates } from "./templates.js";
 
@@ -83,6 +84,8 @@ const operations: Record<string, (deps: HttpDeps, ctx: Ctx, raw: unknown) => Pro
   create_sample_project: createSampleProject,
   create_checkout: createCheckout,
   create_portal: createPortal,
+  connect_channel: connectChannel,
+  disconnect_channel: disconnectChannel,
   create_run_grant: async () => {
     throw new EngineError("unsupported", "Unattended publishing grants are not available in this build. Approve each schedule in the studio.");
   },
@@ -99,12 +102,17 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
   if (read && (match = path.match(/^\/campaigns\/([^/]+)$/))) {
     // Reads double as the moment stuck work is noticed, so a card can never spin forever.
     await sweepRenderJobs(deps, { orgId: ctx.org.id });
-    return json(await getCampaign(deps, ctx, decodeURIComponent(match[1])));
+    const campaignId = decodeURIComponent(match[1]);
+    // The scheduler runs rarely, so an open project also confirms its own uploaded posts — at most one provider
+    // check per post per minute, and never more than three per read. A failed check must not fail the read.
+    await verifySubmittedPublishJobs(deps, { orgId: ctx.org.id, projectId: campaignId, minIntervalSeconds: 60, limit: 3 }).catch(() => undefined);
+    return json(await getCampaign(deps, ctx, campaignId));
   }
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
   if (read && path === "/billing") return json(await getBillingStatus(deps, ctx));
+  if (read && path === "/channels") return json(await getChannelStatus(deps, ctx));
   if (post && path === "/workspace/select") {
     // resolveContext has already proven membership of the requested workspace.
     if (principal.kind === "agent" && principal.via === "token") throw new EngineError("forbidden", "A workspace token is bound to one workspace.");
@@ -146,7 +154,7 @@ export function health(deps: HttpDeps) {
     director: config.llm ? "ai" : "basic",
     rendering: { connected: Boolean(config.renderWorkerToken), provider: "humanlike", humanlikeKey: Boolean(config.humanlikeApiKey) },
     billing: { mode: config.stripe ? "sandbox" : "not_configured", problem: config.stripeProblem },
-    publishing: { adapters: [] as string[] },
+    publishing: { adapters: config.youtube ? ["youtube"] : ([] as string[]), problem: config.youtube ? null : config.youtubeProblem },
     scheduler: Boolean(config.cronSecret),
   };
 }

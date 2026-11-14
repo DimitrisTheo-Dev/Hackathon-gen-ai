@@ -112,6 +112,42 @@ export const checkoutResultSchema = z.object({
 });
 export const portalResultSchema = z.object({ portalUrl: z.url({ protocol: /^https$/, hostname: /(^|\.)stripe\.com$/ }) });
 export const sampleInputSchema = z.object({ operationKey: z.uuid() }).strict();
+/** Mirrors the engine's publishing-destination read model (`GET /v1/studio/channels`). */
+const channelPlatformSchema = z.enum(["youtube", "instagram", "tiktok"]);
+export const channelConnectionSchema = z.object({
+  id: idSchema,
+  platform: channelPlatformSchema,
+  displayName: z.string(),
+  state: z.enum(["connected", "expired", "unavailable"]),
+  connectedAt: instantSchema,
+});
+export const channelStatusSchema = z.object({
+  platforms: z.array(
+    z.object({
+      platform: channelPlatformSchema,
+      availability: z.enum(["ready", "not_configured", "unavailable"]),
+      reason: z.string().nullable(),
+      note: z.string().nullable(),
+    }),
+  ),
+  connections: z.array(channelConnectionSchema),
+  canManage: z.boolean(),
+});
+/**
+ * The Google tokens are handed to the engine once, straight after Google's consent screen. They are
+ * validated and stored server-side; this client never persists or echoes them.
+ */
+export const connectChannelInputSchema = z
+  .object({ platform: z.literal("youtube"), accessToken: z.string().min(20).max(4096), refreshToken: z.string().min(10).max(4096), operationKey: z.uuid() })
+  .strict();
+export const connectChannelResultSchema = z.object({ connection: channelConnectionSchema });
+export const disconnectChannelInputSchema = z.object({ connectionId: idSchema, operationKey: z.uuid() }).strict();
+export const disconnectChannelResultSchema = z.object({ disconnected: z.literal(true), cancelledPosts: z.number().int().nonnegative(), revokedAtGoogle: z.boolean() });
+export type ChannelStatus = z.infer<typeof channelStatusSchema>;
+export type ChannelConnection = z.infer<typeof channelConnectionSchema>;
+export type ConnectChannelInput = z.infer<typeof connectChannelInputSchema>;
+export type DisconnectChannelInput = z.infer<typeof disconnectChannelInputSchema>;
+export type DisconnectChannelResult = z.infer<typeof disconnectChannelResultSchema>;
 export type BillingStatus = z.infer<typeof billingStatusSchema>;
 export type CheckoutInput = z.infer<typeof checkoutInputSchema>;
 export type CheckoutResult = z.infer<typeof checkoutResultSchema>;
@@ -152,6 +188,10 @@ export interface StudioClient {
   createCheckout(input: CheckoutInput): Promise<CheckoutResult>;
   createPortal(): Promise<PortalResult>;
   selectWorkspace(workspaceId: string): Promise<StudioContext>;
+  /** Publishing destinations: what can be connected on this deployment and what already is. */
+  getChannels(): Promise<ChannelStatus>;
+  connectChannel(input: ConnectChannelInput): Promise<ChannelConnection>;
+  disconnectChannel(input: DisconnectChannelInput): Promise<DisconnectChannelResult>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {

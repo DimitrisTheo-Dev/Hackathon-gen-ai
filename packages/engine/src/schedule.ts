@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { manifestSchema, operationSchema, type Operation, type Platform, type ScheduleManifest } from "../../contracts/src/index.js";
 import { audit, canonical, idempotent, requireHuman, requireScope, sha256Hex, type Ctx, type EngineDeps } from "./access.js";
+import { NOT_AVAILABLE_YET, youtubePublisher } from "./channels.js";
 import { EngineError, StoreConflict } from "./errors.js";
-import { selectOne, type Row } from "./store.js";
+import { ChannelGrantExpired, UnknownPublishOutcome } from "./providers/youtube.js";
+import { selectOne, type Filter, type Row } from "./store.js";
 import { loadProject, parse } from "./studio.js";
 
 /**
@@ -10,13 +12,27 @@ import { loadProject, parse } from "./studio.js";
  *   proposal (draft times on items) → manifest (exact, hashed) → human approval → publish jobs.
  * A publish job then moves SCHEDULED → PROCESSING → SUBMITTED → VERIFIED_PUBLISHED | FAILED.
  * "Submitted" means a provider accepted the request; only provider evidence makes it "published".
+ * A job whose send has an unknown result stays PROCESSING and is failed by the sweep — never re-sent.
  */
 export interface Publisher {
-  /** Submit one approved post. Must be idempotent on `attemptKey`. */
-  publish(input: { attemptKey: string; credentials: string | null; mediaUrl: string; payload: Row; scheduledAt: string }): Promise<{ providerPostId: string; state: "submitted" | "verified_published"; url: string | null }>;
+  /** True when the provider itself holds a post until its time, so the post is submitted as soon as the schedule is committed. */
+  readonly schedulesNatively: boolean;
+  /**
+   * Submit one approved post. Throw `EngineError` when nothing was sent, `ChannelGrantExpired` when the
+   * account must be reconnected, and `UnknownPublishOutcome` when a send started and its result is not known.
+   */
+  publish(input: { attemptKey: string; credentials: string | null; mediaUrl: string; mediaMime: string; itemTitle: string; payload: Row; scheduledAt: string }): Promise<{ providerPostId: string; state: "submitted" | "verified_published"; url: string | null }>;
+  /** Ask the provider what became of a submitted post. Only provider evidence may return `verified_published`. */
+  verify?(input: { credentials: string | null; providerPostId: string; scheduledAt: string; visibility: string }): Promise<{ state: "submitted" | "verified_published" | "failed"; publishedAt: string | null; note: string | null }>;
 }
-/** No destination has approved API access in this build, so no adapter is registered. See DEMO_READINESS.md. */
-export const publishers: Partial<Record<Platform, Publisher>> = {};
+/**
+ * The one real destination is YouTube, and only when this deployment holds its OAuth client and an
+ * encryption key. Instagram and TikTok have no adapter: both require platform app review first.
+ */
+export function publisherFor(deps: EngineDeps, platform: Platform): Publisher | null {
+  return platform === "youtube" ? youtubePublisher(deps) : null;
+}
+const PLATFORM_NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
 
 export const prepareInputSchema = z.object({ campaignId: z.string().min(1).max(160), expectedRevision: z.number().int().positive(), operationKey: z.uuid() }).strict();
 export const manifestInputSchema = z.object({ manifestId: z.string().min(1).max(160), hash: z.string().min(1).max(200), operationKey: z.uuid() }).strict();
@@ -61,12 +77,17 @@ export async function prepareSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown):
         const platform = target.platform as Platform;
         const variant = (item.variants as Row[]).find((entry) => entry.platform === platform);
         const account = accounts.find((entry) => entry.id === target.accountId && entry.platform === platform);
-        if (!publishers[platform]) {
-          blockers.push({ itemId: item.id, message: `Publishing to ${platform} is not connected in this build. The schedule can be drafted, but nothing can be posted there yet.` });
+        if (!publisherFor(deps, platform)) {
+          // Identical wording per cause, so the review groups it once instead of repeating it per item.
+          blockers.push({ itemId: item.id, message: platform === "youtube" ? `YouTube publishing is not set up on this deployment yet. The schedule can be drafted, but nothing can be posted there.` : NOT_AVAILABLE_YET });
           continue;
         }
-        if (!account || account.state !== "connected") {
-          blockers.push({ itemId: item.id, message: `Connect a ${platform} account before scheduling there.` });
+        if (!account) {
+          blockers.push({ itemId: item.id, message: `Connect a ${PLATFORM_NAME[platform]} channel and choose it for this item before scheduling there.` });
+          continue;
+        }
+        if (account.state !== "connected") {
+          blockers.push({ itemId: item.id, message: `Reconnect ${PLATFORM_NAME[platform]}: “${account.display_name}” no longer has access.` });
           continue;
         }
         if (!variant) {
@@ -194,54 +215,163 @@ export async function commitSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown): 
     }
     await deps.store.update("schedule_manifests", { id: manifest.id, org_id: ctx.org.id }, { state: "committed" });
     await audit(deps, ctx, { projectId: project.id, action: "Scheduled approved posts", objectId: manifest.id, revision: project.revision, outcome: `${jobIds.length} publish job(s) scheduled` });
+    // Destinations that hold a post until its time (YouTube `publishAt`) receive it now. Bounded per request;
+    // anything left is picked up by the scheduler. Each job is claimed by compare-and-swap, so a repeated
+    // commit, a second tab or the scheduler can never send the same post twice.
+    let sent = 0;
+    for (const id of jobIds) {
+      if (sent >= MAX_NATIVE_SUBMISSIONS_PER_COMMIT) break;
+      const job = await selectOne(deps.store, "publish_jobs", { id, org_id: ctx.org.id, state: "scheduled" });
+      if (!job || !publisherFor(deps, job.platform as Platform)?.schedulesNatively) continue;
+      if ((await processPublishJob(deps, job)) !== "skipped") sent++;
+    }
     return parse(operationSchema, { operationId: input.operationKey, state: "accepted", jobIds, nextPollAfterMs: 30000, reviewUrl: null });
   });
 }
 
 const BACKOFF_MINUTES = [1, 5, 15, 60];
+const MAX_NATIVE_SUBMISSIONS_PER_COMMIT = 3;
+const PROCESSING_TIMEOUT_MINUTES = 15;
 
-/** Due-job worker, driven by the scheduler tick. Each job is claimed by compare-and-swap, so two ticks cannot double-post. */
-export async function processDuePublishJobs(deps: EngineDeps) {
-  const nowIso = deps.now().toISOString();
-  const due = await deps.store.select("publish_jobs", { state: "scheduled", scheduled_at: { lte: nowIso } }, { order: ["scheduled_at", "asc"], limit: 20 });
-  const outcome = { processed: 0, submitted: 0, failed: 0, retried: 0 };
-  for (const candidate of due) {
-    if (candidate.next_attempt_at && new Date(candidate.next_attempt_at) > deps.now()) continue;
-    const claimed = await deps.store.update("publish_jobs", { id: candidate.id, state: "scheduled" }, { state: "processing", attempt: candidate.attempt + 1, updated_at: nowIso });
-    if (!claimed.length) continue;
-    const job = claimed[0];
-    outcome.processed++;
-    const finish = async (patch: Row, type: string) => {
-      await deps.store.update("publish_jobs", { id: job.id, state: "processing" }, { ...patch, updated_at: deps.now().toISOString() });
-      await deps.store.insert("job_events", { id: crypto.randomUUID(), org_id: job.org_id, job_id: job.id, job_kind: "publish", type, detail: { attempt: job.attempt }, at: deps.now().toISOString() });
-    };
-    const publisher = publishers[job.platform as Platform];
-    const [item, asset, account] = await Promise.all([
-      selectOne(deps.store, "content_items", { id: job.item_id, org_id: job.org_id }),
-      selectOne(deps.store, "media_assets", { id: job.media_asset_id, org_id: job.org_id }),
-      selectOne(deps.store, "provider_connections", { id: job.account_id, org_id: job.org_id }),
-    ]);
-    // Re-validate at send time: only the approved version, with its approved file, on a still-connected account.
-    if (!publisher) { await finish({ state: "failed", error: `No publishing adapter is connected for ${job.platform}.` }, "failed"); outcome.failed++; continue; }
-    if (!item || item.approved_revision !== job.revision || !asset || asset.sha256 !== job.payload.assetHash) { await finish({ state: "failed", error: "The approved version or its video changed after approval. Review and approve again." }, "failed"); outcome.failed++; continue; }
-    if (!account || account.state !== "connected") { await finish({ state: "failed", error: `The ${job.platform} account needs to be reconnected. The approved post was not sent.` }, "failed"); outcome.failed++; continue; }
+async function publishEvent(deps: EngineDeps, job: Row, type: string, detail: Row = {}) {
+  await deps.store.insert("job_events", { id: crypto.randomUUID(), org_id: job.org_id, job_id: job.id, job_kind: "publish", type, detail: { attempt: job.attempt, ...detail }, at: deps.now().toISOString() });
+}
+
+/**
+ * Sends one publish job. The job is claimed by compare-and-swap (scheduled → processing) first, so two
+ * callers cannot both send it. Outcomes: submitted | failed | retried | unknown | skipped (not ours to send).
+ */
+export async function processPublishJob(deps: EngineDeps, candidate: Row): Promise<"submitted" | "failed" | "retried" | "unknown" | "skipped"> {
+  if (candidate.next_attempt_at && new Date(candidate.next_attempt_at) > deps.now()) return "skipped";
+  const claimed = await deps.store.update("publish_jobs", { id: candidate.id, state: "scheduled" }, { state: "processing", attempt: candidate.attempt + 1, updated_at: deps.now().toISOString() });
+  if (!claimed.length) return "skipped";
+  const job = claimed[0];
+  const finish = async (patch: Row, type: string) => {
+    await deps.store.update("publish_jobs", { id: job.id, state: "processing" }, { ...patch, updated_at: deps.now().toISOString() });
+    await publishEvent(deps, job, type);
+  };
+  const platform = job.platform as Platform;
+  const publisher = publisherFor(deps, platform);
+  const [item, asset, account] = await Promise.all([
+    selectOne(deps.store, "content_items", { id: job.item_id, org_id: job.org_id }),
+    selectOne(deps.store, "media_assets", { id: job.media_asset_id, org_id: job.org_id }),
+    selectOne(deps.store, "provider_connections", { id: job.account_id, org_id: job.org_id }),
+  ]);
+  // Re-validate at send time: only the approved version, with its approved file, on a still-connected account.
+  if (!publisher) {
+    await finish({ state: "failed", error: `No publishing adapter is connected for ${PLATFORM_NAME[platform]}.` }, "failed");
+    return "failed";
+  }
+  if (!item || item.approved_revision !== job.revision || !asset || asset.sha256 !== job.payload.assetHash) {
+    await finish({ state: "failed", error: "The approved version or its video changed after approval. Review and approve again." }, "failed");
+    return "failed";
+  }
+  if (!account || account.state !== "connected") {
+    await finish({ state: "failed", error: `Reconnect ${PLATFORM_NAME[platform]}; the approved post was not sent.` }, "failed");
+    return "failed";
+  }
+  try {
+    const mediaUrl = (await deps.store.media.signedUrls([asset.storage_path], 900))[asset.storage_path];
+    if (!mediaUrl) throw new EngineError("provider_unavailable", "The approved video could not be read from storage. Nothing was posted.");
+    const result = await publisher.publish({ attemptKey: job.id, credentials: account.credentials_ciphertext ?? null, mediaUrl, mediaMime: asset.mime, itemTitle: item.title, payload: job.payload, scheduledAt: new Date(job.scheduled_at).toISOString() });
+    await finish({ state: result.state, provider_post_id: result.providerPostId, published_url: result.url, published_at: result.state === "verified_published" ? deps.now().toISOString() : null, error: null }, result.state);
+    await deps.store.insert("audit_events", { id: crypto.randomUUID(), org_id: job.org_id, project_id: job.project_id, actor: PLATFORM_NAME[platform], actor_kind: "system", action: `Approved post uploaded to ${PLATFORM_NAME[platform]}`, object_id: job.item_id, revision: job.revision, outcome: result.state === "verified_published" ? "Published" : `Accepted by ${PLATFORM_NAME[platform]} · not yet confirmed public`, correlation_id: job.id, at: deps.now().toISOString() });
+    return "submitted";
+  } catch (error) {
+    if (error instanceof UnknownPublishOutcome) {
+      // A send started and its result is unknown. Stay in "processing": retrying could post a duplicate.
+      await publishEvent(deps, job, "unknown_outcome");
+      return "unknown";
+    }
+    if (error instanceof ChannelGrantExpired) {
+      await deps.store.update("provider_connections", { id: account.id, org_id: job.org_id }, { state: "expired", updated_at: deps.now().toISOString() });
+      await finish({ state: "failed", error: error.message }, "failed");
+      return "failed";
+    }
+    // Everything else thrown by a publisher is a definite "nothing was sent", so a transient failure may be retried.
+    const transient = !(error instanceof EngineError) || error.code === "provider_unavailable" || error.code === "quota_exceeded";
+    if (transient && job.attempt <= BACKOFF_MINUTES.length) {
+      await finish({ state: "scheduled", next_attempt_at: new Date(deps.now().getTime() + BACKOFF_MINUTES[job.attempt - 1] * 60_000).toISOString(), error: "The provider was unavailable; this post will be retried." }, "retry_scheduled");
+      return "retried";
+    }
+    await finish({ state: "failed", error: error instanceof EngineError ? error.message : "The provider did not accept this post." }, "failed");
+    return "failed";
+  }
+}
+
+/**
+ * Asks the provider what became of submitted posts. `scope.minIntervalSeconds` throttles how often one job is
+ * re-checked (its `updated_at` is the marker), so a studio that polls every few seconds costs one provider call
+ * per job per interval at most.
+ */
+export async function verifySubmittedPublishJobs(deps: EngineDeps, scope: { orgId?: string; projectId?: string; minIntervalSeconds?: number; limit?: number } = {}) {
+  const before = new Date(deps.now().getTime() - (scope.minIntervalSeconds ?? 0) * 1000).toISOString();
+  const filter: Filter = { state: "submitted", updated_at: { lte: before }, ...(scope.orgId ? { org_id: scope.orgId } : {}), ...(scope.projectId ? { project_id: scope.projectId } : {}) };
+  const outcome = { checked: 0, verified: 0, failed: 0 };
+  for (const job of await deps.store.select("publish_jobs", filter, { order: ["updated_at", "asc"], limit: scope.limit ?? 20 })) {
+    const publisher = publisherFor(deps, job.platform as Platform);
+    if (!publisher?.verify || !job.provider_post_id) continue;
+    const account = await selectOne(deps.store, "provider_connections", { id: job.account_id, org_id: job.org_id });
+    const now = deps.now().toISOString();
+    if (!account || account.state !== "connected") {
+      // Without access we cannot ask. Say so, and leave the last confirmed state alone.
+      await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { error: `Reconnect ${PLATFORM_NAME[job.platform as Platform]} to confirm whether this post is public.`, updated_at: now });
+      continue;
+    }
+    outcome.checked++;
     try {
-      const mediaUrl = (await deps.store.media.signedUrls([asset.storage_path], 900))[asset.storage_path];
-      if (!mediaUrl) throw new Error("media unavailable");
-      const result = await publisher.publish({ attemptKey: job.id, credentials: account.credentials_ciphertext ?? null, mediaUrl, payload: job.payload, scheduledAt: new Date(job.scheduled_at).toISOString() });
-      await finish({ state: result.state, provider_post_id: result.providerPostId, published_url: result.url, published_at: result.state === "verified_published" ? deps.now().toISOString() : null, error: null }, result.state);
-      outcome.submitted++;
-    } catch (error) {
-      const transient = !(error instanceof EngineError) || error.code === "provider_unavailable" || error.code === "quota_exceeded";
-      if (transient && job.attempt <= BACKOFF_MINUTES.length) {
-        await finish({ state: "scheduled", next_attempt_at: new Date(deps.now().getTime() + BACKOFF_MINUTES[job.attempt - 1] * 60_000).toISOString(), error: "The provider was unavailable; this post will be retried." }, "retry_scheduled");
-        outcome.retried++;
+      const result = await publisher.verify({ credentials: account.credentials_ciphertext ?? null, providerPostId: job.provider_post_id, scheduledAt: new Date(job.scheduled_at).toISOString(), visibility: String(job.payload?.visibility ?? "private") });
+      if (result.state === "verified_published") {
+        // The only path to "published": the provider itself reported the post as public.
+        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "verified_published", published_at: result.publishedAt ?? now, error: null, updated_at: now })).length) {
+          outcome.verified++;
+          await publishEvent(deps, job, "verified_published");
+        }
+      } else if (result.state === "failed") {
+        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "failed", error: result.note ?? "The provider reports this post as failed.", updated_at: now })).length) {
+          outcome.failed++;
+          await publishEvent(deps, job, "failed", { reason: result.note });
+        }
       } else {
-        await finish({ state: "failed", error: error instanceof EngineError ? error.message : "The provider did not accept this post." }, "failed");
-        outcome.failed++;
+        await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { error: result.note, updated_at: now });
       }
+    } catch (error) {
+      if (error instanceof ChannelGrantExpired) await deps.store.update("provider_connections", { id: account.id, org_id: job.org_id }, { state: "expired", updated_at: now });
+      // A failed check changes nothing about the post; touch the marker so it is not retried in a tight loop.
+      await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { updated_at: now });
     }
   }
+  return outcome;
+}
+
+/** A job stuck in "processing" has an unknown outcome. It fails visibly and is never re-sent automatically. */
+export async function sweepPublishJobs(deps: EngineDeps) {
+  const before = new Date(deps.now().getTime() - PROCESSING_TIMEOUT_MINUTES * 60_000).toISOString();
+  let swept = 0;
+  for (const job of await deps.store.select("publish_jobs", { state: "processing", updated_at: { lt: before } }, { limit: 50 })) {
+    const failed = await deps.store.update("publish_jobs", { id: job.id, state: "processing" }, { state: "failed", error: "Outcome unknown — check the channel before retrying.", updated_at: deps.now().toISOString() });
+    if (failed.length) {
+      swept++;
+      await publishEvent(deps, job, "failed", { reason: "outcome_unknown" });
+    }
+  }
+  return swept;
+}
+
+/** Scheduler tick: send what is due (or can be handed to the provider now), verify what was sent, fail what is stuck. */
+export async function processDuePublishJobs(deps: EngineDeps) {
+  const nowIso = deps.now().toISOString();
+  const outcome = { processed: 0, submitted: 0, failed: 0, retried: 0, unknown: 0, verified: 0, swept: 0 };
+  for (const candidate of await deps.store.select("publish_jobs", { state: "scheduled" }, { order: ["scheduled_at", "asc"], limit: 20 })) {
+    const due = new Date(candidate.scheduled_at).toISOString() <= nowIso;
+    if (!due && !publisherFor(deps, candidate.platform as Platform)?.schedulesNatively) continue;
+    const result = await processPublishJob(deps, candidate);
+    if (result === "skipped") continue;
+    outcome.processed++;
+    outcome[result]++;
+  }
+  outcome.verified = (await verifySubmittedPublishJobs(deps)).verified;
+  outcome.swept = await sweepPublishJobs(deps);
   return outcome;
 }
 

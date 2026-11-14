@@ -19,6 +19,12 @@ export interface LlmConfig {
   apiKey: string | null;
   model: string;
 }
+export interface YoutubeConfig {
+  clientId: string;
+  clientSecret: string;
+  /** 32 raw bytes. Encrypts stored channel refresh tokens (AES-256-GCM). */
+  encryptionKey: Uint8Array;
+}
 export interface EngineConfig {
   appBaseUrl: string;
   supabaseUrl: string;
@@ -37,6 +43,10 @@ export interface EngineConfig {
   /** Why billing is unavailable, in words safe to show an owner. Null when configured. */
   stripeProblem: string | null;
   llm: LlmConfig | null;
+  /** YouTube channel connection and publishing. Null until all three settings are present and valid. */
+  youtube: YoutubeConfig | null;
+  /** Why channel connection is unavailable, in words safe to show an owner. Null when configured. */
+  youtubeProblem: string | null;
   /** Model-backed director turns allowed per organization per 24 hours. */
   directorDailyTurns: number;
   mediaUrlTtlSeconds: number;
@@ -79,6 +89,20 @@ function llmFrom(env: Record<string, string | undefined>): LlmConfig | null {
   return null;
 }
 
+function youtubeFrom(env: Record<string, string | undefined>): { youtube: YoutubeConfig | null; problem: string | null } {
+  const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+  const rawKey = env.CONNECTIONS_ENCRYPTION_KEY?.trim();
+  if (!clientId && !clientSecret && !rawKey) return { youtube: null, problem: "YouTube publishing has not been set up on this deployment." };
+  if (!clientId || !clientId.endsWith(".apps.googleusercontent.com")) return { youtube: null, problem: "GOOGLE_OAUTH_CLIENT_ID is missing or is not a Google OAuth client ID." };
+  if (!clientSecret) return { youtube: null, problem: "GOOGLE_OAUTH_CLIENT_SECRET is missing, so channel access cannot be refreshed." };
+  if (!rawKey) return { youtube: null, problem: "CONNECTIONS_ENCRYPTION_KEY is missing, so channel credentials cannot be stored safely." };
+  // Standard or URL-safe base64 of exactly 32 bytes. Anything else is refused rather than padded or truncated.
+  const key = Buffer.from(rawKey.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+  if (key.byteLength !== 32) return { youtube: null, problem: "CONNECTIONS_ENCRYPTION_KEY must be 32 random bytes, base64-encoded." };
+  return { youtube: { clientId, clientSecret, encryptionKey: new Uint8Array(key) }, problem: null };
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): EngineConfig {
   const supabaseUrl = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
   const appBaseUrl = (env.APP_BASE_URL ?? (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : "")).trim().replace(/\/$/, "");
@@ -91,6 +115,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     }
   }
   const { stripe, problem } = stripeFrom(env);
+  const channels = youtubeFrom(env);
   return {
     appBaseUrl,
     supabaseUrl,
@@ -108,6 +133,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     stripe,
     stripeProblem: problem,
     llm: llmFrom(env),
+    youtube: channels.youtube,
+    youtubeProblem: channels.problem,
     directorDailyTurns: integer(env.DIRECTOR_DAILY_TURNS, 100, 1, 10_000),
     mediaUrlTtlSeconds: 3600,
   };

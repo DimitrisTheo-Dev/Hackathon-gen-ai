@@ -6,6 +6,8 @@ import "./mobile.css";
 import "./director/director.css";
 import "./landing/landing.css";
 import "./live.css";
+// Sign-in, agent connection, consent, billing and templates. Loaded last: it fully describes those surfaces.
+import "./onboarding.css";
 const AuthApp = lazy(() => import("./AuthApp"));
 const ClaudeVpsPage = lazy(() => import("./claude/ClaudeVpsPage"));
 const claudeRoute = /^\/claude-login-test(\/|$)/.test(location.pathname);

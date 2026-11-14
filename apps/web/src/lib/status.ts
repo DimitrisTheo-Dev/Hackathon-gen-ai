@@ -26,3 +26,29 @@ export function failedRender(item: ContentItem, jobs: Campaign["jobs"] = []) {
   if (item.status !== "failed") return null;
   return jobs.filter((job) => job.itemId === item.id && job.stage !== "publish" && job.state === "failed").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
 }
+
+/**
+ * Work that is genuinely in flight for this item right now, or null. Used for the animated pill:
+ * it never appears for a state the engine has not reported or a request this browser has not sent.
+ */
+export function liveActivity(item: ContentItem, jobs: Campaign["jobs"] = [], local: { saving?: boolean; drafting?: boolean } = {}): { label: string; tone: "drafting" | "queued" | "rendering" } | null {
+  if (local.drafting) return { label: "Faceful is drafting…", tone: "drafting" };
+  if (local.saving) return { label: "Saving…", tone: "drafting" };
+  const badge = itemBadge(item, jobs);
+  if (badge.tone === "rendering") return { label: "Rendering…", tone: "rendering" };
+  if (badge.tone === "queued") return { label: "Queued to render", tone: "queued" };
+  return null;
+}
+
+/** Compact relative time for activity lines ("just now", "4 min ago", "3 h ago", "2 d ago"). */
+export function timeAgo(iso: string, now = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (!Number.isFinite(seconds)) return "";
+  if (seconds < 45) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return `${days} d ago`;
+}

@@ -86,7 +86,7 @@ export function Modal({
   animateEntry?: boolean;
 }) {
   return (
-    <SurfaceDialog title={title} className={`modal ${wide ? "wide" : ""}`} animateEntry={animateEntry} onClose={onClose}>
+    <SurfaceDialog title={title} className={`modal ${wide ? "wide" : ""} ${animateEntry ? "" : "instant"}`} animateEntry={animateEntry} onClose={onClose}>
       {({ close, grip }) => <>
       {grip}
       <header className="modal-header">

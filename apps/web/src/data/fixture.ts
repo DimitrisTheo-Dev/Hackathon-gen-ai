@@ -521,5 +521,9 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     createCheckout: unavailable,
     createPortal: unavailable,
     selectWorkspace: unavailable,
+    // The local preview never connects an account or stores a credential.
+    getChannels: unavailable,
+    connectChannel: unavailable,
+    disconnectChannel: unavailable,
   };
 }

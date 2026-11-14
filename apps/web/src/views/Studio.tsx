@@ -1,30 +1,34 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
+  ArrowUp,
   ArrowUpRight,
   CalendarDays,
   ChevronDown,
   ChevronRight,
   Check,
-  Circle,
   CreditCard,
   Clock3,
   FileText,
   Folder,
   Grid2X2,
+  LayoutTemplate,
   Layers,
   List,
-  LoaderCircle,
   LogOut,
   Menu,
-  PanelLeftClose,
+  PanelLeft,
+  PenLine,
   Plus,
   Plug,
   RefreshCw,
   Search,
   Settings2,
   ShieldCheck,
+  Sparkles,
+  TriangleAlert,
   Video,
   X,
+  Zap,
 } from "lucide-react";
 import type {
   Campaign,
@@ -45,14 +49,30 @@ import {
   platformNames,
 } from "../components/ui";
 import { Editor, contentPatch, type Draft } from "./Editor";
-import { Connect } from "./Connect";
-import { Review, Grant } from "./Review";
-import { CreateCampaign } from "./CreateCampaign";
 import { operationKey } from "../lib/operation-key";
 import { CommandPalette } from "../components/CommandPalette";
-import { Billing } from "./Billing";
-import { Templates } from "./Templates";
-import { itemBadge } from "../lib/status";
+import { itemBadge, liveActivity, timeAgo } from "../lib/status";
+import { useAutoGrow } from "../lib/use-auto-grow";
+import "../studio.css";
+import "../channels.css";
+
+// Views a person opens occasionally load on demand, then stay cached. They are warmed when the browser is idle.
+const loadConnect = () => import("./Connect");
+const loadReview = () => import("./Review");
+const loadCreate = () => import("./CreateCampaign");
+const loadBilling = () => import("./Billing");
+const loadTemplates = () => import("./Templates");
+const Connect = lazy(() => loadConnect().then((m) => ({ default: m.Connect })));
+const Review = lazy(() => loadReview().then((m) => ({ default: m.Review })));
+const Grant = lazy(() => loadReview().then((m) => ({ default: m.Grant })));
+const CreateCampaign = lazy(() => loadCreate().then((m) => ({ default: m.CreateCampaign })));
+const Billing = lazy(() => loadBilling().then((m) => ({ default: m.Billing })));
+const Templates = lazy(() => loadTemplates().then((m) => ({ default: m.Templates })));
+const Channels = lazy(() => import("./Channels").then((m) => ({ default: m.Channels })));
+const SIDEBAR_KEY = "faceful:sidebar";
+function ViewSkeleton() {
+  return <div className="view-skeleton" role="status" aria-label="Loading"><span className="skeleton skeleton-title" /><span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" /><span className="skeleton skeleton-block" /></div>;
+}
 
 import { useDirectorHistory } from '../director/use-history';
 import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
@@ -114,25 +134,54 @@ export function Studio({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [optimisticItems, setOptimisticItems] = useState<Record<string, ContentItem>>({});
+  // Sidebar width is a preference, remembered on this device only.
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem(SIDEBAR_KEY) === "collapsed"; } catch { return false; } });
+  // Which item the director is currently preparing a plan for (a real, in-flight request).
+  const [draftingItem, setDraftingItem] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const noticeHeld = useRef(false);
+  const homeInput = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(homeInput, homeIdea, 240);
   const director = useDirectorHistory(context,campaign);
-  const previousEditorRect=useRef<{view:View;rect:DOMRect}|null>(null);
-  useLayoutEffect(()=>{
-    const el=document.querySelector<HTMLElement>('.editor');
-    if(!el){
-      // Remember where the first-run composer sat, so the conversation can dock from there.
-      const form=view==='home'?document.querySelector<HTMLElement>('.home-idea-form'):null;
-      if(form)previousEditorRect.current={view,rect:form.getBoundingClientRect()};
-      return;
-    }
-    const rect=el.getBoundingClientRect(),previous=previousEditorRect.current;
-    previousEditorRect.current={view,rect};
-    if(previous?.view==='home'&&view==='canvas'&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&!matchMedia('(max-width: 1000px)').matches){
-      const dx=previous.rect.left-rect.left,dy=previous.rect.top-rect.top;
-      if(Number.isFinite(dx)&&Number.isFinite(dy))el.animate([{transform:`translate(${dx}px,${dy}px)`,opacity:.65},{transform:'translate(0,0)',opacity:1}],{duration:360,easing:'cubic-bezier(.22,.8,.26,1)'});
-    }
+  const previousComposer=useRef<{view:View;rect:DOMRect}|null>(null);
+  useEffect(()=>{
+    // The home composer and the docked composer are one object: remember where it sat, then move the
+    // panel so its composer starts there and reveal the rest of the panel around it (FLIP + clip).
+    // A passive effect on purpose: the panel's own effect opens it first, and both run before the next paint.
+    const panel=document.querySelector<HTMLElement>('.editor');
+    const composer=view==='home'
+      ? document.querySelector<HTMLElement>('.editor-home .director-composer, .home-idea-form')
+      : panel?.querySelector<HTMLElement>('.director-composer')??null;
+    const previous=previousComposer.current;
+    if(composer)previousComposer.current={view,rect:composer.getBoundingClientRect()};
+    if(!panel||!composer||previous?.view!=='home'||view!=='canvas')return;
+    if(matchMedia('(prefers-reduced-motion: reduce)').matches||matchMedia('(max-width: 1000px)').matches)return;
+    const to=composer.getBoundingClientRect(),box=panel.getBoundingClientRect(),from=previous.rect;
+    if(!to.width||!box.width)return;
+    const dx=from.left+from.width/2-(to.left+to.width/2),dy=from.top-to.top;
+    if(!Number.isFinite(dx)||!Number.isFinite(dy)||(Math.abs(dx)<2&&Math.abs(dy)<2))return;
+    const inset=`inset(${Math.max(0,to.top-box.top)}px ${Math.max(0,box.right-to.right)}px ${Math.max(0,box.bottom-to.bottom)}px ${Math.max(0,to.left-box.left)}px round 16px)`;
+    panel.animate(
+      [{transform:`translate(${dx}px,${dy}px)`,clipPath:inset},{transform:'translate(0,0)',clipPath:'inset(0px 0px 0px 0px round 0px)'}],
+      {duration:440,easing:'cubic-bezier(.32,.72,0,1)'},
+    );
   },[view,loading,campaign?.id]);
   // One-shot: the composer takes focus only on the mount that follows a create.
   useEffect(()=>{if(!focusDirector)return;const timer=window.setTimeout(()=>setFocusDirector(false),0);return()=>window.clearTimeout(timer);},[focusDirector,selected]);
+  useEffect(() => { try { localStorage.setItem(SIDEBAR_KEY, collapsed ? "collapsed" : "open"); } catch { /* preference only */ } }, [collapsed]);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    // Confirmations leave by themselves; errors stay until dismissed. Hover or focus holds a confirmation open.
+    if (!notice) return;
+    let shown = 0;
+    const timer = window.setInterval(() => { if (!noticeHeld.current && (shown += 250) >= 7000) setNotice(""); }, 250);
+    return () => window.clearInterval(timer);
+  }, [notice]);
+  useEffect(() => {
+    const warm = () => { void loadCreate(); void loadReview(); void loadConnect(); void loadBilling(); void loadTemplates(); };
+    const timer = window.setTimeout(warm, 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
   const busyRef = useRef(false);
   const campaignRequest = useRef(0);
   const initialLocation = useRef(new URLSearchParams(location.search));
@@ -528,10 +577,21 @@ export function Studio({
   }
   if (loading)
     return (
-      <div className="loading-page" role="status">
-        <Mark />
-        <p>Opening your studio…</p>
-        <LoaderCircle className="spin" />
+      <div className="app-frame studio-loading" role="status" aria-busy="true">
+        <div className="studio-shell is-home">
+          <aside className="sidebar" aria-hidden="true">
+            <span className="wordmark"><Mark /><span>Faceful</span></span>
+            <span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" /><span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" />
+          </aside>
+          <div className="workspace">
+            <div className="topbar" aria-hidden="true"><span className="skeleton skeleton-line short" /></div>
+            <div className="workspace-main studio-loading-main">
+              <span className="skeleton skeleton-title" aria-hidden="true" />
+              <span className="skeleton skeleton-composer" aria-hidden="true" />
+              <p>Opening your studio…</p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   if (!context)
@@ -582,184 +642,109 @@ export function Studio({
   const activeConnections = context.connections.filter(
     (c) => c.lastSeenAt && !c.revokedAt && new Date(c.expiresAt) > new Date(),
   );
+  const credits = context.capabilities.renderUnitsRemaining;
+  const inProject = Boolean(campaign) && (view === "canvas" || view === "schedule");
   return (
     <div className="app-frame">
       <a className="skip-link" href="#workspace-content">
         Skip to campaign
       </a>
       <div
-        className={`studio-shell ${view==="home"?"is-home":""} ${item && view === "canvas" ? "has-editor" : ""}`}
+        className={`studio-shell ${view==="home"?"is-home":""} ${item && view === "canvas" ? "has-editor" : ""} ${collapsed ? "sidebar-collapsed" : ""}`}
       >
-        <aside className="sidebar">
-          <a className="wordmark" href="/">
-            <Mark />
-            Faceful
-          </a>
-          <div className="workspace-switch">
-            <span className="workspace-avatar">
-              {context.workspace.name[0]}
-            </span>
-            <div>
-              <strong>{context.workspace.name}</strong>
-              <small>
-                {context.workspace.type === "agency"
-                  ? "Agency workspace"
-                  : "Workspace"}
-              </small>
-            </div>
-            {context.workspaces.length > 1 ? (
+        <aside className="sidebar" aria-label="Studio">
+          <div className="sidebar-top">
+            <a className="wordmark" href="/" aria-label="Faceful home">
+              <Mark />
+              <span>Faceful</span>
+            </a>
+            <button className="icon-button sidebar-toggle" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} title={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed((value) => !value)}>
+              <PanelLeft size={16} />
+            </button>
+          </div>
+          {context.workspaces.length > 1 && (
+            <div className="workspace-switch">
+              <span className="workspace-avatar">{context.workspace.name[0]}</span>
               <select className="workspace-select" aria-label="Switch workspace" value={context.workspace.id} disabled={busy} onChange={(event) => switchWorkspace(event.target.value)}>
                 {context.workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
               </select>
-            ) : <ChevronDown size={14} />}
-          </div>
-          <button className="search-box" onClick={() => setCommandOpen(true)} aria-label="Search projects and content">
-            <Search size={17} /><span>Search studio</span><kbd>⌘ K</kbd>
+            </div>
+          )}
+          <button className="search-box" onClick={() => setCommandOpen(true)} aria-label="Search projects and content" title="Search">
+            <Search size={16} /><span>Search</span><kbd>⌘K</kbd>
           </button>
-          <nav aria-label="Studio"><button className={view==="home"?"active":""} onClick={()=>go("home")}><Plus size={17}/>Create</button>
-            <button
-              className={view === "canvas" ? "active" : ""}
-              onClick={() => go("canvas")}
-            >
-              <Layers size={17} />
-              Campaigns<span className="nav-count">{campaigns.length}</span>
-            </button>
-            <button
-              className={view === "schedule" ? "active" : ""}
-              onClick={() => go("schedule")}
-            >
-              <CalendarDays size={17} />
-              Schedule
-            </button>
-            <button
-              className={view === "brand" ? "active" : ""}
-              onClick={() => go("brand")}
-            >
-              <FileText size={17} />
-              Brand & sources
-            </button>
-            {!fixture && (
-              <button
-                className={view === "billing" ? "active" : ""}
-                onClick={() => go("billing")}
-              >
-                <CreditCard size={17} />
-                Billing
-                <span className="nav-count" title="Videos you can still render">{context.capabilities.renderUnitsRemaining}</span>
-              </button>
-            )}
+          <nav aria-label="Studio" className="sidebar-nav">
+            <button className={view==="home"?"active":""} aria-current={view==="home"?"page":undefined} title="Create" onClick={()=>go("home")}><Sparkles size={16}/><span>Create</span></button>
+            <button className={view === "schedule" ? "active" : ""} aria-current={view==="schedule"?"page":undefined} title="Schedule" onClick={() => go("schedule")}><CalendarDays size={16} /><span>Schedule</span></button>
+            <button className={view === "brand" ? "active" : ""} aria-current={view==="brand"?"page":undefined} title="Brand & sources" onClick={() => go("brand")}><FileText size={16} /><span>Brand & sources</span></button>
+            {!fixture && <button className={view === "billing" ? "active" : ""} aria-current={view==="billing"?"page":undefined} title="Billing" onClick={() => go("billing")}><CreditCard size={16} /><span>Billing</span></button>}
           </nav>
           <div className="projects-heading">
             <span>Projects</span>
-            <button
-              className="icon-button"
-              aria-label="Create a campaign"
-              onClick={() => setCreating(true)}
-            >
-              <Plus size={15} />
-            </button>
+            <button className="icon-button" aria-label="Create a campaign" title="New project" onClick={() => setCreating(true)}><Plus size={14} /></button>
           </div>
           <nav className="project-list" aria-label="Projects">
-            {campaigns.map((c) => (
-              <button
-                key={c.id}
-                className={campaign?.id === c.id ? "current-project" : ""}
-                onClick={() => openCampaign(c.id)}
-                title={c.title}
-              >
-                <span className="project-dot" />
-                <span className="project-name">{c.title}</span>{c.origin === "sample" && <span className="sample-chip">Sample</span>}<small>{c.items.length}</small>
-              </button>
-            ))}
+            {campaigns.length === 0 && <p className="project-empty">Your projects will appear here.</p>}
+            {campaigns.map((c) => {
+              const working = c.jobs.some((job) => job.state === "queued" || job.state === "running");
+              const current = campaign?.id === c.id;
+              return (
+                <button key={c.id} className={current ? "current-project" : ""} aria-current={current && inProject ? "page" : undefined} onClick={() => openCampaign(c.id)} title={c.title}>
+                  <Grid2X2 size={14} className="project-icon" />
+                  <span className="project-name">{c.title}</span>
+                  {c.origin === "sample" && <span className="sample-chip">Sample</span>}
+                  {working && <span className="live-dot" role="img" aria-label="Work in progress" />}
+                  <small>{c.items.length}</small>
+                </button>
+              );
+            })}
           </nav>
           <div className="sidebar-bottom">
-            <button
-              className={`agent-status ${view === "connect" ? "selected" : ""}`}
-              onClick={() => go("connect")}
-            >
-              <span className="agent-icon">
-                <Plug size={18} />
-              </span>
-              <span>
-                <strong>
-                  {activeConnections.length
-                    ? "Agent connected"
-                    : "Connect your agent"}
-                </strong>
-                <small>
-                  {activeConnections.length
-                    ? activeConnections.map((c) => c.displayName).join(", ")
-                    : "Codex or Claude Code"}
-                </small>
-              </span>
-              <ChevronRight size={15} />
+            <button className={`sidebar-row agent-status ${view === "connect" ? "selected" : ""}`} title="Agents" onClick={() => go("connect")}>
+              <Plug size={16} />
+              <span>Agents</span>
+              <small>{activeConnections.length ? <>{activeConnections.length} connected<i className="live-dot is-steady" aria-hidden="true" /></> : "Connect"}</small>
             </button>
-            <a
-              href="/docs/"
-              className="sidebar-help"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Help & documentation <ArrowUpRight size={13} />
-            </a>
+            {!fixture && (
+              <button className={`sidebar-row credit-status ${view === "billing" ? "selected" : ""}`} title="Videos you can still render" onClick={() => go("billing")}>
+                <Zap size={16} />
+                <span>Credits</span>
+                <small><b className="tick-number" key={credits}>{credits}</b> left</small>
+              </button>
+            )}
             <div className="user-row">
-              <span className="user-avatar">
-                {fixture ? "D" : context.workspace.name[0]}
-              </span>
-              <span>
+              <span className="user-avatar" aria-hidden="true">{fixture ? "D" : context.workspace.name[0]}</span>
+              <span className="user-name" title={context.workspace.name}>
                 {fixture ? "Personal studio" : context.workspace.name}
                 <small>{context.workspace.role}</small>
               </span>
-              {onSignOut && (
-                <button
-                  className="icon-button"
-                  aria-label="Sign out"
-                  onClick={onSignOut}
-                >
-                  <LogOut size={16} />
-                </button>
-              )}
+              {onSignOut && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={onSignOut}><LogOut size={15} /></button>}
             </div>
           </div>
         </aside>
         <div className="workspace">
           <header className="topbar">
             <div className="breadcrumbs">
-              <button
-                className="icon-button mobile-menu"
-                aria-label="Toggle navigation"
-                aria-expanded={sidebar}
-                onClick={() => setSidebar(!sidebar)}
-              >
-                <Menu size={18} />
-              </button>
+              <button className="icon-button mobile-menu" aria-label="Toggle navigation" aria-expanded={sidebar} onClick={() => setSidebar(!sidebar)}><Menu size={18} /></button>
               <button className="mobile-project-switch" onClick={() => setSidebar(true)} aria-label="Switch project"><span>{campaign?.title ?? "Your projects"}</span><ChevronDown size={15}/></button>
-              <Folder size={15} />
+              <Folder size={14} />
               <span>Projects</span>
-              <ChevronRight size={13} />
+              <ChevronRight size={12} />
               <strong>
-                {view === "connect"
-                  ? "Agent connections"
-                  : view === "brand"
-                    ? "Brand & sources"
-                    : view === "billing"
-                      ? "Billing"
-                      : (campaign?.title ?? "Your campaigns")}
+                {view === "connect" ? "Agent connections" : view === "brand" ? "Brand & sources" : view === "billing" ? "Billing" : view === "home" ? "Create" : (campaign?.title ?? "Your campaigns")}
               </strong>
             </div>
+            {inProject && (
+              <div className="segmented topbar-views" role="group" aria-label="Project view">
+                <button aria-pressed={view === "canvas"} onClick={() => go("canvas")}><Grid2X2 size={14} />Canvas</button>
+                <button aria-pressed={view === "schedule"} onClick={() => go("schedule")}><CalendarDays size={14} />Schedule</button>
+              </div>
+            )}
             <div className="topbar-right">
-              <button className="icon-button" onClick={() => setCommandOpen(true)} aria-label="Find projects or content"><Search size={18} /></button>
-              <span className="timezone-label">
-                <Clock3 size={13} />
-                {context.workspace.timezone}
-              </span>
-              <a
-                className="icon-button"
-                href="/docs/"
-                aria-label="Open documentation"
-              >
-                <ArrowUpRight size={17} />
-              </a>
+              <span className="timezone-label"><Clock3 size={13} />{context.workspace.timezone}</span>
+              {inProject && <button className="icon-button activity-toggle" aria-label="Campaign activity" title="Activity" onClick={() => setShowActivity(true)}><Clock3 size={16} /></button>}
+              <button className="icon-button" onClick={() => setCommandOpen(true)} aria-label="Find projects or content" title="Search (⌘K)"><Search size={16} /></button>
+              <a className="icon-button" href="/docs/" aria-label="Open documentation" title="Documentation"><ArrowUpRight size={16} /></a>
             </div>
           </header>
           <main
@@ -767,62 +752,54 @@ export function Studio({
             tabIndex={-1}
             className={`workspace-main view-${view}`}
           >
-            {offline && <div className="feedback"><Notice error>You’re offline. Unsaved edits stay open; reconnect before saving to the shared workspace.</Notice></div>}
+            {offline && <div className="feedback is-offline"><Notice error>You’re offline. Unsaved edits stay open; reconnect before saving to the shared workspace.</Notice></div>}
             {(error || notice) && (
               <div className="feedback">
                 {error && (
                   <Notice error>
                     {error}
-                    {errorBilling && (
-                      <button className="text-button" onClick={() => go("billing")}>
-                        Open billing
-                      </button>
-                    )}
-                    <button
-                      className="text-button"
-                      onClick={() => setError("")}
-                    >
-                      Dismiss
-                    </button>
+                    {errorBilling && <button className="text-button" onClick={() => go("billing")}>Open billing</button>}
+                    <button className="text-button" onClick={() => setError("")}>Dismiss</button>
                   </Notice>
                 )}
                 {notice && (
-                  <div className="success-note" role="status">
+                  <div className="success-note" role="status" onMouseEnter={() => { noticeHeld.current = true; }} onMouseLeave={() => { noticeHeld.current = false; }} onFocus={() => { noticeHeld.current = true; }} onBlur={() => { noticeHeld.current = false; }}>
                     <Check size={15} />
-                    {notice}
-                    <button
-                      className="icon-button"
-                      aria-label="Dismiss notification"
-                      onClick={() => setNotice("")}
-                    >
-                      <X size={14} />
-                    </button>
+                    <span>{notice}</span>
+                    <button className="icon-button" aria-label="Dismiss notification" onClick={() => setNotice("")}><X size={14} /></button>
                   </div>
                 )}
               </div>
             )}
             {view === "home" && !campaign ? (<div className="empty-state studio-first">
               <h1>What will we create today?</h1>
-              <p>Describe your idea. Shape it with Faceful.</p>
+              <p>Describe a video. Faceful drafts it, and you shape it together.</p>
               <form className="home-idea-form" aria-busy={homeBusy} onSubmit={e=>{e.preventDefault();void submitHomeIdea();}}>
                 <label className="sr-only" htmlFor="home-idea">What would you like to create?</label>
-                <textarea id="home-idea" value={homeIdea} onChange={e=>setHomeIdea(e.target.value)} rows={4} maxLength={1500} placeholder="A 20-second introduction to our new idea…" enterKeyHint="send" disabled={homeBusy} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void submitHomeIdea();}}}/>
-                <button className="button primary" disabled={!homeIdea.trim()||offline||homeBusy}>{homeBusy?"Drafting…":"Start creating"}</button>
+                <textarea ref={homeInput} id="home-idea" value={homeIdea} onChange={e=>setHomeIdea(e.target.value)} rows={3} maxLength={1500} placeholder="A 15-second Instagram Reel introducing our app, friendly and energetic…" enterKeyHint="send" disabled={homeBusy} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void submitHomeIdea();}}}/>
+                <div className="home-idea-bar">
+                  <small aria-hidden="true"><kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</small>
+                  <button className="button primary home-send" disabled={!homeIdea.trim()||offline||homeBusy}>{homeBusy?<><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span>Drafting…</>:<>Start creating<ArrowUp size={15} aria-hidden="true"/></>}</button>
+                </div>
               </form>
               <div className="home-turn" role="status">
                 {homeTurn&&<p className="home-turn-request"><small>You</small>{homeTurn.text}</p>}
-                {homeBusy&&<p className="home-turn-working"><LoaderCircle size={14} className="spin" aria-hidden="true"/>Preparing your first drafts…</p>}
+                {homeBusy&&<p className="home-turn-working"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span>Preparing your first drafts…</p>}
                 {homeReply&&<p className="home-turn-reply">{homeReply}</p>}
               </div>
               {!!homeTurn?.suggestions.length&&!homeBusy&&<div className="director-suggestions home-suggestions" aria-label="Suggested next steps">{homeTurn.suggestions.filter(prompt=>prompt!=="Show my content").map(prompt=><button key={prompt} onClick={()=>homeSuggestion(prompt)}>{prompt}</button>)}</div>}
+              <div className="home-starters" aria-label="Ways to start">
+                <button disabled={homeBusy} onClick={()=>homeSuggestion("Create a 15-second avatar video about ")}><Video size={16} aria-hidden="true"/><span>Create avatar video</span></button>
+                {!fixture&&!homeTurn?.suggestions.includes("Choose a template")&&<button disabled={busy||homeBusy} onClick={()=>setTemplatesOpen(true)}><LayoutTemplate size={16} aria-hidden="true"/><span>Choose a template</span></button>}
+                <button disabled={homeBusy} onClick={()=>homeSuggestion("Plan three short videos for next week about ")}><CalendarDays size={16} aria-hidden="true"/><span>Plan a campaign</span></button>
+                {!fixture&&<button disabled={busy||homeBusy} onClick={startSample}><Sparkles size={16} aria-hidden="true"/><span>Try the BeWell sample</span></button>}
+              </div>
               <div className="home-actions" aria-label="Other ways to start">
-                {!fixture&&<button className="text-button" disabled={busy||homeBusy} onClick={()=>setTemplatesOpen(true)}>Choose a template</button>}
-                {!fixture&&<button className="text-button" disabled={busy||homeBusy} onClick={startSample}>Try the BeWell sample</button>}
-                <button className="text-button" onClick={()=>setCreating(true)}>Create with my own script</button>
-                <button className="text-button" onClick={()=>go("connect")}>Connect your agent</button>
+                <button className="text-button" onClick={()=>setCreating(true)}><PenLine size={13} aria-hidden="true"/>Create with my own script</button>
+                <button className="text-button" onClick={()=>go("connect")}><Plug size={13} aria-hidden="true"/>Connect your agent</button>
               </div>
             </div>) : view === "home" ? null : view === "billing" ? (
-              <Billing
+              <Suspense fallback={<ViewSkeleton />}><Billing
                 client={client}
                 context={context}
                 checkoutReturn={checkoutReturn}
@@ -833,15 +810,15 @@ export function Studio({
                   history.replaceState(history.state, "", url);
                   void refreshContext().catch(() => undefined);
                 }}
-              />
+              /></Suspense>
             ) : view === "connect" ? (
-              <Connect
+              <Suspense fallback={<ViewSkeleton />}><Connect
                 context={context}
                 client={client}
                 refresh={refreshContext}
                 onContinue={() => go("canvas")}
                 onCreateCampaign={() => setCreating(true)}
-              />
+              /></Suspense>
             ) : view === "brand" ? (
               <div className="brand-view">
                 <span className="section-kicker">Your shared context</span>
@@ -908,6 +885,18 @@ export function Studio({
                     "Quintessential is an unofficial demo agency; no endorsement is implied."}
                 </Notice>
               </div>
+            ) : !campaign && view === "schedule" && !fixture ? (
+              // No project yet: channels can still be connected here, and Google returns to this view to finish connecting.
+              <div className="schedule-view no-project">
+                <div className="schedule-header">
+                  <div>
+                    <h1>Schedule</h1>
+                    <p>Nothing is planned yet. Posts appear here once a campaign has times you approved.</p>
+                  </div>
+                  <button className="button secondary" onClick={() => go("home")}><Sparkles size={14} />Create a video</button>
+                </div>
+                <div className="channels-slot" data-slot="schedule-channels"><Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense></div>
+              </div>
             ) : !campaign ? (
               <div className="empty-state">
                 <Layers size={36} />
@@ -931,10 +920,10 @@ export function Studio({
                 <div className="campaign-heading">
                   <div>
                     <div className="campaign-meta">
-                      <span className="campaign-dot" />
-                      Campaign <span>/</span>{" "}
-                      {fixture ? "Local workspace" : "Shared workspace"}
                       {campaign.origin === "sample" && <span className="sample-chip" title="Seeded demonstration content. Nothing in it was rendered or published.">Sample</span>}
+                      <span>{campaign.items.length} {campaign.items.length === 1 ? "draft" : "drafts"}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{fixture ? "Saved on this device" : "Shared workspace"}</span>
                     </div>
                     <h1>{campaign.title}</h1>
                     <p>
@@ -945,72 +934,26 @@ export function Studio({
                     <details className="mobile-campaign-brief"><summary>Read brief</summary><p>{campaign.brief}</p></details>
                   </div>
                   <div className="campaign-actions">
+                    <button className="button secondary new-campaign-button" onClick={() => setCreating(true)}><Plus size={14} />New campaign</button>
                     <button
-                      className="button secondary new-campaign-button"
-                      onClick={() => setCreating(true)}
-                    >
-                      <Plus size={14} />
-                      New campaign
-                    </button>
-                    <button
-                      className="button secondary"
+                      className="button secondary refresh-button"
                       disabled={busy}
                       aria-label="Refresh campaign"
+                      title="Refresh"
                       onClick={() =>
                         void action(async () => {
                           await fetchCampaign(campaign.id);
-                          setNotice(
-                            "Latest saved campaign loaded. Local unsaved drafts are preserved.",
-                          );
+                          setNotice("Latest saved campaign loaded. Local unsaved drafts are preserved.");
                         })
                       }
                     >
                       <RefreshCw size={14} />
                       <span className="refresh-label">Refresh</span>
                     </button>
-                    <button
-                      className="button primary"
-                      disabled={busy || unsaved}
-                      onClick={() => void prepare()}
-                    >
-                      <CalendarDays size={15} />
-                      Review schedule
-                    </button>
+                    <button className="button primary" disabled={busy || unsaved} onClick={() => void prepare()}><CalendarDays size={15} />Review schedule</button>
                   </div>
                 </div>
-                {unsaved && (
-                  <p className="draft-reminder">
-                    Save your edits before reviewing the schedule.
-                  </p>
-                )}
-                <div className="view-toolbar">
-                  <div className="segmented">
-                    <button
-                      aria-pressed={view === "canvas"}
-                      onClick={() => go("canvas")}
-                    >
-                      <Grid2X2 size={14} />
-                      Canvas
-                    </button>
-                    <button
-                      aria-pressed={view === "schedule"}
-                      onClick={() => go("schedule")}
-                    >
-                      <CalendarDays size={14} />
-                      Schedule
-                    </button>
-                  </div>
-                  <span className="item-count">
-                    {matches.length} {matches.length === 1 ? "item" : "items"}
-                  </span>
-                  <button
-                    className="text-button activity-toggle"
-                    onClick={() => setShowActivity(true)}
-                  >
-                    <Clock3 size={14} />
-                    Activity
-                  </button>
-                </div>
+                {unsaved && <p className="draft-reminder">Save your edits before reviewing the schedule.</p>}
                 {view === "canvas" ? (
                   <div className="canvas">
                     <div className={`canvas-tools ${filtersOpen ? "filters-open" : ""}`}>
@@ -1022,24 +965,30 @@ export function Studio({
                     </div>
                     <div className="board-caption">
                       <span>
-                        {campaign.companyContext?.name ?? context.brand.name} /
-                        Campaign stories
+                        {campaign.companyContext?.name ?? context.brand.name} · {matches.length} {matches.length === 1 ? "item" : "items"}
                       </span>
                       <span>Portrait · 9:16</span>
                     </div>
                     <div className="content-grid">
-                      {matches.map((i) => {
+                      {matches.map((i, position) => {
                         const index = campaign.items.indexOf(i);
                         const previewItem = optimisticItems[i.id] ?? i;
+                        const badge = itemBadge(i, campaign.jobs);
+                        // Animated only for work that is really in flight: a sent request or a job the engine reports.
+                        const live = liveActivity(i, campaign.jobs, { saving: Boolean(optimisticItems[i.id]), drafting: draftingItem === i.id });
+                        const isSelected = selected === i.id;
                         return (
                           <article
-                            className={`content-card ${selected === i.id ? "selected" : ""}`}
+                            className={`content-card ${isSelected ? "selected" : ""} ${live ? "is-live" : ""}`}
+                            style={{ "--i": Math.min(position, 8) } as CSSProperties}
                             key={i.id}
                           >
+                            {/* Sits on the card's top edge so it never covers the storyboard. */}
+                            {live && <span className={`live-pill tone-${live.tone}`}><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span>{live.label}</span>}
                             <button
                               className="content-select"
                               onClick={(e) => select(i, e)}
-                              aria-pressed={selected === i.id}
+                              aria-pressed={isSelected}
                               aria-label={`Edit ${i.title}`}
                             >
                               <div className="card-preview">
@@ -1047,10 +996,7 @@ export function Studio({
                                   item={previewItem}
                                   index={index}
                                   passive
-                                  brandName={
-                                    campaign.companyContext?.name ??
-                                    context.brand.name
-                                  }
+                                  brandName={campaign.companyContext?.name ?? context.brand.name}
                                 />
                                 {i.media && (
                                   <span className="has-video-badge">
@@ -1061,41 +1007,26 @@ export function Studio({
                               </div>
                               <div className="card-heading">
                                 <h2>{previewItem.title}</h2>
-                                <span className="card-selection">
-                                  {selected === i.id ? (
-                                    <Check size={11} />
-                                  ) : null}
-                                </span>
+                                <span className="card-selection">{isSelected ? <Check size={11} /> : null}</span>
                               </div>
                               <div className="card-state">
-                                <span className={`state-dot ${i.status}`} />
-                                {optimisticItems[i.id] ? "Saving draft…" : itemBadge(i, campaign.jobs).label}
-                                <span>v{i.revision}</span>
+                                <span className={`status-pill tone-${badge.tone}`}><i aria-hidden="true" />{optimisticItems[i.id] ? "Saving draft…" : badge.label}</span>
+                                <span className="card-version">v{i.revision}</span>
                               </div>
                             </button>
                             <div className="card-footer">
-                              <div
-                                className="platforms"
-                                aria-label="Destinations"
-                              >
+                              <div className="platforms" aria-label="Destinations">
                                 {i.variants.map((v) => (
-                                  <span
-                                    key={v.platform}
-                                    aria-label={platformNames[v.platform]}
-                                  >
+                                  <span key={v.platform} aria-label={platformNames[v.platform]}>
                                     <PlatformIcon platform={v.platform} />
                                   </span>
                                 ))}
                               </div>
-                              <span>
-                                {i.targets[0]
-                                  ? dateLabel(
-                                      i.targets[0].scheduledAt,
-                                      campaign.timezone,
-                                    )
-                                  : "No time set"}
-                              </span>
+                              <span>{i.targets[0] ? dateLabel(i.targets[0].scheduledAt, campaign.timezone) : "No time set"}</span>
                             </div>
+                            {badge.tone === "failed"
+                              ? <p className="card-activity is-failed"><TriangleAlert size={12} aria-hidden="true" />Render failed · open the draft to retry</p>
+                              : isSelected && <p className="card-activity"><Check size={12} aria-hidden="true" />Saved v{i.revision} · {timeAgo(i.updatedAt, now)}</p>}
                           </article>
                         );
                       })}
@@ -1226,6 +1157,16 @@ export function Studio({
                                       Open published post
                                     </a>
                                   )}
+                                  {/* Accepted by YouTube and waiting for its publish time: the upload is real, so link to it. */}
+                                  {t.platform === "youtube" && t.state === "accepted" && t.providerId && !t.publishedUrl && (
+                                    <a
+                                      href={`https://studio.youtube.com/video/${encodeURIComponent(t.providerId)}/edit`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      Open in YouTube Studio <ArrowUpRight size={12} />
+                                    </a>
+                                  )}
                                 </div>
                                 <span className={`status-chip ${t.state}`}>
                                   {t.state.replaceAll("_", " ")}
@@ -1236,6 +1177,8 @@ export function Studio({
                         </section>
                       ))}
                     </div>
+                    {/* Publishing accounts: connect and list them where times are planned. Live workspaces only. */}
+                    {!fixture && <div className="channels-slot" data-slot="schedule-channels"><Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense></div>}
                     <button
                       className="text-button"
                       onClick={() => setGrant(true)}
@@ -1245,43 +1188,26 @@ export function Studio({
                     </button>
                   </div>
                 )}
-                <div className="run-summary">
-                  <span>
-                    <Video size={14} />
-                    <strong>{finished}</strong> videos completed
-                  </span>
-                  <span>
-                    <CalendarDays size={14} />
-                    <strong>{accepted}</strong> destinations accepted
-                  </span>
-                  <span>
-                    <Check size={14} />
-                    <strong>{published}</strong> published
-                  </span>
-                  <span>
-                    <strong>{campaign.humanInterventions}</strong>{" "}
-                    {fixture ? "local edits" : "human interventions"}
-                  </span>
-                </div>
                 <footer className="workspace-footer">
                   <span className="quiet-status">
                     <span />
                     {fixture ? "Saved on this device" : "Live workspace"}
                   </span>
-                  <span>
-                    {fixture
-                      ? "No provider jobs have been run"
-                      : "Background work continues when you leave"}
-                  </span>
+                  <div className="run-summary">
+                    <span><Video size={13} /><strong>{finished}</strong> {finished === 1 ? "video" : "videos"} ready</span>
+                    <span><CalendarDays size={13} /><strong>{accepted}</strong> scheduled</span>
+                    <span><Check size={13} /><strong>{published}</strong> published</span>
+                    <span><strong>{campaign.humanInterventions}</strong> {fixture ? "local edits" : "edits by people"}</span>
+                  </div>
                 </footer>
               </>
             )}
           </main>
           <nav className="mobile-dock" aria-label="Workspace shortcuts">
-            <button onClick={() => setSidebar(true)}><Folder size={20}/><span>Projects</span></button>
+            <button aria-current={sidebar ? "page" : undefined} onClick={() => setSidebar(true)}><Folder size={20}/><span>Projects</span></button>
             <button aria-current={view === "canvas" ? "page" : undefined} onClick={() => go("canvas")}><Grid2X2 size={20}/><span>Canvas</span></button>
             <button aria-current={view === "schedule" ? "page" : undefined} onClick={() => go("schedule")}><CalendarDays size={20}/><span>Schedule</span></button>
-            <button onClick={() => {if(view==="home")setCreating(true);else {setSelected(current=>current??campaign?.items[0]?.id??null);setMobileChatOpen(true);}}}><Plus size={21}/><span>{view==="home"?"Create":"Chat"}</span></button>
+            <button onClick={() => {if(view==="home")setCreating(true);else if(!campaign)go("home");else {setSelected(current=>current??campaign?.items[0]?.id??null);setMobileChatOpen(true);}}}>{view==="home"?<Plus size={21}/>:<Sparkles size={20}/>}<span>{view==="home"?"Create":"Chat"}</span></button>
           </nav>
         </div>
         {item && draft && (view === "canvas" || view === "home") && (
@@ -1303,9 +1229,11 @@ export function Studio({
             playOnOpen={playItem===item.id}
             onPlayed={()=>setPlayItem(null)}
             versions={fixture?undefined:{load:client.listVersions,restore:restoreVersion}}
+            channels={fixture?undefined:<Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense>}
             directorInstruction={directorDrafts[item.id]??""}
             onDirectorInstruction={value=>setDirectorDrafts(previous=>({...previous,[item.id]:value}))}
             onDirectorAction={executeDirector}
+            onDirectorBusy={(working) => setDraftingItem(working ? item.id : null)}
             item={item}
             index={campaign!.items.indexOf(item)}
             context={context}
@@ -1354,6 +1282,7 @@ export function Studio({
         </nav>
         {fixture && <p className="project-fixture-note">Local workspace. Drafts stay on this device; rendering and publishing require connected services.</p>}
       </Modal>}
+      <Suspense fallback={null}>
       {creating && (
         <CreateCampaign
           initialBrief={homeIdea}
@@ -1410,6 +1339,7 @@ export function Studio({
           onClose={() => setGrant(false)}
         />
       )}
+      </Suspense>
       {showActivity && campaign && (
         <Modal title="Campaign activity" onClose={() => setShowActivity(false)}>
           <div className="activity-list">

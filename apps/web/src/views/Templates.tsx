@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { LoaderCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, LoaderCircle } from "lucide-react";
 import type { Campaign, Template } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
-import { Modal, Notice } from "../components/ui";
+import { Modal } from "../components/ui";
 
 const languageNames: Record<string, string> = { en: "English", el: "Greek (Ελληνικά)" };
+const languageShort: Record<string, string> = { en: "English", el: "Ελληνικά" };
 
 /** Curated starting points. A template fills editable drafts from what you type; nothing is rendered. */
 export function Templates({
@@ -49,43 +50,68 @@ export function Templates({
   }
   return (
     <Modal title={selected ? selected.name : "Choose a template"} onClose={onClose}>
-      {error && <Notice error>{error}</Notice>}
-      {!selected && templates === null && !error && <p role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading templates…</p>}
-      {!selected && templates?.length === 0 && <p>No templates are available in this workspace yet. Start with your own script instead.</p>}
-      {!selected && !!templates?.length && (
-        <ul className="template-list">
-          {templates.map((template) => (
-            <li key={template.id}>
-              <button className="template-option" onClick={() => choose(template)}>
-                <strong>{template.name}</strong>
-                <span>{template.description}</span>
-                <small>{template.itemCount} {template.itemCount === 1 ? "video" : "videos"} · about {template.durationSeconds}s each · {template.aspectRatio} · {template.languages.map((code) => languageNames[code] ?? code).join(", ")}</small>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {selected && (
-        <form className="template-form" onSubmit={submit} aria-busy={busy}>
-          <p>{selected.description} You can edit every line afterwards.</p>
-          <div className="field">
-            <label htmlFor="template-language">Script language</label>
-            <select id="template-language" value={language} disabled={busy} onChange={(event) => setLanguage(event.target.value)}>
-              {selected.languages.map((code) => <option key={code} value={code}>{languageNames[code] ?? code}</option>)}
-            </select>
+      <div className="ob-templates" key={selected?.id ?? "list"}>
+        {error && <p className="ob-error" role="alert">{error}</p>}
+        {!selected && templates === null && !error && (
+          <div className="ob-template-list" role="status">
+            <span className="sr-only">Loading templates…</span>
+            <div className="ob-template-option ob-skeleton-card"><i /><i /><i /></div>
+            <div className="ob-template-option ob-skeleton-card"><i /><i /><i /></div>
           </div>
-          {selected.inputs.map((field) => (
-            <div className="field" key={field.key}>
-              <label htmlFor={`template-${field.key}`}>{field.label}{!field.required && <span>Optional</span>}</label>
-              <input id={`template-${field.key}`} name={field.key} value={inputs[field.key] ?? ""} maxLength={field.maxLength} required={field.required} disabled={busy} placeholder={field.placeholder} autoComplete="off" onChange={(event) => setInputs((previous) => ({ ...previous, [field.key]: event.target.value }))} />
+        )}
+        {!selected && templates?.length === 0 && <p className="ob-sub">No templates are available in this workspace yet. Start with your own script instead.</p>}
+        {!selected && !!templates?.length && (
+          <>
+            <p className="ob-sub">Each template turns a few words into editable drafts. Nothing is rendered until you ask.</p>
+            <ul className="ob-template-list">
+              {templates.map((template, index) => (
+                <li key={template.id} style={{ "--ob-i": index } as React.CSSProperties}>
+                  <button className="ob-template-option" onClick={() => choose(template)}>
+                    <span className="ob-template-icon" aria-hidden="true"><Clapperboard size={18} strokeWidth={1.75} /></span>
+                    <span className="ob-template-text">
+                      <strong>{template.name}</strong>
+                      <span>{template.description}</span>
+                      <small>{template.itemCount} {template.itemCount === 1 ? "video" : "videos"} · about {template.durationSeconds}s each · {template.aspectRatio} · {template.languages.map((code) => languageNames[code] ?? code).join(", ")}</small>
+                    </span>
+                    <ArrowRight className="ob-template-arrow" size={16} aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {selected && (
+          <form className="ob-template-form" onSubmit={submit} aria-busy={busy}>
+            <p className="ob-sub">{selected.description} You can edit every line afterwards.</p>
+            <div className="ob-field">
+              <label htmlFor="template-language">Script language</label>
+              {/* The select is the real control (keyboard and screen readers); the segments are its pointer shortcut. */}
+              <div className="ob-language" style={{ "--ob-count": selected.languages.length, "--ob-index": Math.max(0, selected.languages.indexOf(language)) } as React.CSSProperties}>
+                <select id="template-language" className="ob-language-select" value={language} disabled={busy} onChange={(event) => setLanguage(event.target.value)}>
+                  {selected.languages.map((code) => <option key={code} value={code}>{languageNames[code] ?? code}</option>)}
+                </select>
+                {selected.languages.map((code) => (
+                  <button key={code} type="button" tabIndex={-1} aria-hidden="true" data-checked={code === language || undefined} disabled={busy} onClick={() => setLanguage(code)}>
+                    {languageShort[code] ?? code}
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
-          <div className="modal-actions">
-            <button className="button secondary" type="button" disabled={busy} onClick={() => { setSelected(null); setError(""); }}>Back to templates</button>
-            <button className="button primary" disabled={busy}>{busy ? "Creating drafts…" : `Create ${selected.itemCount === 1 ? "draft" : `${selected.itemCount} drafts`}`}</button>
-          </div>
-        </form>
-      )}
+            {selected.inputs.map((field) => (
+              <div className="ob-field" key={field.key}>
+                <label htmlFor={`template-${field.key}`}>{field.label}{!field.required && <span>Optional</span>}</label>
+                <input id={`template-${field.key}`} name={field.key} value={inputs[field.key] ?? ""} maxLength={field.maxLength} required={field.required} readOnly={busy} placeholder={field.placeholder} autoComplete="off" enterKeyHint="next" onChange={(event) => setInputs((previous) => ({ ...previous, [field.key]: event.target.value }))} />
+              </div>
+            ))}
+            <div className="ob-template-actions">
+              <button className="ob-button ob-button-quiet" type="button" disabled={busy} onClick={() => { setSelected(null); setError(""); }}><ArrowLeft size={15} aria-hidden="true" />Back to templates</button>
+              <button className="ob-button ob-button-primary" aria-disabled={busy || undefined}>
+                {busy ? <><LoaderCircle size={16} className="spin" aria-hidden="true" />Creating drafts…</> : `Create ${selected.itemCount === 1 ? "draft" : `${selected.itemCount} drafts`}`}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </Modal>
   );
 }

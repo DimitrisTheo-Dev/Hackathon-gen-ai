@@ -92,7 +92,7 @@ Mapping from the brief's suggested action contract: `StartDraft` → `start_camp
 
 **Render job.** `queued → running → succeeded | failed`, plus `cancel_requested → cancelled`. A job can become `succeeded` only after the engine finds the uploaded object in private storage, checks its size and computes its SHA-256. Queued jobs nobody claims (default 60 min) and running jobs that stop reporting (default 20 min) fail visibly. Failure, cancellation and timeout return the held credit exactly once.
 
-**Publish.** Draft times on items → `schedule_manifests` (`required → approved → committed`, or `stale`) → `publish_jobs` (`scheduled → processing → submitted → verified_published | failed | cancelled`). The manifest hash covers exact versions, file hashes, accounts, times and copy. At send time the worker re-checks the approved revision, the file hash and the account. **No publisher adapter is registered**, so every manifest carries a blocker and nothing can be posted.
+**Publish.** Draft times on items → `schedule_manifests` (`required → approved → committed`, or `stale`) → `publish_jobs` (`scheduled → processing → submitted → verified_published | failed | cancelled`). The manifest hash covers exact versions, file hashes, accounts, times and copy. At send time the worker re-checks the approved revision, the file hash and the account. **YouTube is the only publisher adapter, and only where the deployment is configured for it (§12).** Instagram and TikTok always carry a blocker, so nothing can be posted there.
 
 **Billing.** `free | checkout_pending | trialing | active | past_due | unpaid | paused | incomplete | cancelled`, or `not_configured` when Stripe keys are absent. Only verified webhooks change it. See `STRIPE_SANDBOX_SETUP.md`.
 
@@ -161,9 +161,37 @@ Browsers can `SELECT` their own organization's projects, items, versions, media 
 ## 11. Not implemented
 
 - A Humanlike recorder (needs credentials; Minas's seam).
-- Any publishing adapter or social-account OAuth.
+- Instagram and TikTok publishing (each needs the platform’s app review). YouTube is implemented; see §12.
 - File uploads, website import and brand extraction.
 - Collaborator invitations (the role model and checks exist; there is no invite flow).
 - Unattended publishing grants (`create_run_grant`).
 - Realtime push; the studio polls every five seconds.
 - Application rate limiting on `/v1` and `/mcp`.
+
+## 12. Publishing: YouTube
+
+YouTube is the one real publishing destination. Instagram and TikTok have no adapter (each needs the platform's app review) and every schedule that names them carries the blocker "Instagram and TikTok publishing need each platform’s app review; not available yet."
+
+**Configuration.** `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (the same Google OAuth client Supabase Auth uses) and `CONNECTIONS_ENCRYPTION_KEY` (32 random bytes, base64). Without all three, `GET /v1/studio/channels` reports YouTube as `not_configured` with the reason, `capabilities.canConnectChannels` is false and `connect_channel` answers `unsupported`. `GET /v1/health` lists `publishing.adapters`.
+
+**Connecting (people only: owner or admin, never an agent).** The studio starts Supabase Auth identity linking for Google with the scopes `youtube.upload` and `youtube.readonly`, `access_type=offline` and `prompt=consent` (Supabase project setting `security_manual_linking_enabled` is on). Google shows its own account and channel chooser and returns through Supabase's registered callback. The browser then holds a Google access token and refresh token once; it posts them to `connect_channel` and refreshes its session so they do not stay in browser storage. If Google signed a different Faceful account in, the studio signs out instead of continuing.
+
+`POST /v1/studio/operations/connect_channel` `{ platform: "youtube", accessToken, refreshToken, operationKey }` verifies, in order, before storing anything: (1) Google's `tokeninfo` says the access token was issued to this deployment's client and includes `youtube.upload`; (2) the refresh token can be exchanged with this client's secret; (3) `channels.list?mine=true` with that fresh token names the channel. The channel ID and title come from Google, never from the request. The refresh token is stored in `provider_connections.credentials_ciphertext` as `v1.<iv>.<tag>.<ciphertext>` (AES-256-GCM, random IV). Tokens are sent to Google only in form bodies or an `Authorization` header, never in a URL, and are never logged or returned. `disconnect_channel` `{ connectionId, operationKey }` cancels that channel's unsent posts, revokes the grant at Google (best effort) and deletes the row.
+
+**Publishing.** The schedule path is unchanged: draft times → `prepare_schedule` → a person's `approve_schedule` → `commit_schedule`. With a connected channel chosen on the item, a YouTube entry becomes approvable. Because YouTube holds a private video until `publishAt`, `commit_schedule` uploads immediately (at most three per request; the scheduler takes the rest): a **public** post is uploaded `private` with `publishAt` = the approved instant; private and unlisted posts are uploaded with that privacy and no release time. Metadata: title (the YouTube variant's, else the item's, ≤ 100 chars), description = caption, `selfDeclaredMadeForKids: false`, `containsSyntheticMedia` = the variant's AI disclosure.
+
+| Publish job state | Meaning | Studio target state |
+| --- | --- | --- |
+| `scheduled` | Waiting to be sent (or waiting to retry after a definite refusal) | `queued` |
+| `processing` | Being sent; if the outcome is unknown it stays here and is failed after 15 minutes — never re-sent automatically | `queued` |
+| `submitted` | YouTube returned a video ID (`providerId`). Uploaded, and scheduled when public. **Not** published | `accepted` |
+| `verified_published` | `videos.list` reported `uploadStatus: processed` and `privacyStatus: public` | `published`, with `publishedUrl` |
+| `failed` | Refused, rejected by YouTube, channel access revoked, or outcome unknown | `failed`, with the reason |
+
+Verification runs on the scheduler tick and, throttled to once a minute per post, when an open project is read. `publishedUrl` is exposed only for `verified_published`; an uploaded-but-private video is identified by `providerId` (open it at `https://studio.youtube.com/video/<providerId>/edit`).
+
+**The audit restriction.** Google keeps videos uploaded through API projects that have not passed YouTube's API audit locked to private. Until the Google project behind this client is audited, a "public" post is uploaded and scheduled but can remain private after its release time; the job then stays `submitted` and the target shows why. Nothing is reported as published without YouTube saying so.
+
+**Failure handling.** `invalid_grant` on refresh marks the connection `expired` and fails the job with "Reconnect YouTube; the approved post was not sent." Transient refusals before any upload retry with backoff (1, 5, 15, 60 minutes). An edit after approval cancels unsent posts. A send whose result cannot be determined is never retried.
+
+**Verified without a user:** Google's real responses for an invalid access token (`tokeninfo` 400 `invalid_token`, Data API 401 `authError`), `invalid_grant` for an invalid refresh token with this client ID and secret (so the pair is valid), and that Supabase returns a Google authorization URL carrying the YouTube scopes, `access_type=offline`, `prompt=consent select_account` and the registered callback. **Not verified:** a person completing Google consent, whether the YouTube Data API is enabled on the Google project, a real upload, and the audit status.

@@ -251,7 +251,7 @@ test("a schedule with unresolved blockers cannot be approved, and an edit makes 
   const manifest = await prepareSchedule(deps, ctx, { campaignId: campaign.id, expectedRevision: 2, operationKey: crypto.randomUUID() });
   assert.equal(manifest.entries.length, 0);
   assert.ok(manifest.blockers.some((b) => /No finished video/.test(b.message)));
-  assert.ok(manifest.blockers.some((b) => /not connected in this build/.test(b.message)));
+  assert.ok(manifest.blockers.some((b) => /app review; not available yet/.test(b.message)));
   await rejects(approveSchedule(deps, ctx, { manifestId: manifest.id, hash: manifest.hash, operationKey: crypto.randomUUID() }), "approval_required");
   await rejects(approveSchedule(deps, ctx, { manifestId: manifest.id, hash: "forged", operationKey: crypto.randomUUID() }), "stale_manifest");
   await reviseContent(deps, ctx, { contentId: item.id, expectedRevision: 2, operationKey: crypto.randomUUID(), patch: { title: "Renamed" } });

@@ -1,20 +1,13 @@
-import { AgentIcon } from '../components/AgentIcon';
-import { useRef, useState } from "react";
-import {
-  ArrowRight,
-  Plug,
-  Check,
-  KeyRound,
-  ExternalLink,
-  FileText,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Check, CodeXml, Eye, EyeOff, KeyRound, LoaderCircle, MousePointer2, Plug, ShieldCheck, Sparkle } from "lucide-react";
 import type { StudioContext } from "@castroom/contracts";
 import type { CreateConnectionInput, StudioClient } from "../data/client";
-import { CopyButton, Notice, dateLabel } from "../components/ui";
+import { AgentIcon } from "../components/AgentIcon";
+import { CopyAction, Segmented, Step, relativeTime } from "./onboarding-parts";
 
-type Host = "codex" | "claude";
+type AgentId = "claude" | "codex" | "cursor" | "gemini" | "vscode" | "generic";
+type Mode = "quick" | "manual";
 type Connection = StudioContext["connections"][number];
-type PendingAction = "create" | "check" | "revoke" | null;
 
 type ConnectProps = {
   context: StudioContext;
@@ -24,568 +17,406 @@ type ConnectProps = {
   onCreateCampaign?: () => void;
 };
 
-const hostNames: Record<Host, string> = {
-  codex: "Codex",
-  claude: "Claude Code",
-};
-const requestedScopes = [
-  "campaign:read",
-  "content:edit",
-  "render:write",
-  "schedule:prepare",
+/** Only the two agents that completed a recorded session against this server are called "Tested". */
+const AGENTS: Array<{ id: AgentId; name: string; where: string; tested: boolean }> = [
+  { id: "claude", name: "Claude Code", where: "Terminal", tested: true },
+  { id: "codex", name: "Codex", where: "Terminal", tested: true },
+  { id: "cursor", name: "Cursor", where: "Editor", tested: false },
+  { id: "gemini", name: "Gemini CLI", where: "Terminal", tested: false },
+  { id: "vscode", name: "VS Code", where: "Editor", tested: false },
+  { id: "generic", name: "Any MCP client", where: "Remote MCP", tested: false },
 ];
+/** What a workspace token may do. Approval, billing management and token administration stay with people. */
+const TOKEN_SCOPES = ["campaign:read", "content:edit", "render:write", "schedule:prepare", "billing:read"];
+const TOKEN_DAYS = 30;
+const scopeNames: Record<string, string> = {
+  "campaign:read": "Read projects",
+  "content:edit": "Edit drafts",
+  "render:write": "Request renders",
+  "schedule:prepare": "Prepare schedules",
+  "billing:read": "See credits",
+  "billing:checkout": "Open checkout",
+};
 
 function usableEndpoint(value: string | null): string | null {
   if (!value) return null;
   try {
     const url = new URL(value);
-    // Setup instructions never embed credentials, URL tokens, or shell fragments.
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash
-    )
-      return null;
+    const local = ["localhost", "127.0.0.1"].includes(url.hostname);
+    // Setup instructions never embed credentials, URL tokens or shell fragments.
+    if ((url.protocol !== "https:" && !(local && url.protocol === "http:")) || url.username || url.password || url.search || url.hash) return null;
     return url.href;
   } catch {
     return null;
   }
 }
+const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+const isActive = (connection: Connection, now: number) => !connection.revokedAt && Date.parse(connection.expiresAt) > now;
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function isVerified(connection: Connection, now: number): boolean {
-  return Boolean(
-    connection.lastSeenAt &&
-      !connection.revokedAt &&
-      Date.parse(connection.expiresAt) > now,
+function AgentTile({ id, size = 44 }: { id: AgentId; size?: number }) {
+  const glyph = Math.round(size * 0.5);
+  return (
+    <span className="ob-agent-tile" data-agent={id} style={{ inlineSize: size, blockSize: size }} aria-hidden="true">
+      {id === "claude" || id === "codex" ? (
+        <AgentIcon host={id} size={Math.round(size * 0.62)} />
+      ) : id === "cursor" ? (
+        <MousePointer2 size={glyph} strokeWidth={1.75} />
+      ) : id === "gemini" ? (
+        <Sparkle size={glyph} strokeWidth={1.75} />
+      ) : id === "vscode" ? (
+        <CodeXml size={glyph} strokeWidth={1.75} />
+      ) : (
+        <Plug size={glyph} strokeWidth={1.75} />
+      )}
+    </span>
   );
 }
 
-export function Connect({
-  context,
-  client,
-  refresh,
-  onContinue,
-  onCreateCampaign,
-}: ConnectProps) {
-  const [host, setHost] = useState<Host>("codex");
-  const [manual, setManual] = useState(false);
-  const [message, setMessage] = useState("");
+interface Snippet {
+  title: string;
+  note: string;
+  label: string;
+  /** What is shown. A token never appears here. */
+  shown: string;
+  /** What is copied. Includes the token only while it is still held from this session's one-time reveal. */
+  copied: string;
+  includesToken: boolean;
+}
+function snippetFor(agent: AgentId, mode: Mode, url: string, token: string): Snippet {
+  const exported = (value: string) => `export FACEFUL_TOKEN=${value}`;
+  const tokenShown = exported(token ? "'••••••••••••'" : "'paste-your-token'");
+  const tokenCopied = exported(token ? shellQuote(token) : "'paste-your-token'");
+  const withToken = (command: string): Pick<Snippet, "shown" | "copied" | "includesToken"> => ({ shown: `${tokenShown}\n${command}`, copied: `${tokenCopied}\n${command}`, includesToken: Boolean(token) });
+  if (agent === "claude") {
+    if (mode === "quick")
+      return { title: "Add Faceful to Claude Code", note: "Run this in the terminal where you use Claude Code.", label: "Claude Code setup command", ...withToken(`claude mcp add --transport http faceful ${url} --header "Authorization: Bearer $FACEFUL_TOKEN"`) };
+    const config = JSON.stringify({ mcpServers: { faceful: { type: "http", url, headers: { Authorization: "Bearer ${FACEFUL_TOKEN}" } } } }, null, 2);
+    return { title: "Add Faceful to your project’s .mcp.json", note: "Keep your other servers. The file refers to FACEFUL_TOKEN; it never contains the token.", label: "Claude Code .mcp.json entry", shown: config, copied: config, includesToken: false };
+  }
+  if (agent === "codex") {
+    if (mode === "quick")
+      return { title: "Add Faceful to Codex", note: "Run this in the terminal where you use Codex.", label: "Codex setup command", ...withToken(`codex mcp add faceful --url ${url} --bearer-token-env-var FACEFUL_TOKEN`) };
+    const config = `[mcp_servers.faceful]\nurl = ${JSON.stringify(url)}\nbearer_token_env_var = "FACEFUL_TOKEN"`;
+    return { title: "Add Faceful to ~/.codex/config.toml", note: "Keep your other servers. Codex reads the token from FACEFUL_TOKEN when it starts.", label: "Codex config.toml entry", shown: config, copied: config, includesToken: false };
+  }
+  if (mode === "quick") {
+    const config = JSON.stringify({ mcpServers: { faceful: { url, headers: { Authorization: "Bearer ${FACEFUL_TOKEN}" } } } }, null, 2);
+    return {
+      title: "Add the standard MCP configuration",
+      note: "Paste this where your client keeps its MCP servers. If it doesn’t read environment variables, put the token in place of ${FACEFUL_TOKEN} and keep that file out of git.",
+      label: "Standard MCP configuration",
+      shown: config,
+      copied: config,
+      includesToken: false,
+    };
+  }
+  const details = `Server URL   ${url}\nTransport    Streamable HTTP\nHeader       Authorization: Bearer <your token>`;
+  return { title: "Enter the connection details", note: "Use these three values in your client’s “add remote MCP server” form.", label: "Connection details", shown: details, copied: details, includesToken: false };
+}
+
+export function Connect({ context, client, refresh, onContinue }: ConnectProps) {
+  const [picked, setPicked] = useState<AgentId | null>(null);
+  const [mode, setMode] = useState<Mode>("quick");
+  const [pending, setPending] = useState<"create" | "revoke" | null>(null);
   const [error, setError] = useState("");
-  const [pending, setPending] = useState<PendingAction>(null);
-  const [pendingConnectionId, setPendingConnectionId] = useState<string | null>(
-    null,
-  );
   const [token, setToken] = useState("");
-  const [issuedConnection, setIssuedConnection] = useState<Connection | null>(
-    null,
-  );
+  const [reveal, setReveal] = useState(false);
+  const [issued, setIssued] = useState<Connection | null>(null);
+  const [copiedSetup, setCopiedSetup] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<string | null>(null);
   const [revokedIds, setRevokedIds] = useState<Set<string>>(() => new Set());
-  const createRequests = useRef<Partial<Record<Host, CreateConnectionInput>>>(
-    {},
-  );
+  const [announcement, setAnnouncement] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const createRequest = useRef<CreateConnectionInput | null>(null);
   const revokeKeys = useRef<Record<string, string>>({});
+  const heading = useRef<HTMLHeadingElement>(null);
+  const cards = useRef<Partial<Record<AgentId, HTMLButtonElement | null>>>({});
+  // What each connection looked like when this view opened; anything newer is a call made since.
+  const seenAtOpen = useRef<Map<string, string | null>>(new Map(context.connections.map((connection) => [connection.id, connection.lastSeenAt])));
+
   const isLive = context.capabilities.mode === "live";
   const endpoint = usableEndpoint(context.capabilities.mcpUrl);
   const canSetUp = isLive && Boolean(endpoint);
-  const busy = pending !== null;
-  const now = Date.now();
-  const connections =
-    issuedConnection &&
-    !context.connections.some(
-      (connection) => connection.id === issuedConnection.id,
-    )
-      ? [...context.connections, issuedConnection]
-      : context.connections;
-  const verified = isLive
-    ? connections.filter(
-        (connection) =>
-          !revokedIds.has(connection.id) && isVerified(connection, now),
-      )
-    : [];
-  const selectedName = hostNames[host];
-  const templateUrl = endpoint ?? "REPLACE_WITH_STUDIO_PROVIDED_HTTPS_MCP_URL";
-  const config =
-    host === "codex"
-      ? `[mcp_servers.castroom]\nurl = ${JSON.stringify(templateUrl)}\nbearer_token_env_var = "CASTROOM_TOKEN"`
-      : JSON.stringify(
-          {
-            mcpServers: {
-              castroom: {
-                type: "http",
-                url: endpoint ?? "${CASTROOM_MCP_URL}",
-                headers: { Authorization: "Bearer ${CASTROOM_TOKEN}" },
-              },
-            },
-          },
-          null,
-          2,
-        );
-  const command = `codex mcp add castroom --url ${shellQuote(templateUrl)} --bearer-token-env-var CASTROOM_TOKEN`;
-  const showCommand = host === "codex" && !manual;
-  const code = showCommand ? command : config;
+  const canCreate = canSetUp && context.capabilities.canCreateAgentToken;
+  const url = endpoint ?? "https://your-faceful-site/mcp";
+  const agent = AGENTS.find((entry) => entry.id === picked) ?? null;
 
-  function chooseHost(next: Host) {
-    if (next === host) return;
-    setHost(next);
-    setMessage("");
+  const connections = useMemo(() => {
+    const list = issued && !context.connections.some((connection) => connection.id === issued.id) ? [issued, ...context.connections] : context.connections;
+    return list.map((connection) => (revokedIds.has(connection.id) && !connection.revokedAt ? { ...connection, revokedAt: new Date(now).toISOString() } : connection));
+  }, [context.connections, issued, revokedIds, now]);
+  const active = connections.filter((connection) => isActive(connection, now));
+  const past = connections.filter((connection) => !isActive(connection, now));
+  const isNewCall = (connection: Connection) => Boolean(connection.lastSeenAt) && seenAtOpen.current.get(connection.id) !== connection.lastSeenAt;
+  // The connection this visit is about: the token just created, else whichever answered since the view opened.
+  const watched = (issued && active.find((connection) => connection.id === issued.id)) || active.find(isNewCall) || null;
+  const connected = Boolean(watched && isNewCall(watched));
+
+  // Live confirmation: ask the server every few seconds while this view is on screen, and stop when it is not.
+  useEffect(() => {
+    if (!isLive) return;
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      setNow(Date.now());
+      void refresh().catch(() => undefined);
+    };
+    const timer = window.setInterval(tick, 4000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [isLive, refresh]);
+  const wasConnected = useRef(false);
+  useEffect(() => {
+    if (connected && !wasConnected.current && watched) setAnnouncement(`${watched.displayName} is connected.`);
+    wasConnected.current = connected;
+  }, [connected, watched]);
+
+  function choose(id: AgentId) {
+    setPicked(id);
+    setMode("quick");
     setError("");
-    // A workspace token can be used in either host; do not discard its one-time value on a tab change.
+    setCopiedSetup(false);
+    createRequest.current = null;
+    // A workspace token works in any agent; its one-time value is kept while this view stays open.
+    requestAnimationFrame(() => heading.current?.focus({ preventScroll: true }));
+  }
+  function back() {
+    const previous = picked;
+    setPicked(null);
+    setError("");
+    requestAnimationFrame(() => (previous ? cards.current[previous]?.focus({ preventScroll: true }) : undefined));
   }
 
-  async function createConnection() {
-    if (!canSetUp || !context.capabilities.canCreateAgentToken || busy || token)
-      return;
+  async function createToken() {
+    if (!canCreate || pending || !agent) return;
     setPending("create");
     setError("");
-    setMessage("");
-    const request = createRequests.current[host] ?? {
-      displayName: selectedName,
-      scopes: [...requestedScopes],
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    // The same request is reused if this attempt has to be retried.
+    createRequest.current ??= {
+      displayName: agent.name,
+      scopes: [...TOKEN_SCOPES],
+      expiresAt: new Date(Date.now() + TOKEN_DAYS * 24 * 3600_000).toISOString(),
       operationKey: crypto.randomUUID(),
     };
-    createRequests.current[host] = request;
     try {
-      const result = await client.createConnection(request);
+      const result = await client.createConnection(createRequest.current);
+      createRequest.current = null;
       setToken(result.token);
-      setIssuedConnection(result.connection);
-      delete createRequests.current[host];
-      setMessage(
-        "Workspace token created. Store it securely, then hide it. Your agent has not connected yet.",
-      );
-      try {
-        await refresh();
-      } catch {
-        setError(
-          "The token was created, but the connection list could not refresh. Store this token before leaving; check the list again when the service is available.",
-        );
-      }
+      setReveal(false);
+      setIssued(result.connection);
+      setCopiedSetup(false);
+      setAnnouncement("Token created. Copy it now; it is shown only once.");
+      await refresh().catch(() => undefined);
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Could not create the connection. Try again with the same request.",
-      );
+      setError(reason instanceof Error ? reason.message : "The token could not be created. Try again.");
     } finally {
       setPending(null);
     }
   }
 
-  async function checkConnection() {
-    if (!canSetUp || busy) return;
-    setPending("check");
-    setError("");
-    setMessage("");
-    try {
-      const latest = await client.getContext();
-      const candidates = issuedConnection
-        ? latest.connections.filter(
-            (connection) => connection.id === issuedConnection.id,
-          )
-        : latest.connections;
-      const confirmed =
-        latest.capabilities.mode === "live"
-          ? candidates.find(
-              (connection) =>
-                !revokedIds.has(connection.id) &&
-                isVerified(connection, Date.now()),
-            )
-          : undefined;
-      setMessage(
-        confirmed
-          ? `${confirmed.displayName} connected. The server recorded an authenticated call at ${dateLabel(confirmed.lastSeenAt!, latest.workspace.timezone)}.`
-          : "No active authenticated call has been recorded for this connection. Run studio_get_context from your agent, then check again.",
-      );
-      try {
-        await refresh();
-      } catch {
-        setError(
-          "The connection check completed, but the workspace could not refresh. Check again before continuing with agent actions.",
-        );
-      }
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Could not check the connection. Try again when the service is available.",
-      );
-    } finally {
-      setPending(null);
-    }
-  }
-
-  async function revokeConnection(connection: Connection) {
-    if (
-      !isLive ||
-      busy ||
-      connection.revokedAt ||
-      revokedIds.has(connection.id)
-    )
-      return;
+  async function revoke(connection: Connection) {
+    if (!isLive || pending) return;
     setPending("revoke");
-    setPendingConnectionId(connection.id);
+    setRevoking(connection.id);
     setError("");
-    setMessage("");
-    const operationKey =
-      revokeKeys.current[connection.id] ?? crypto.randomUUID();
-    revokeKeys.current[connection.id] = operationKey;
+    const operationKey = (revokeKeys.current[connection.id] ??= crypto.randomUUID());
     try {
-      await client.revokeConnection({
-        connectionId: connection.id,
-        operationKey,
-      });
-      setRevokedIds((current) => new Set([...current, connection.id]));
+      await client.revokeConnection({ connectionId: connection.id, operationKey });
       delete revokeKeys.current[connection.id];
-      if (issuedConnection?.id === connection.id) setToken("");
-      setMessage(
-        `${connection.displayName} was revoked. Already authorized jobs and accepted schedules require separate cancellation.`,
-      );
-      try {
-        await refresh();
-      } catch {
-        setError(
-          "Revocation succeeded, but the workspace could not refresh. Reload when the service is available to see the updated list.",
-        );
-      }
+      setRevokedIds((current) => new Set([...current, connection.id]));
+      if (issued?.id === connection.id) setToken("");
+      setConfirmRevoke(null);
+      setAnnouncement(`${connection.displayName} token revoked. New calls with it are refused.`);
+      await refresh().catch(() => undefined);
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Revocation could not be confirmed. Check the connection before retrying.",
-      );
+      setError(reason instanceof Error ? reason.message : "The token could not be revoked. Check the list before trying again.");
     } finally {
       setPending(null);
-      setPendingConnectionId(null);
+      setRevoking(null);
     }
   }
+
+  const snippet = agent ? snippetFor(agent.id, mode, url, token) : null;
+  const hasToken = Boolean(token) || active.length > 0;
+  const stepOne = hasToken ? "done" : "current";
+  const stepTwo = connected || copiedSetup ? "done" : hasToken ? "current" : "todo";
+  const stepThree = connected ? "done" : hasToken && (copiedSetup || Boolean(issued)) ? "current" : "todo";
+  const unavailable = !isLive
+    ? "This is the local preview. Agent connections work in the live studio."
+    : !endpoint
+      ? "Agent connections aren’t switched on for this deployment yet. You can keep working in the studio."
+      : !context.capabilities.canCreateAgentToken
+        ? "Only a workspace owner or admin can create tokens. Ask one to create it for you."
+        : "";
 
   return (
-    <div className="connect-view">
-      <div className="connect-intro">
-        <span className="connect-symbol" aria-hidden="true">
-          <Plug size={26} />
-        </span>
-        <h1>Connect your agent</h1>
-        <p>
-          Create campaigns with your agent.
-          <br />
-          Fine-tune them here.
-        </p>
-      </div>
-
-      <div className="host-choices" role="group" aria-label="Choose your agent">
-        <button
-          type="button"
-          aria-pressed={host === "codex"}
-          aria-controls="agent-setup"
-          onClick={() => chooseHost("codex")}
-          disabled={busy}
-        >
-          <span className="host-logo" aria-hidden="true">
-            <AgentIcon host="codex" size={32} />
-          </span>
-          <strong>Codex</strong>
-          <small>Terminal client</small>
-        </button>
-        <button
-          type="button"
-          aria-pressed={host === "claude"}
-          aria-controls="agent-setup"
-          onClick={() => chooseHost("claude")}
-          disabled={busy}
-        >
-          <span className="host-logo claude-logo" aria-hidden="true">
-            <AgentIcon host="claude" size={32} />
-          </span>
-          <strong>Claude Code</strong>
-          <small>Terminal client</small>
-        </button>
-      </div>
-
-      <section
-        className="setup-card"
-        id="agent-setup"
-        aria-labelledby="setup-title"
-      >
-        <div className="setup-heading">
-          <h2 id="setup-title">Set up {selectedName}</h2>
-          <button
-            type="button"
-            className="text-button"
-            aria-pressed={manual}
-            onClick={() => setManual((current) => !current)}
-          >
-            {manual ? "Guided setup" : "Manual configuration"}
-          </button>
-        </div>
-        <p className="setup-workspace">
-          Workspace <strong>{context.workspace.name}</strong>
-        </p>
-
-        {!canSetUp && (
-          <Notice>
-            {isLive
-              ? "Agent setup is not available in this workspace yet."
-              : "Agent setup is not connected to this workspace yet."}{" "}
-            You can continue in the studio while agent setup is unavailable.
-          </Notice>
-        )}
-
-        {canSetUp ? (
-          <>
-            <p className="muted">
-              Request access to read campaigns, edit drafts, render, and prepare
-              a schedule for up to 24 hours. Publication still needs a separate
-              review or owner-created campaign grant.
-            </p>
-            <ol className="setup-steps">
-              <li>
-                <strong>Create a workspace token</strong>
-                <p>
-                  Store it in your local <code>CASTROOM_TOKEN</code> environment
-                  variable before launching {selectedName}. Keep it out of
-                  prompts, URLs, recordings, and git.
-                </p>
-                <button
-                  type="button"
-                  className="button secondary"
-                  disabled={
-                    !context.capabilities.canCreateAgentToken ||
-                    busy ||
-                    Boolean(token)
-                  }
-                  onClick={() => void createConnection()}
-                >
-                  <KeyRound size={15} aria-hidden="true" />
-                  {pending === "create"
-                    ? "Creating token…"
-                    : "Create workspace token"}
-                </button>
-                {!context.capabilities.canCreateAgentToken && (
-                  <p>
-                    Token creation is not enabled for this workspace or your
-                    current access.
-                  </p>
-                )}
-                {token && issuedConnection && (
-                  <div className="token-once">
-                    <label htmlFor="new-token">
-                      {issuedConnection.displayName} token · available only in
-                      this session
-                    </label>
-                    <input
-                      id="new-token"
-                      type="password"
-                      readOnly
-                      value={token}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <CopyButton
-                      key={issuedConnection.id}
-                      value={token}
-                      label="Copy token"
-                    />
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => setToken("")}
-                    >
-                      Hide token
-                    </button>
-                    <p>
-                      Expires{" "}
-                      {dateLabel(
-                        issuedConnection.expiresAt,
-                        context.workspace.timezone,
-                      )}
-                      . Granted scopes: {issuedConnection.scopes.join(", ")}.
-                    </p>
-                  </div>
-                )}
-              </li>
-              <li>
-                <strong>
-                  {showCommand
-                    ? "Add Faceful in your terminal"
-                    : host === "codex"
-                      ? "Merge this into your Codex config.toml"
-                      : "Merge this into your project’s .mcp.json"}
-                </strong>
-                {!showCommand && (
-                  <p>
-                    Keep existing server entries. The configuration references
-                    your token; it never contains the token itself.
-                  </p>
-                )}
-                <pre
-                  tabIndex={0}
-                  aria-label={`${selectedName} ${showCommand ? "setup command" : "configuration"}`}
-                >
-                  <code>{code}</code>
-                </pre>
-                <CopyButton
-                  key={`${host}-${manual}`}
-                  value={code}
-                  label={
-                    showCommand ? "Copy setup command" : "Copy configuration"
-                  }
-                />
-                {host === "claude" && (
-                  <p>
-                    Open Claude Code from the configured environment, review the
-                    trusted project’s server prompt, then open <code>/mcp</code>
-                    .
-                  </p>
-                )}
-              </li>
-              <li>
-                <strong>Check your first authenticated call</strong>
-                <p>
-                  Ask your agent: “Use <code>studio_get_context</code> to show
-                  my workspace, avatars, and available actions.” Then check for
-                  the server’s confirmation here.
-                </p>
-                <button
-                  type="button"
-                  className="button primary"
-                  disabled={busy}
-                  onClick={() => void checkConnection()}
-                >
-                  <Plug size={15} aria-hidden="true" />
-                  {pending === "check"
-                    ? "Checking connection…"
-                    : "Check connection"}
-                </button>
-              </li>
-            </ol>
-          </>
-        ) : (
-          manual && (
-            <div className="setup-steps">
-              <p className="muted">
-                Template only. The live endpoint and a scoped workspace token
-                are required before this configuration can work.
-              </p>
-              <pre
-                tabIndex={0}
-                aria-label={`${selectedName} configuration template`}
-              >
-                <code>{config}</code>
-              </pre>
+    <div className="ob-connect" data-view={agent ? "steps" : "grid"}>
+      {!agent ? (
+        <div className="ob-connect-pane" key="grid">
+          <header className="ob-connect-hero">
+            <div className="ob-agent-stack" aria-hidden="true">
+              {(["claude", "codex", "cursor", "gemini", "vscode"] as AgentId[]).map((id, index) => (
+                <span key={id} style={{ "--ob-i": index } as React.CSSProperties}><AgentTile id={id} size={56} /></span>
+              ))}
             </div>
-          )
-        )}
+            <h1>Connect your agent</h1>
+            <p>Faceful works inside the agent you already use. Same projects, same rules as the studio.</p>
+          </header>
 
-        {message && (
-          <div role="status" aria-live="polite">
-            <Notice>{message}</Notice>
-          </div>
-        )}
-        {error && <Notice error>{error}</Notice>}
-        <p className="small muted">
-          A copied command does not establish a connection. Authenticated client
-          trials are pending; other MCP hosts have not been tested.
-        </p>
-        <a
-          className="text-button"
-          href="/docs/setup/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open setup instructions <ExternalLink size={13} aria-hidden="true" />
-        </a>
-      </section>
+          <section aria-labelledby="ob-agents-title">
+            <h2 className="ob-section-title" id="ob-agents-title">Choose your agent</h2>
+            <ul className="ob-agent-grid">
+              {AGENTS.map((entry, index) => (
+                <li key={entry.id} style={{ "--ob-i": index } as React.CSSProperties}>
+                  <button type="button" className="ob-agent-card" ref={(node) => { cards.current[entry.id] = node; }} onClick={() => choose(entry.id)}>
+                    <AgentTile id={entry.id} />
+                    <strong>{entry.name}</strong>
+                    <small>{entry.where}</small>
+                    {entry.tested ? <span className="ob-badge ob-badge-tested"><Check size={11} strokeWidth={2.5} aria-hidden="true" />Tested</span> : <span className="ob-badge">Standard MCP</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="ob-footnote">Tested with Claude Code and Codex. The others use the same standard MCP connection and are not yet verified by us.</p>
+          </section>
+        </div>
+      ) : (
+        <div className="ob-connect-pane" key={agent.id}>
+          <button type="button" className="ob-back" onClick={back}><ArrowLeft size={15} aria-hidden="true" />All agents</button>
+          <header className="ob-setup-head">
+            <AgentTile id={agent.id} size={48} />
+            <div>
+              <h1 ref={heading} tabIndex={-1}>Connect {agent.name}</h1>
+              <p>{agent.tested ? "Tested with this server." : "Standard MCP configuration. Not yet verified by us with this client."} Workspace <strong>{context.workspace.name}</strong>.</p>
+            </div>
+          </header>
+
+          {unavailable && <p className="ob-callout" role="note">{unavailable}</p>}
+
+          <Segmented label="Setup style" value={mode} onChange={(next) => { setMode(next); setCopiedSetup(false); }} options={[{ value: "quick", label: "Quick setup" }, { value: "manual", label: "Do it yourself" }]} />
+
+          <ol className="ob-steps">
+            <Step number={1} title="Create a workspace token" state={stepOne}>
+              {token && issued ? (
+                <div className="ob-token">
+                  <label htmlFor="ob-token-value">Your token · shown once</label>
+                  <div className="ob-token-row">
+                    <input id="ob-token-value" type={reveal ? "text" : "password"} readOnly value={token} autoComplete="off" spellCheck={false} onFocus={(event) => event.currentTarget.select()} />
+                    <button type="button" className="ob-icon-button" aria-pressed={reveal} aria-label={reveal ? "Hide token" : "Show token"} onClick={() => setReveal((current) => !current)}>
+                      {reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                    </button>
+                    <CopyAction value={token} label="Copy token" copiedLabel="Token copied" />
+                  </div>
+                  <p className="ob-step-note"><ShieldCheck size={14} aria-hidden="true" />Scoped to this workspace, expires {relativeTime(issued.expiresAt, now)}, revocable any time. It can’t approve posts or manage billing.</p>
+                  <button type="button" className="ob-link" onClick={() => { setToken(""); setReveal(false); }}>I’ve saved it — hide it for good</button>
+                </div>
+              ) : (
+                <>
+                  <p className="ob-step-note">
+                    {active.length
+                      ? `This workspace has ${active.length === 1 ? "an active token" : `${active.length} active tokens`}. A token is shown only once, so create a new one if you no longer have it.`
+                      : `A key your agent uses instead of your password. Scoped to this workspace, expires after ${TOKEN_DAYS} days, revocable any time.`}
+                  </p>
+                  <button type="button" className={`ob-button ${active.length ? "ob-button-quiet" : "ob-button-primary"}`} disabled={!canCreate || pending !== null} onClick={() => void createToken()}>
+                    {pending === "create" ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <KeyRound size={16} aria-hidden="true" />}
+                    {pending === "create" ? "Creating token…" : active.length ? "Create another token" : "Create token"}
+                  </button>
+                </>
+              )}
+            </Step>
+
+            <Step number={2} title={snippet!.title} state={stepTwo}>
+              <p className="ob-step-note">{snippet!.note}</p>
+              <div className="ob-code-block">
+                <pre tabIndex={0} aria-label={snippet!.label}><code>{snippet!.shown}</code></pre>
+                <CopyAction
+                  className="ob-copy-floating"
+                  value={snippet!.copied}
+                  label={snippet!.includesToken ? "Copy with token" : "Copy"}
+                  copiedLabel="Copied"
+                  onCopied={() => setCopiedSetup(true)}
+                />
+              </div>
+              {snippet!.includesToken && <p className="ob-step-note">The copy includes your token so you can paste once. It is hidden here on purpose.</p>}
+              {!snippet!.includesToken && mode === "quick" && (agent.id === "claude" || agent.id === "codex") && <p className="ob-step-note">Replace <code>paste-your-token</code> with your token before running it.</p>}
+              {agent.id === "claude" && mode === "manual" && <p className="ob-step-note">Start Claude Code from a shell where <code>FACEFUL_TOKEN</code> is set, then open <code>/mcp</code> to confirm the server.</p>}
+            </Step>
+
+            <Step number={3} title={<>Ask your agent: “List my Faceful projects”</>} state={stepThree}>
+              <p className="ob-live" data-state={connected ? "connected" : "waiting"}>
+                {connected && watched ? (
+                  <><span className="ob-live-tick" aria-hidden="true"><Check size={13} strokeWidth={2.75} /></span>Connected · last seen {relativeTime(watched.lastSeenAt!, now)}</>
+                ) : (
+                  <><span className="ob-live-dot" aria-hidden="true" />{hasToken ? "Waiting for your agent’s first call. This updates by itself." : "Create a token first; the confirmation appears here."}</>
+                )}
+              </p>
+              {connected && <p className="ob-step-note">Your agent now sees the same projects you do. Try “Create a 15-second draft about …” or “How many render credits do I have?”</p>}
+            </Step>
+          </ol>
+
+          <p className="ob-oauth-line">Or let your agent sign in: clients that support OAuth open Faceful’s consent screen instead of using a token. Add <code>{url}</code> as a remote MCP server with no header and approve the request when it appears.</p>
+        </div>
+      )}
+
+      {error && <p className="ob-error" role="alert">{error}</p>}
+      <p className="sr-only" role="status">{announcement}</p>
 
       {connections.length > 0 && (
-        <section
-          className="connections-list"
-          aria-labelledby="connections-title"
-        >
-          <h2 id="connections-title">
-            Workspace connections <span>{verified.length} verified</span>
-          </h2>
-          {connections.map((connection) => {
-            const revoked = Boolean(
-              connection.revokedAt || revokedIds.has(connection.id),
-            );
-            const expired = Date.parse(connection.expiresAt) <= now;
-            const confirmed = isLive && !revoked && isVerified(connection, now);
-            const state = !isLive
-              ? "Example request"
-              : revoked
-                ? "Revoked"
-                : expired
-                  ? "Expired"
-                  : confirmed
-                    ? "Connected"
-                    : "Awaiting first authenticated call";
-            return (
-              <article key={connection.id}>
-                <div>
-                  <strong>{connection.displayName}</strong>
-                  <p>
-                    {confirmed && <Check size={12} aria-hidden="true" />}{" "}
-                    {state}
-                  </p>
-                  {isLive && connection.lastSeenAt && (
-                    <p>
-                      Last authenticated call{" "}
-                      {dateLabel(
-                        connection.lastSeenAt,
-                        context.workspace.timezone,
-                      )}
-                    </p>
+        <section className="ob-connections" aria-labelledby="ob-connections-title">
+          <h2 id="ob-connections-title">Your connections</h2>
+          <ul>
+            {active.map((connection) => {
+              const fresh = isNewCall(connection);
+              return (
+                <li key={connection.id} data-fresh={fresh || undefined}>
+                  <div className="ob-connection-main">
+                    <strong>{connection.displayName}</strong>
+                    <span className="ob-connection-state" data-state={connection.lastSeenAt ? "seen" : "idle"}>
+                      {connection.lastSeenAt ? <>Last seen {relativeTime(connection.lastSeenAt, now)}</> : "No calls yet"}
+                    </span>
+                    <span className="ob-connection-meta">Expires {relativeTime(connection.expiresAt, now)}</span>
+                    <ul className="ob-scope-list" aria-label="Permissions">
+                      {connection.scopes.map((scope) => <li key={scope}>{scopeNames[scope] ?? scope}</li>)}
+                    </ul>
+                  </div>
+                  {confirmRevoke === connection.id ? (
+                    <div className="ob-confirm" role="group" aria-label={`Revoke the ${connection.displayName} token?`}>
+                      <p>Revoke this token? {connection.displayName} stops working at once. Work it already started is not cancelled.</p>
+                      <button type="button" className="ob-button ob-button-danger" disabled={pending !== null} onClick={() => void revoke(connection)}>{revoking === connection.id ? "Revoking…" : "Revoke token"}</button>
+                      <button type="button" className="ob-button ob-button-quiet" disabled={pending !== null} onClick={() => setConfirmRevoke(null)}>Keep token</button>
+                    </div>
+                  ) : (
+                    <button type="button" className="ob-link ob-link-danger" disabled={!isLive || pending !== null} aria-label={`Revoke the ${connection.displayName} token`} onClick={() => setConfirmRevoke(connection.id)}>Revoke</button>
                   )}
-                  <small>
-                    {connection.scopes.join(", ")} · Expires{" "}
-                    {dateLabel(
-                      connection.expiresAt,
-                      context.workspace.timezone,
-                    )}
-                  </small>
-                </div>
-                <button
-                  type="button"
-                  className="button secondary"
-                  disabled={!isLive || revoked || busy}
-                  onClick={() => void revokeConnection(connection)}
-                >
-                  {pending === "revoke" && pendingConnectionId === connection.id
-                    ? "Revoking…"
-                    : "Revoke"}
-                </button>
-              </article>
-            );
-          })}
-          <p>
-            Revoking a token blocks new calls. Cancel already authorized work or
-            accepted schedules separately.
-          </p>
+                </li>
+              );
+            })}
+          </ul>
+          {past.length > 0 && (
+            <details className="ob-past">
+              <summary>{past.length} revoked or expired</summary>
+              <ul>
+                {past.map((connection) => (
+                  <li key={connection.id}>
+                    <div className="ob-connection-main">
+                      <strong>{connection.displayName}</strong>
+                      <span className="ob-connection-meta">{connection.revokedAt ? "Revoked" : "Expired"}{connection.lastSeenAt ? ` · last seen ${relativeTime(connection.lastSeenAt, now)}` : ""}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </section>
       )}
 
-      <div className="connect-footer onboarding-next">
-        {onCreateCampaign && (
-          <button
-            type="button"
-            className="button primary"
-            onClick={onCreateCampaign}
-          >
-            <FileText size={15} aria-hidden="true" />
-            Add a company brief
-          </button>
-        )}
-        <button type="button" className="text-button" onClick={onContinue}>
-          Continue in studio <ArrowRight size={15} aria-hidden="true" />
-        </button>
-      </div>
+      <footer className="ob-connect-foot">
+        <a className="ob-link" href="/docs/mcp/" target="_blank" rel="noreferrer">How agent connections work</a>
+        <button type="button" className="ob-link" onClick={onContinue}>Back to the studio <ArrowRight size={14} aria-hidden="true" /></button>
+      </footer>
     </div>
   );
 }

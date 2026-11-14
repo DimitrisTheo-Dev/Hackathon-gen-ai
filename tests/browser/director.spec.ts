@@ -42,8 +42,12 @@ test('OTP screens verify code, cooldown and failure without sending a real email
    await route.fulfill({status:401,contentType:'application/json',body:'{"message":"Unauthenticated"}'});
  });
  await page.goto('/studio/');await page.getByLabel('Email address').fill('qa@example.com');await page.getByRole('button',{name:'Continue with email'}).click();await expect(page.getByRole('heading',{name:'Check your email'})).toBeVisible();await expect(page.getByRole('button',{name:/Resend in/})).toBeDisabled();
- await page.getByLabel('Sign-in code').fill('123 456');await expect(page.getByLabel('Sign-in code')).toHaveValue('123456');await page.getByRole('button',{name:'Verify and continue'}).click();await expect(page.getByRole('alert')).toContainText('expired');await expect(page.locator('.content-card')).toHaveCount(0);
- await page.getByRole('button',{name:'Change email'}).click();await expect(page.getByLabel('Email address')).toBeVisible();expect(calls.filter(p=>p.endsWith('/otp'))).toHaveLength(1);
+ // A pasted code with a space is normalised, and the sixth digit submits by itself: no extra click.
+ await page.getByLabel('Sign-in code').fill('123 456');await expect(page.getByRole('alert')).toContainText('expired');await expect(page.locator('.content-card')).toHaveCount(0);
+ // The rejected digits are cleared and focus never left the field, so the next code can be typed at once.
+ await expect(page.getByLabel('Sign-in code')).toHaveValue('');await expect(page.getByLabel('Sign-in code')).toBeFocused();expect(calls.filter(p=>p.endsWith('/verify'))).toHaveLength(1);
+ await expect(page.getByText('Creating an account doesn’t grant access')).toHaveCount(0);await expect(page.getByText('Code requested')).toHaveCount(0);
+ await page.getByRole('button',{name:'Use a different email'}).click();await expect(page.getByLabel('Email address')).toBeVisible();expect(calls.filter(p=>p.endsWith('/otp'))).toHaveLength(1);
 });
 
 test('hero rotates client marks without shifting the headline and can pause',async({page})=>{
@@ -63,7 +67,7 @@ test('OTP verification opens a server-confirmed session without inventing worksp
   const body=path.endsWith('/otp')?{}:path.endsWith('/verify')?{access_token:token,refresh_token:'test-only-not-a-real-credential',expires_in:3600,token_type:'bearer',user}:user;
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
  });
- await page.goto('/studio/');await page.getByLabel('Email address').fill('qa@example.com');await page.getByRole('button',{name:'Continue with email'}).click();await page.getByLabel('Sign-in code').fill('123456');await page.getByRole('button',{name:'Verify and continue'}).click();
+ await page.goto('/studio/');await page.getByLabel('Email address').fill('qa@example.com');await page.getByRole('button',{name:'Continue with email'}).click();await page.getByLabel('Sign-in code').fill('123456');
  // The studio now calls its own origin for the engine. This server has none, so the person is told so; no fixture is substituted.
  await expect(page.getByRole('heading',{name:'The studio service isn’t available yet.'})).toBeVisible();await expect(page.locator('.auth-card')).toContainText('no sample content was substituted');await expect(page.locator('.content-card')).toHaveCount(0);
  await page.reload();await expect(page.getByRole('heading',{name:'The studio service isn’t available yet.'})).toBeVisible();await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByLabel('Email address')).toBeVisible();

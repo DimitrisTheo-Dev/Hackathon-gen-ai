@@ -1,6 +1,7 @@
 import { test, expect, chromium, webkit, type Page } from '@playwright/test';
 
-const origin = 'http://127.0.0.1:4173';
+// Override to run beside another session's server: FACEFUL_E2E_ORIGIN=http://127.0.0.1:4573
+const origin = process.env.FACEFUL_E2E_ORIGIN ?? 'http://127.0.0.1:4173';
 const evidence = 'docs/demo/evidence/creative-director';
 async function cleanConsole(page: Page) {
   const errors: string[] = [];
@@ -18,9 +19,7 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     await expect(page.getByRole('dialog',{name:'Explore Faceful'})).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button',{name:'Open navigation',exact:true})).toBeFocused();
-    await page.getByRole('button',{name:'Inspect this draft',exact:true}).click();
-    await expect(page.locator('.landing-preview-script')).toBeVisible();
-    expect(await page.locator('.landing-preview-script').evaluate(el => getComputedStyle(el).fontSize)).toBe('16px');
+    await expect(page.locator('.landing-hero').getByRole('link',{name:'Start creating'})).toHaveAttribute('href','/studio/');
     const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
     expect(viewport).toContain('viewport-fit=cover'); expect(viewport).not.toMatch(/maximum-scale|user-scalable/);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -68,7 +67,7 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     await expect(page.locator('.save-state')).toContainText('version 2');
     await expect(page.locator('.content-card').first().locator('h2')).toHaveText('Title that must roll back on failure');
     await context.setOffline(true);
-    await expect(editor.getByText('You’re offline.',{exact:false})).toBeVisible();
+    await expect(editor.getByText('You’re offline.',{exact:false}).filter({visible:true})).toBeVisible();
     await expect(page.getByRole('button',{name:'Save changes',exact:true})).toBeDisabled();
     await context.setOffline(false);
     await page.getByRole('button',{name:'Return to campaign'}).click();

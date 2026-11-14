@@ -347,7 +347,8 @@ test("propose_schedule saves draft times in the workspace timezone and reports b
   assert.equal(proposed.data.manifest.approval, "required");
   assert.deepEqual(proposed.data.manifest.entries, [], "nothing is ready to publish without a video and a connected account");
   assert.ok(proposed.data.manifest.blockers.some((blocker: any) => /No finished video/.test(blocker.message)));
-  assert.ok(proposed.data.manifest.blockers.some((blocker: any) => /not connected/.test(blocker.message)));
+  assert.ok(proposed.data.manifest.blockers.some((blocker: any) => /app review; not available yet/.test(blocker.message)), "Instagram is blocked with its specific reason");
+  assert.ok(proposed.data.manifest.blockers.some((blocker: any) => /YouTube publishing is not set up on this deployment/.test(blocker.message)), "YouTube is blocked until the deployment is configured");
   assert.equal(proposed.data.reviewUrl, `${BASE}/studio/?view=schedule&campaign=${project.id}`);
   assert.equal((await getCampaign(deps, owner, project.id)).items[0].targets.length, 2, "the studio shows the same draft times");
   assert.equal((await deps.store.select("publish_jobs", {})).length, 0);

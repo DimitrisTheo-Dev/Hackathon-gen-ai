@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Check, LoaderCircle } from "lucide-react";
+import { ArrowUpRight, Check, CircleAlert, LoaderCircle } from "lucide-react";
 import type { StudioContext } from "@castroom/contracts";
 import type { BillingStatus, StudioClient } from "../data/client";
-import { Notice, dateLabel } from "../components/ui";
+import { dateLabel } from "../components/ui";
 
 const statusLabels: Record<BillingStatus["status"], string> = {
   not_configured: "Not set up",
@@ -16,6 +16,7 @@ const statusLabels: Record<BillingStatus["status"], string> = {
   unpaid: "Unpaid",
   paused: "Paused",
 };
+const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
 /**
  * Plan, credits and the single upgrade path. Everything shown comes from the server's
@@ -97,61 +98,94 @@ export function Billing({
     }
   }
   const subscribed = billing ? ["active", "trialing", "past_due"].includes(billing.status) : false;
+  const tone = !billing ? "" : billing.status === "active" || billing.status === "trialing" ? "good" : ["past_due", "unpaid", "incomplete"].includes(billing.status) ? "bad" : "";
+  const plan = billing?.plans[0] ?? null;
+  const sandbox = billing?.mode === "sandbox";
   return (
-    <div className="brand-view billing-view">
-      <span className="section-kicker">{context.workspace.name}</span>
-      <h1>Billing and usage</h1>
-      <p className="lead">Drafting, editing and planning are free. Rendering a video uses credits.</p>
+    <div className="billing-view ob-billing">
+      <header className="ob-page-head">
+        <div>
+          <h1>Billing and usage</h1>
+          <p>Drafting, editing and planning are free. Rendering a video uses credits.</p>
+        </div>
+        {sandbox && <span className="ob-test-mode">Test mode — no real charges</span>}
+      </header>
+
       {checkoutReturn === "cancelled" && (
-        <div className="success-note" role="status">Checkout was cancelled. Nothing was charged and your drafts are unchanged.
-          <button className="text-button" onClick={onReturnHandled}>Dismiss</button>
+        <div className="success-note ob-note" role="status">
+          <span>Checkout was cancelled. Nothing was charged and your drafts are unchanged.</span>
+          <button className="ob-link" onClick={onReturnHandled}>Dismiss</button>
         </div>
       )}
-      {confirming && <p className="billing-confirming" role="status"><LoaderCircle size={15} className="spin" aria-hidden="true" />Waiting for Stripe to confirm your checkout. Your plan updates here as soon as it does.</p>}
-      {confirmNote && <div className="success-note" role="status">{confirmNote}</div>}
-      {error && <Notice error>{error} <button className="text-button" onClick={() => void load()}>Try again</button></Notice>}
-      {!billing && !error && <p role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading billing…</p>}
+      {confirming && <p className="ob-note ob-note-pending" role="status"><LoaderCircle size={15} className="spin" aria-hidden="true" />Waiting for Stripe to confirm your checkout. Your plan updates here as soon as it does.</p>}
+      {confirmNote && <div className="success-note ob-note" role="status"><Check size={15} strokeWidth={2.25} aria-hidden="true" /><span>{confirmNote}</span></div>}
+      {error && <p className="ob-error" role="alert">{error} <button className="ob-link" onClick={() => void load()}>Try again</button></p>}
+
+      {!billing && !error && (
+        <div className="ob-billing-cards" role="status">
+          <span className="sr-only">Loading billing…</span>
+          <div className="ob-billing-card ob-skeleton-card"><i /><i /><i /></div>
+          <div className="ob-billing-card ob-skeleton-card"><i /><i /><i /></div>
+        </div>
+      )}
+
       {billing && (
         <>
-          <dl className="billing-facts">
-            <div><dt>Plan</dt><dd>{billing.planKey ? `${billing.planKey[0].toUpperCase()}${billing.planKey.slice(1)} plan` : "Free"}<span className={`status-chip ${billing.status === "active" || billing.status === "trialing" ? "accepted" : ["past_due", "unpaid", "incomplete"].includes(billing.status) ? "failed" : ""}`}>{statusLabels[billing.status]}</span></dd></div>
-            <div><dt>Render credits</dt><dd className="billing-number">{billing.creditBalance}</dd></div>
-            <div><dt>Videos you can render</dt><dd className="billing-number">{billing.rendersRemaining}<small>{billing.renderCreditCost} credit{billing.renderCreditCost === 1 ? "" : "s"} per render</small></dd></div>
-            {billing.currentPeriodEnd && <div><dt>{billing.cancelAtPeriodEnd ? "Ends" : "Renews"}</dt><dd>{dateLabel(billing.currentPeriodEnd, context.workspace.timezone, true)}</dd></div>}
+          <dl className="ob-billing-cards">
+            <div className="ob-billing-card">
+              <dt>Render credits</dt>
+              <dd>
+                <span className="billing-number">{billing.creditBalance}</span>
+                <span className="ob-billing-sub">{billing.rendersRemaining} {plural(billing.rendersRemaining, "video", "videos")} left · {billing.renderCreditCost} {plural(billing.renderCreditCost, "credit", "credits")} per video</span>
+              </dd>
+            </div>
+            <div className="ob-billing-card">
+              <dt>Plan</dt>
+              <dd>
+                <span className="ob-plan-name">{billing.planKey ? `${billing.planKey[0].toUpperCase()}${billing.planKey.slice(1)} plan` : "Free"}</span>
+                {/* "Free" already says it; a chip appears only when the status adds something. */}
+                {(billing.planKey || billing.status !== "free") && <span className="ob-plan-status" data-tone={tone || undefined}>{statusLabels[billing.status]}</span>}
+                {billing.currentPeriodEnd && <span className="ob-billing-sub">{billing.cancelAtPeriodEnd ? "Ends" : "Renews"} {dateLabel(billing.currentPeriodEnd, context.workspace.timezone, true)}</span>}
+                {!billing.currentPeriodEnd && <span className="ob-billing-sub">{subscribed ? "Managed on Stripe" : "No subscription yet"}</span>}
+              </dd>
+            </div>
           </dl>
-          {billing.status === "past_due" && <Notice error>Your last payment did not go through. Update your payment method in the billing portal to keep rendering.</Notice>}
+
+          <ul className="ob-credit-facts">
+            <li><Check size={15} strokeWidth={2.25} aria-hidden="true" />One credit renders one video. Drafts, edits and schedules never use credits.</li>
+            <li><Check size={15} strokeWidth={2.25} aria-hidden="true" />The studio and your connected agents share this one balance.</li>
+            <li><Check size={15} strokeWidth={2.25} aria-hidden="true" />A render that fails or is cancelled gives its credit back.</li>
+          </ul>
+
+          {billing.status === "past_due" && <p className="ob-error" role="alert">Your last payment did not go through. Update your payment method on Stripe to keep rendering.</p>}
+
           {billing.mode === "not_configured" ? (
-            <section aria-labelledby="billing-blocked">
+            <section className="ob-upgrade ob-upgrade-blocked" aria-labelledby="billing-blocked">
               <h2 id="billing-blocked">Upgrades aren’t available yet</h2>
-              <Notice>
-                <strong>Stripe test billing is not connected to this deployment.</strong>
-                <p>{billing.configurationProblem ?? "Stripe sandbox keys have not been added."}</p>
-                <p>Nothing can be charged. Drafting, editing and your existing credits keep working.</p>
-              </Notice>
+              <p className="ob-blocked"><CircleAlert size={16} aria-hidden="true" /><span><strong>Stripe test billing is not connected to this deployment.</strong> {billing.configurationProblem ?? "Stripe sandbox keys have not been added."}</span></p>
+              <p className="ob-fine">Nothing can be charged. Drafting, editing and your existing credits keep working.</p>
             </section>
           ) : (
-            <section aria-labelledby="billing-plan">
+            <section className="ob-upgrade" aria-labelledby="billing-plan">
               <h2 id="billing-plan">{subscribed ? "Your subscription" : "Upgrade"}</h2>
-              {!subscribed && billing.plans[0] && (
+              {!subscribed && plan && (
                 <>
-                  <ul className="rule-list">
-                    <li><Check size={16} aria-hidden="true" />{billing.plans[0].creditsPerPeriod} render credits each billing period</li>
-                    <li><Check size={16} aria-hidden="true" />Payment happens on Stripe’s hosted page, in test mode. No real charge is made.</li>
-                    <li><Check size={16} aria-hidden="true" />Your plan changes only after Stripe confirms the payment.</li>
-                  </ul>
+                  <p className="ob-upgrade-lead"><strong className="ob-count">{plan.creditsPerPeriod}</strong> render credits every billing period, for the studio and your agents alike.</p>
                   {billing.canCheckout ? (
-                    <button className="button primary" disabled={busy !== null || confirming} onClick={() => void upgrade()}>
-                      {busy === "checkout" ? "Opening Stripe…" : "Upgrade with Stripe test checkout"}<ArrowUpRight size={14} aria-hidden="true" />
+                    <button className="ob-button ob-button-primary" disabled={busy !== null || confirming} onClick={() => void upgrade()}>
+                      {busy === "checkout" ? <><LoaderCircle size={16} className="spin" aria-hidden="true" />Opening Stripe…</> : <>Upgrade with Stripe test checkout<ArrowUpRight size={15} aria-hidden="true" /></>}
                     </button>
-                  ) : <p className="muted">Only a workspace owner or admin can upgrade this workspace.</p>}
+                  ) : <p className="ob-fine">Only a workspace owner or admin can upgrade this workspace.</p>}
+                  <p className="ob-fine">You pay on Stripe’s page. Card details never enter Faceful or the chat, and your plan changes only after Stripe confirms the payment.</p>
                 </>
               )}
+              {subscribed && <p className="ob-upgrade-lead">Your credits are topped up each billing period. Change or cancel the plan on Stripe.</p>}
               {billing.hasCustomer && billing.canManage && (
-                <button className="button secondary" disabled={busy !== null} onClick={() => void manage()}>
-                  {busy === "portal" ? "Opening Stripe…" : "Manage billing on Stripe"}<ArrowUpRight size={14} aria-hidden="true" />
+                <button className="ob-button ob-button-quiet" disabled={busy !== null} onClick={() => void manage()}>
+                  {busy === "portal" ? <><LoaderCircle size={16} className="spin" aria-hidden="true" />Opening Stripe…</> : <>Manage billing on Stripe<ArrowUpRight size={15} aria-hidden="true" /></>}
                 </button>
               )}
-              <p className="billing-mode">Stripe test mode · use Stripe’s test cards only</p>
+              <p className="ob-fine ob-test-card">Stripe test mode. Pay with Stripe’s test card <span className="ob-count">4242 4242 4242 4242</span>, any future date and any CVC.</p>
             </section>
           )}
         </>
