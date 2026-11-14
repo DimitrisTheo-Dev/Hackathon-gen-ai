@@ -1,0 +1,304 @@
+{
+  "scope": "flow",
+  "candidate": {
+    "apps/web/index.html": "ca5cacbec7381dcab08d9f050cf0a3251cb3dafaf2ecd71765fe1afc331374f7",
+    "apps/web/package.json": "411f11b6079bf973be279e6e36a42ecd0edb43765c6223737c74e923061c2d4a",
+    "apps/web/vite.config.ts": "aa5c847b0af83b77a338774b4b3bb8e37eaf7ec376c362cc87487fa922d5d42e",
+    "apps/web/public/llms.txt": "40e7b981db2a71c3f38f771537628f77b942b94bbb3218f846fbcba135a1c758",
+    "apps/web/public/design.css": "8fc3ac2971d68db61af69d92598224eaa4c52bfae9bb5322a0829c067c62df53",
+    "apps/web/public/sitemap.xml": "a5a1e49f183a7bdf0addab2e059c46f2499d0a863b1a44b1f6e0f01eaec21115",
+    "apps/web/public/robots.txt": "33067c3b7dfea00abff0a10b2509bbd7f88fc0d73e777f8e6188909de89b8b5e",
+    "apps/web/public/og.png": "f947efa4d35b22996d4f8e030975fc048148dab940cfd5e8002ba92f24878248",
+    "apps/web/public/favicon.svg": "5afa29c538cb6665cda72e61acacacd9135820718b1555728131c9838605c653",
+    "apps/web/src/main.tsx": "7df7b36c4bdc02a23b7198f90534a7645a2950b4a3fdbf72daa87ad92e8b5887",
+    "apps/web/src/AuthApp.tsx": "32e19b5ffb879362396d53176f2479809e30aeac6d0f5ffde2904a290c81853a",
+    "apps/web/src/vite-env.d.ts": "eb4b7fce608c65170158a26c0de8710ab0e2fcb64e78c40493d25bd4ed1c89d8",
+    "apps/web/src/style.css": "df687c70397a7c2167846d436ad04f958c12e17fdcb842468c54204b8db46ba8",
+    "apps/web/src/landing/LandingPage.tsx": "afe9836addbb5fdd94f3cc921a309a4e4b3da2d8243bcf424de04c9ec71d7293",
+    "apps/web/src/landing/landing.css": "63812529ca909b8072afc980afde94f6887723b4791e6dfc0c1fd0664d6b3258",
+    "apps/web/src/components/CommandPalette.tsx": "156f44b7e34a75010647d0ff3e0889744bfc83722037cce89d08dcc278edbb22",
+    "apps/web/src/components/ui.tsx": "a668205050a86e15d5cc9d1019ff9735917c9e8e724c85bd4ac0ce529f9be37b",
+    "apps/web/src/lib/operation-key.ts": "ecc8afed0868181b44079150fe862baca6a359dc2b049202bab01d2a4b4ba6be",
+    "apps/web/src/lib/supabase.ts": "e67e9744142db8fe705717cde3b40fe25f9f0c4e5a751768b03d909bce2e68d1",
+    "apps/web/src/lib/time.ts": "47e4cf022c292fd4897732b4ad11fb47d41584b9075c046f0c8515b608a5d272",
+    "apps/web/src/data/live.ts": "ba685d8600b71f123d106815c0445838b1e8a6ce6fc33c6b92455158c68b120a",
+    "apps/web/src/data/client.ts": "f1eae994d858da609a8486ed6b8cf9479b851e99725229154e2c624ea23d0f6b",
+    "apps/web/src/data/fixture.ts": "d103b7fe8505c651fa595a97d09a9da75d51d2056ca6b7a836299743a8e566cf",
+    "apps/web/src/views/Connect.tsx": "743d4427330306af555ecca2def13780db715330905df81468cff94a3a8adb1a",
+    "apps/web/src/views/Studio.tsx": "14055b05f06135be47ef4cfcd2af39734cc90c09bfed2b73cfc0695823b2ccb0",
+    "apps/web/src/views/Editor.tsx": "2ff501f3b68ded1d950c65448919d1f7f6a87e1b71462a6d4a7771bf5aeafc96",
+    "apps/web/src/views/CreateCampaign.tsx": "336ae9f066884cebc098beb1e0bdc99634dced79010a0ef5aeed0597f79da24c",
+    "apps/web/src/views/Review.tsx": "005df7d62795e9d8f5becc4e3fb2e451b743729b7a43f56a1c865480881c1123",
+    "apps/web/src/views/editor/model.ts": "9f591b8062f60e575fbc23f8784fd6ce7b76871be26819b0503242617ade952b",
+    "apps/web/public/contact/index.html": "56165836e77e05b51a08266cf71a15f8a502381da79cf7d39dff9e3a078bb39a",
+    "apps/web/public/privacy/index.html": "2f396694cd930678c5b1563b4ac015ab2c27c0366087a4dc515a0485841c58c4",
+    "apps/web/public/about/index.html": "92dface142ce86f293ae7805984e98da0427cac3121f756ad698a1020b606d34",
+    "apps/web/public/docs/index.html": "f3a85cfb5390af5a0a570aeb26ba4887611e955a35b5b9dd9d7146cb533a1e72",
+    "apps/web/public/docs/docs.css": "b21502a007a34f86d2e18c0ba46d93079f38d874e74465efb7717883d0efdf5a",
+    "apps/web/public/fonts/InterVariable.woff2": "693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3",
+    "apps/web/public/fonts/LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+    "apps/web/public/docs/capabilities/index.html": "706303dc224bbcef02ac92eda9d6d271a9ed62f4abdb0c91f6af5f67e947bdc8",
+    "apps/web/public/docs/security/index.html": "f880084c0bf301d5b332365f44edfa89a4b3619fb37ba4b671a7e3bd5d39415d",
+    "apps/web/public/docs/setup/index.html": "b3f777a9a85e17bc0c25f0606c2bfd429db75150213882627380ca1729ab5ce9",
+    "apps/web/public/docs/mcp/index.html": "f7691d616d748ae150b98b2d9215f88aa57936084c65f05229467a8adbedf712",
+    "apps/web/public/docs/cli/index.html": "014a76b438864d18d8c846ee3c07e1750d82138bad525e4abb87744fa07337d6",
+    "apps/web/public/docs/api/index.html": "606012349a823401a09b2a55e9203c5f5c64b89a1cc28aa1b593e4caaa094623",
+    "apps/web/public/docs/errors/index.html": "27dca0b332bc6cc63fdcb9b39775f87057fa55972bf216dbe60d5e3f3a2dd5b7",
+    "packages/contracts/package.json": "a1aa9af3062281debba0f79eeddb52da6d19400ef3479ae09ef9a2be6d0417a9",
+    "packages/contracts/src/index.ts": "f851f725aafc90e0f14beef4992662f78771dd47f4619e03665280a4f8b34314",
+    "packages/public-api/src/documents.ts": "f9c9e230d18ff07a58344068a1579ff5a3459e4efda3713c2e85f55882e5fc5a",
+    "packages/public-api/src/index.ts": "6ae29021551a987e838b72b5a68a0c167b0240ae8dc11dbb6c5ad8e5018a8a9f",
+    "packages/cli/examples/three-video-plan.json": "065c499a6c754c39bbc50aa4cd1d202f9b06bb6487a678c585993967d8c869ca",
+    "packages/cli/src/main.ts": "842275d8eb3603b7785fa09f1aafa4621865d4e05d08e6ab96c81f4d204caa79",
+    "packages/cli/src/cli.ts": "262bd8846658e01eba2c857d6600ed884a22aa8e41f7e4596d375b43392dca71",
+    "package.json": "9792a5bef23626a83f7cca86c9e12b955a06bcfc3971c9b9ef5df07887e1716f",
+    "pnpm-lock.yaml": "f84f01fc8b780e52c4e4269111575e5d874d8546824a9ae33c5bf3fd7e9661ac",
+    "pnpm-workspace.yaml": "dd406511110ef63d88ad787140bdab08ab89f69507e047041806a92d97d684f7",
+    "proxy.ts": "07ac6067c4983ad56d31fa286164b76c52bf9e99161d61a645187f889533f1b9",
+    "tsconfig.json": "21037fc0e1e1fd9257faba2948c3cfd169b9a65e493408e56b42e7515b779c9d",
+    "vercel.json": "3295203d48829202eddefcad4582524bf7ba188342a599f9523971fef4fd2fa6",
+    "scripts/prerender.ts": "4f4cdee633cd0586b556182d23a88d7b5cc79afe25b262e702f16150bb026c71"
+  },
+  "evidence": [
+    {
+      "id": "desktop",
+      "path": "docs/demo/evidence/redesign/editor-1440.png",
+      "sha256": "9e24de8bf8e8186c00e5bfdd1be08f946ae7bce9de366f303bc496fa73769039",
+      "kind": "image"
+    },
+    {
+      "id": "mobile",
+      "path": "docs/demo/evidence/redesign/editor-390.png",
+      "sha256": "c390937b2c7278c068659f1a305119098bbc2d24b096b7491c5bf5aeca1be456",
+      "kind": "image"
+    },
+    {
+      "id": "landing",
+      "path": "docs/demo/evidence/redesign/landing-390.png",
+      "sha256": "8c5692e83db368c537d0c570b8e2636eb079c4d90f3ba925268c30b5de6db054",
+      "kind": "image"
+    },
+    {
+      "id": "scroll",
+      "path": "docs/demo/evidence/redesign/mobile-scroll-end.png",
+      "sha256": "a804f8bfebb31c2ee5032e1fe9dc340bde4ad03ebc0c15edd0ff8ad07a0647cc",
+      "kind": "image"
+    },
+    {
+      "id": "review",
+      "path": "docs/demo/evidence/redesign/review-blocked.png",
+      "sha256": "910bac46ca25baf23ca19a0522c82eb5f39a1e17aaf7587d31fc6b56ffcd04dd",
+      "kind": "image"
+    },
+    {
+      "id": "journey",
+      "path": "docs/demo/evidence/browser-redesign.txt",
+      "sha256": "547fce74c902f96c634bcaea62c98190fc498073fda2dd8945f05339d3084c32",
+      "kind": "interaction"
+    },
+    {
+      "id": "http",
+      "path": "docs/demo/evidence/public-local-redesign.json",
+      "sha256": "fd8bc15455f40ffaa7a78d3b64c1ef2686df4dd7c0259dbf0afbdc0e845cd330",
+      "kind": "measurement"
+    }
+  ],
+  "areas": [
+    {
+      "id": "task",
+      "status": "fail",
+      "observation": "Local draft creation, editing and review work. The intended agent\u2192real-video\u2192publish journey cannot run until Minas connects the engine and providers.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "structure",
+      "status": "pass",
+      "observation": "Desktop retains projects/canvas/editor; phones use a full-width selected editor with a return action. The selected content and next save/review action remain explicit.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "terminology",
+      "status": "pass",
+      "observation": "Sample storyboard, development preview, draft, provider acceptance and publication are distinguished. No fixture completion or copied-command handshake is claimed.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "typography",
+      "status": "pass",
+      "observation": "Self-hosted Inter Variable renders throughout; metadata12px and compact13px controls remain legible in inspected captures. Greek/long English content and reflow were exercised.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "spacing",
+      "status": "pass",
+      "observation": "Neutral shell separates260px sidebar and360px editor; mobile preview is bounded to leave room for script editing. Card/footer overlap was removed and measured.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "color",
+      "status": "pass",
+      "observation": "Charcoal actions, warm neutral surfaces, green positive and amber pending semantics follow the user palette. Reference-inspired product chrome contains no purple accent.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "components",
+      "status": "pass",
+      "observation": "Cards, pill controls, native dialogs and grouped review blockers share restrained borders and spacing. No dead publication or renderer control is presented as live.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "states",
+      "status": "pass",
+      "observation": "Fixture saved/unsaved, unavailable rendering, blocked approval, corrupt storage, offline draft retention, search empty and auth boundary were operated. Real provider failure/cancellation awaits backend.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "interaction",
+      "status": "pass",
+      "observation": "Create/select/edit/save/reload, palette arrows/Enter/Escape, workflow tabs and modal close were exercised. User input remains across item switches; writes only report confirmed fixture revisions.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "responsive",
+      "status": "pass",
+      "observation": "Chromium CSS widths1440,1280,1024,768,430,390,375,320 have no horizontal document overflow. Tablet drawer and mobile canvas/footer geometry passed rechecks.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "accessibility",
+      "status": "pass",
+      "observation": "Keyboard palette/tab/dialog paths, visible focus and reduced-motion mode were exercised. Native phone keyboard, screen-reader behavior and actual browser-menu200% zoom remain unverified;720px equivalent reflow passed.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    },
+    {
+      "id": "character",
+      "status": "pass",
+      "observation": "Compared Moonjar desktop/mobile and product references: warm restrained materials, centered editorial hero, tangible portrait drafts, compact navigation and focused inspector. Original Castroom assets/copy only.",
+      "evidence": [
+        "journey",
+        "desktop",
+        "mobile",
+        "landing"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "R1",
+      "areas": [
+        "responsive",
+        "interaction"
+      ],
+      "severity": "major",
+      "status": "resolved",
+      "location": "Tablet navigation",
+      "observation": "Opened drawer hid project list at768/1024.",
+      "resolution": "Corrected drawer visibility specificity; browser tests now open and select navigation.",
+      "evidence": [
+        "journey",
+        "mobile"
+      ]
+    },
+    {
+      "id": "R2",
+      "areas": [
+        "responsive",
+        "spacing"
+      ],
+      "severity": "major",
+      "status": "resolved",
+      "location": "Mobile canvas",
+      "observation": "Cards overflowed the shrinking canvas and overlapped footer.",
+      "resolution": "Canvas uses content-sized flex basis;390px reviewer measured clientHeight=scrollHeight2136, grid ends before summary. Regression checks pass.",
+      "evidence": [
+        "journey",
+        "scroll"
+      ]
+    },
+    {
+      "id": "R3",
+      "areas": [
+        "components",
+        "terminology"
+      ],
+      "severity": "minor",
+      "status": "resolved",
+      "location": "Review sheet",
+      "observation": "Three items repeated identical workspace blockers six times.",
+      "resolution": "Group identical messages and show affected-item scope; browser verifies two blocker rows and disabled approval.",
+      "evidence": [
+        "journey",
+        "review"
+      ]
+    },
+    {
+      "id": "LIVE",
+      "areas": [
+        "task"
+      ],
+      "severity": "blocker",
+      "status": "open",
+      "location": "Live campaign pipeline",
+      "observation": "Authenticated MCP, real rendering/composition and publishing receipts cannot be tested without the shared engine/provider access.",
+      "evidence": [
+        "journey"
+      ]
+    }
+  ],
+  "verdict": "blocked"
+}

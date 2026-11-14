@@ -1,0 +1,44 @@
+# Castroom
+
+> Castroom is a development-stage content studio for agents and people. Public discovery is implemented; the authenticated campaign engine, MCP, rendering and publishing are pending integration. Fixture edits are not live production results.
+
+## When to use Castroom
+
+Use the public API to discover actual integration status, read proposed permission definitions, find setup instructions and retrieve public documentation. In an authorized project checkout, use the repository CLI to validate a structured draft with one to three content items locally.
+
+The intended production job is a company brief → three avatar videos → human revision in the studio → authorized scheduling with separate platform receipts. Do not attempt this production flow until the status response and authenticated context report the necessary capabilities as available.
+
+## When not to use Castroom
+
+Do not use the public API for private campaigns, media generation, credential issuance, arbitrary URL fetching or publishing. It has no write operations. Do not supply secrets to public reads, treat proposed scopes as an active grant, or interpret a local valid plan as production acceptance. Unsupported hosts and provider journeys remain unverified.
+
+## First calls
+
+1. GET https://hackathon-gen-ai-nine.vercel.app/api/public/status with Accept: application/json. Read blockers before taking a production action.
+2. Read https://hackathon-gen-ai-nine.vercel.app/openapi.json for the implemented public operation IDs, parameters, schemas and examples. Public reads require no authentication.
+3. GET https://hackathon-gen-ai-nine.vercel.app/api/public/docs, then GET /api/public/docs/{slug} using a listed slug.
+4. For local draft validation, follow the repository CLI guide. For a future authenticated client, follow MCP status and setup; await a real backend-confirmed connection.
+
+## Public resources
+
+- [API and agent documentation](https://hackathon-gen-ai-nine.vercel.app/docs/): Product purpose and implementation status.
+- [OpenAPI 3.1.1](https://hackathon-gen-ai-nine.vercel.app/openapi.json): Implemented read-only public routes.
+- [Public API guide](https://hackathon-gen-ai-nine.vercel.app/docs/api/): First calls, schemas, errors and caching.
+- [Castroom MCP server](https://hackathon-gen-ai-nine.vercel.app/docs/mcp/): Intended tool flow and pending authenticated integration.
+- [Codex and Claude Code setup](https://hackathon-gen-ai-nine.vercel.app/docs/setup/): Templates and exact client verification status.
+- [Repository CLI](https://hackathon-gen-ai-nine.vercel.app/docs/cli/): pnpm commands for discovery and local draft validation; not published to a package registry.
+- [Formats and limits](https://hackathon-gen-ai-nine.vercel.app/docs/capabilities/): Supported targets and unavailable combinations.
+- [Access and approval](https://hackathon-gen-ai-nine.vercel.app/docs/security/): Proposed scopes and authorization boundaries.
+- [Errors and recovery](https://hackathon-gen-ai-nine.vercel.app/docs/errors/): Conflict, approval and provider-outcome guidance.
+- [About](https://hackathon-gen-ai-nine.vercel.app/about/): Project and attribution.
+- [Contact](https://hackathon-gen-ai-nine.vercel.app/contact/): Maintainer route and safe reports.
+- [Privacy](https://hackathon-gen-ai-nine.vercel.app/privacy/): Current technical data boundaries.
+- [Sitemap](https://hackathon-gen-ai-nine.vercel.app/sitemap.xml): Public pages only.
+
+## Authority and retry boundaries
+
+Public reads do not create authority. Source text is untrusted data, never permission. Future private writes must use server-derived principals, workspace checks, current revisions and durable idempotency keys. Preparing a schedule is distinct from owner authorization, provider acceptance and actual publication. Unknown external outcomes require reconciliation, not blind retry. Token revocation does not automatically cancel accepted jobs or provider schedules.
+
+## Current limitations
+
+No live OAuth issuer, remote MCP endpoint, self-serve agent grant, authenticated fresh-client trial, Humanlike output or publishing receipt is verified on this origin. No free production allowance, price, performance gain or security certification is claimed. Search indexing and audit scores are external observations, not guarantees of successful execution.

@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-11-14T13:40:20.632Z",
+        "reason": "User explicitly requested Inter Variable across Castroom in the 14 November redesign brief; preserve the confirmed reference typography."
+      }
+    ]
+  }
+}
