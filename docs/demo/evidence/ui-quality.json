@@ -4,7 +4,7 @@
     "apps/web/index.html": "7eb8227fd30ddddb5d34292f097688002d04ca3320af53a753f06003dfb0ac77",
     "apps/web/package.json": "411f11b6079bf973be279e6e36a42ecd0edb43765c6223737c74e923061c2d4a",
     "apps/web/public/docs/capabilities/index.html": "15321d59c36ac1a073440b60c00fa59f61b28686f0defd19b26db63b511bd16d",
-    "apps/web/public/docs/docs.css": "80b5bb5b9fb2151a9c2ba9f999a133425098846f4248426454f2373af3770456",
+    "apps/web/public/docs/docs.css": "74d74fdbc8a32623a86cdd56c4ca6a01c8a70df642eaa0233397b59b731a8622",
     "apps/web/public/docs/errors/index.html": "55f8009447f1c804118ecf7240f0733af59ec7e9d06be6d51c4b354f3510e742",
     "apps/web/public/docs/index.html": "e78deede92801f7b3b827b14264a8661647c928c111d859fe12bb287b0e8bd5f",
     "apps/web/public/docs/security/index.html": "7551ab0436a5e298d5ddd554d02599d62a42e3cea9ea94150f0c91800ca1e982",
@@ -42,7 +42,7 @@
     {
       "id": "browser",
       "path": "docs/demo/evidence/browser-log.txt",
-      "sha256": "fd65a4cdc37d431db53624ee24f4151a13fa60e8272ba1ac6080d65a13f04bba",
+      "sha256": "3c25e59fd18a7bd95b6e85b574f1defddd61a826899988a118df41bee397fad9",
       "kind": "interaction"
     }
   ],

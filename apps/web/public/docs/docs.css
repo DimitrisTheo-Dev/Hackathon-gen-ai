@@ -1,6 +1,6 @@
 @layer foundation, layout, content;
 @layer foundation {
-  :root { color-scheme: light; --paper:#f6f4f0; --surface:#fffefd; --ink:#302d36; --muted:#706b77; --line:#e4e0e8; --accent:#6546a4; --lavender:#eee8f6; font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:var(--paper); font-synthesis:none; text-rendering:optimizeLegibility; }
+  :root { color-scheme: light; --paper:#f6f4f0; --surface:#fffefd; --ink:#302d36; --muted:#706b77; --line:#e4e0e8; --accent:#6546a4; --lavender:#eee8f6; font-family:"Avenir Next","Segoe UI",sans-serif; color:var(--ink); background:var(--paper); font-synthesis:none; text-rendering:optimizeLegibility; }
   body { margin:0; font-size:1rem; line-height:1.7; }
   a { color:var(--accent); text-underline-offset:.2em; }
   a:hover { text-decoration-thickness:2px; }

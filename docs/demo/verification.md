@@ -86,3 +86,5 @@ Do not put access tokens, cookies, provider secrets, private payloads, or full s
 - `evidence/ui-quality.json` records a blocked live-flow gate and the exact limits of local UI evidence. No uncoached teammate trial, live client setup time, first-playable-video time, or provider-cost measurement is available.
 
 Final deployments: production `dpl_HJeZgDWLL7Vhnoc8yoRrd1oDi9bm` and preview `dpl_51AmeD2xSNYkC1XP5qLPVbBihvYb` are READY for `742589c`. [Protected studio preview](https://hackathon-gen-khh4z973p-my-team-29ecd279.vercel.app/dev/studio/) requires Vercel access. Final public entry asset excludes fixture imports/storage markers; the production sign-in boundary was opened in Safari without submitting an email. See `evidence/final-deployment.json`.
+
+Typography follow-up: docs now use the same Avenir Next / Segoe UI fallback stack as the studio. Narrow desktop Safari review found no visible clipping in heading, prose, notice or navigation. Mechanical typography scan returned no findings and build passed. No suppressions were added; live integration gates remain unchanged.
