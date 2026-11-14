@@ -70,7 +70,7 @@ async function publicRead(path: string, origin: string, schema: z.ZodType, depen
   const timeout = setTimeout(() => controller.abort(), dependencies.timeoutMs ?? limits.timeoutMs);
   try {
     const response = await (dependencies.fetch ?? fetch)(`${origin}${path}`, {
-      method: "GET", headers: { Accept: "application/json" }, credentials: "omit", redirect: "manual", signal: controller.signal,
+      method: "GET", headers: { Accept: "application/json", "X-API-Version": "1" }, credentials: "omit", redirect: "manual", signal: controller.signal,
     });
     if (response.status >= 300 && response.status < 400) throw new CliError("redirect_refused", "The public endpoint returned a redirect.", "Set --origin to the final verified HTTPS origin. Redirects are never followed.");
     if (!response.ok) throw new CliError(`http_${response.status}`, `The public endpoint returned HTTP ${response.status}.`, response.status === 404 ? "Use docs without a slug to list available documents." : "Check the public deployment status and retry later.");

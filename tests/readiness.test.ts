@@ -134,3 +134,14 @@ test("agent index and sitemap discover public actions without exposing private p
   assert.match(robots, /Allow: \/\n/); assert.match(robots, /Disallow: \/studio\//); assert.match(robots, /Disallow: \/dev\//);
   assert.ok(robots.includes(`${publicOrigin}/sitemap.xml`));
 });
+
+test('public API version pinning is enforced with explicit cache variation and recoverable errors',async()=>{
+  for(const version of [null,'1','2','unknown']) {
+    const headers:Record<string,string>={};if(version!==null)headers['X-API-Version']=version;
+    const response=handlePublicRequest(new Request('https://castroom.test/api/public/status',{headers}))!;
+    assert.equal(response.headers.get('x-api-version'),'1');assert.equal(response.headers.get('vary'),'X-API-Version');
+    assert.equal(response.status,version===null||version==='1'?200:400);
+    if(response.status===400){const problem=await response.json();assert.equal(problem.code,'unsupported_api_version');assert.equal(response.headers.get('cache-control'),'no-store');assert.match(problem.resolution,/X-API-Version: 1/);}
+  }
+  for(const path of Object.values(openApiDocument.paths)) assert.ok(path.get.parameters.some(parameter=>parameter.in==='header'&&parameter.name==='X-API-Version'));
+});

@@ -44,6 +44,11 @@ The public API is read-only and contains product guidance, not tenant data. GET 
 curl --fail --silent --show-error https://hackathon-gen-ai-nine.vercel.app/api/public/status
 \`\`\`
 
+## Versioning and deprecation
+Send X-API-Version: 1 to pin public API major version 1. Omission defaults to 1. Every JSON response identifies version 1 and varies its cache on this header. Unsupported versions return a 400 unsupported_api_version problem. The CLI pins version 1.
+
+Additive fields may be introduced within a major version. Incompatible changes require a new version. Before retiring a version, this page will publish the migration path; affected responses will carry the RFC 9745 Deprecation header, a Link with rel=deprecation, and the RFC 8594 Sunset header when a retirement date is set. No version is currently deprecated and no sunset is announced, so those headers are not emitted.
+
 ## Errors and caching
 Errors use application/problem+json with type, title, status, detail, instance, code and resolution. Missing routes/documents return 404. Unsupported methods on a known route return 405 with Allow: GET, HEAD. Successful public reads may be cached for 60 seconds; errors are not cached. Hosting-level throttling may occur; honor Retry-After if returned. No application rate limit or guaranteed quota is claimed.
 

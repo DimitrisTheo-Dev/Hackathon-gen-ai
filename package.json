@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite --config apps/web/vite.config.ts",
-    "build": "tsc --noEmit && tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs && vite build --config apps/web/vite.config.ts && tsx scripts/prerender.ts",
+    "build": "tsc --noEmit && tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs && vite build --config apps/web/vite.config.ts && tsx scripts/prerender.ts && node scripts/check-prerender.mjs",
     "preview": "vite preview --config apps/web/vite.config.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",

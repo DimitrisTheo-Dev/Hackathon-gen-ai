@@ -1,0 +1,26 @@
+{
+  "testedAt": "2026-11-14T14:01:27.080Z",
+  "browser": "159.0.8154.6",
+  "responses": [
+    {
+      "path": "/",
+      "status": 200,
+      "title": "Castroom — Agent-native content production studio",
+      "cacheControl": "public, max-age=0, must-revalidate"
+    },
+    {
+      "path": "/docs/api/",
+      "status": 200,
+      "title": "Castroom API documentation · Castroom",
+      "cacheControl": "public, max-age=0, must-revalidate"
+    },
+    {
+      "path": "/studio/",
+      "status": 200,
+      "title": "Castroom studio",
+      "cacheControl": "private, no-store",
+      "robots": "noindex, nofollow"
+    }
+  ],
+  "errors": []
+}

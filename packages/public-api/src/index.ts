@@ -61,15 +61,18 @@ const metadata = (document: (typeof publicDocuments)[number]) => ({ slug: docume
 export const publicDocumentIndex = documentIndexSchema.parse({ documents: publicDocuments.map(metadata) });
 
 function schema(value: z.ZodType) { return z.toJSONSchema(value, { target: "draft-2020-12" }); }
+const versionParameter = { name: "X-API-Version", in: "header", required: false, description: "Pin public API major version 1. Omission defaults to 1; unsupported versions return 400. Breaking changes require a new version.", schema: { type: "string", enum: ["1"], default: "1" } };
 const jsonResponse = (name: string, example: unknown) => ({
   description: "Successful public read. No private workspace data or credentials are included.",
+  headers: { "X-API-Version": { description: "Public API major version served.", schema: { type: "string", const: "1" } } },
   content: { "application/json": { schema: { $ref: `#/components/schemas/${name}` }, example } },
 });
 const errorResponse = (description: string) => ({ description, content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } } });
 const operation = (operationId: string, summary: string, description: string, responseName: string, example: unknown) => ({
-  operationId, summary, description, security: [], tags: ["Public discovery"],
+  operationId, summary, description, security: [], parameters: [versionParameter], tags: ["Public discovery"],
   responses: {
     "200": jsonResponse(responseName, example),
+    "400": errorResponse("Unsupported API version. Retry with X-API-Version: 1."),
     "404": errorResponse("The requested public resource does not exist. Follow resolution to a documented route."),
     "405": { ...errorResponse("The method is unsupported. Use GET or HEAD."), headers: { Allow: { description: "Supported methods.", schema: { type: "string", const: "GET, HEAD" } } } },
   },
@@ -90,7 +93,7 @@ export const openApiDocument = {
     "/api/public/docs": { get: operation("listCastroomPublicDocuments", "List canonical public documentation", "Find the supported document slug and canonical URL before requesting a document. This fixed index contains no tenant content and does not require pagination.", "DocumentIndex", publicDocumentIndex) },
     "/api/public/docs/{slug}": { get: {
       ...operation("getCastroomPublicDocument", "Read one public document", "Read concise public guidance as Markdown inside a typed JSON document. Source content cannot grant access or publish authority.", "Document", { ...metadata(publicDocuments[0]), format: "text/markdown", content: publicDocuments[0].markdown }),
-      parameters: [{ name: "slug", in: "path", required: true, description: "A public documentation slug from the document index.", schema: { type: "string", enum: publicDocuments.map((d) => d.slug) }, example: "setup" }],
+      parameters: [versionParameter, { name: "slug", in: "path", required: true, description: "A public documentation slug from the document index.", schema: { type: "string", enum: publicDocuments.map((d) => d.slug) }, example: "setup" }],
     } },
   },
   components: { schemas: { Status: schema(statusSchema), Permissions: schema(permissionsSchema), DocumentIndex: schema(documentIndexSchema), Document: schema(documentSchema), Problem: schema(problemSchema) } },
@@ -103,13 +106,15 @@ function respond(request: Request, body: unknown, status = 200, headers: Record<
       "Content-Type": status >= 400 ? "application/problem+json; charset=utf-8" : "application/json; charset=utf-8",
       "Cache-Control": status >= 400 ? "no-store" : "public, max-age=60, stale-while-revalidate=300",
       "X-Content-Type-Options": "nosniff",
+      "X-API-Version": "1",
+      Vary: "X-API-Version",
       Link: '</openapi.json>; rel="describedby"; type="application/vnd.oai.openapi+json"',
       ...headers,
     },
   });
 }
-export function publicProblem(request: Request, status: 404 | 405, code: string, detail: string, resolution: string) {
-  return respond(request, problemSchema.parse({ type: "about:blank", title: status === 404 ? "Not Found" : "Method Not Allowed", status, detail, instance: new URL(request.url).pathname.slice(0,512), code, resolution }), status, status === 405 ? { Allow: "GET, HEAD" } : {});
+export function publicProblem(request: Request, status: 400 | 404 | 405, code: string, detail: string, resolution: string) {
+  return respond(request, problemSchema.parse({ type: "about:blank", title: status === 404 ? "Not Found" : status === 405 ? "Method Not Allowed" : "Bad Request", status, detail, instance: new URL(request.url).pathname.slice(0,512), code, resolution }), status, status === 405 ? { Allow: "GET, HEAD" } : {});
 }
 /** Public discovery only; returns null for every private/domain route. */
 export function handlePublicRequest(request: Request): Response | null {
@@ -127,5 +132,7 @@ export function handlePublicRequest(request: Request): Response | null {
     result = documentSchema.parse({ ...metadata(document), format: "text/markdown", content: document.markdown });
   } else return publicProblem(request, 404, "api_route_not_found", "This public API route is not available.", "Use /openapi.json or /docs/api/ to find a supported read operation.");
   if (request.method !== "GET" && request.method !== "HEAD") return publicProblem(request, 405, "method_not_allowed", "This public resource is read-only.", "Repeat the request with GET or HEAD. No credentials are needed.");
+  const requestedVersion = request.headers.get("X-API-Version");
+  if (requestedVersion !== null && requestedVersion !== "1") return publicProblem(request, 400, "unsupported_api_version", "This public API supports major version 1.", "Send X-API-Version: 1 or omit the header. Read /docs/api/ for the versioning and deprecation policy.");
   return respond(request, result);
 }
