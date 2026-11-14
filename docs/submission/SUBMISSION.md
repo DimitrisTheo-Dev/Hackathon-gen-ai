@@ -4,7 +4,7 @@
 
 - Live: <https://faceful.vercel.app> (studio at `/studio/`, agent docs at `/docs/mcp/`)
 - Repository: <https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai> (private; access on request)
-- Demo video: _link added at submission_
+- Demo video: _link added at submission_ · one-minute pitch surface: <https://faceful.vercel.app/pitch> (press F, then R)
 - Status, evidence and limits: [`DEMO_READINESS.md`](../../DEMO_READINESS.md) · how it works: [`INTEGRATION_CONTRACTS.md`](../../INTEGRATION_CONTRACTS.md) · security: [`SECURITY.md`](../../SECURITY.md)
 
 ## The problem
@@ -32,6 +32,7 @@ Short presenter-led videos (Reels, Shorts, TikToks) are the most effective forma
 | Stripe sandbox: hosted Checkout (test card), plan and credits granted only by signed webhooks, Customer Portal cancellation reflected, double-subscription guard, declined cards grant nothing | `docs/demo/evidence/production/stripe-sandbox.md` |
 | Rate limits (Postgres-backed, IETF `RateLimit` headers), 256 KB body cap, HSTS/COOP/CSP, MCP batch cap | production checks of 15 Nov; `SECURITY.md` |
 | Studio refresh: one continuous loading state, zero layout shift | measured on production with a signed-in session |
+| Works in Chromium, Safari (WebKit) and Firefox; no serious or critical axe findings (WCAG 2.2 AA) on 12 surfaces at desktop and phone widths; landing Lighthouse 100 mobile and desktop on a compressed server | 342 browser tests across three engines; `docs/demo/evidence/quality/` |
 
 **Not yet live (stated plainly in the product):** presenter-video rendering waits for the Humanlike recorder; AI writing on the server needs a model key (until then the studio offers the hand-off to your own agent); YouTube publishing is built but not yet verified with a real channel; Instagram and TikTok need each platform's app review.
 
