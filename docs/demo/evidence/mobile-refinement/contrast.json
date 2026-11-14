@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-11-14T14:27:00.583Z",
+  "scope": "Final CTA secondary text and motion control",
+  "colors": [
+    "rgb(69, 67, 74)",
+    "rgb(69, 67, 74)"
+  ],
+  "check": "Browser regression samples all pairwise gradient-stop interpolations over the real base and opacity; minimum WCAG contrast >=4.5."
+}

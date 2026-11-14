@@ -18,6 +18,19 @@ test('landing samples, keyboard workflow tabs and reduced-motion companion remai
   const tab=page.getByRole('tab',{name:'Brief',exact:true});await tab.focus();await page.keyboard.press('ArrowRight');await expect(page.getByRole('tab',{name:'Create',exact:true})).toHaveAttribute('aria-selected','true');
   await page.keyboard.press('End');await expect(page.getByRole('tabpanel')).toContainText('Final render required');
   await expect(page.locator('.landing-companion')).toContainText('Live authentication is pending');
+  const minimumContrast = await page.locator('.landing-companion').evaluate(section => {
+    const css = getComputedStyle(section);
+    const rgb = (value: string) => value.trim().startsWith('#') ? [1,3,5].map(i=>parseInt(value.trim().slice(i,i+2),16)) : value.match(/[\d.]+/g)!.slice(0,3).map(Number);
+    const luminance = (color: number[]) => color.map(x=>x/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((sum,x,i)=>sum+x*[.2126,.7152,.0722][i],0);
+    const base=rgb(css.backgroundColor);const opacity=Number(getComputedStyle(section,'::before').opacity);
+    const stops=['--art-gold','--art-amber','--art-cream','--art-sky'].map(name=>rgb(css.getPropertyValue(name)));
+    const text=[...section.querySelectorAll(':scope > p, :scope > small, .landing-motion-control')].map(el=>luminance(rgb(getComputedStyle(el).color)));
+    return Math.min(...stops.flatMap(a=>stops.flatMap(b=>Array.from({length:101},(_,step)=>{
+      const bg=luminance(a.map((channel,i)=>(channel*(1-step/100)+b[i]*step/100)*opacity+base[i]*(1-opacity)));
+      return Math.min(...text.map(fg=>(Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)));
+    }))));
+  });
+  expect(minimumContrast).toBeGreaterThanOrEqual(4.5);
   expect(errors).toEqual([]);
 });
 

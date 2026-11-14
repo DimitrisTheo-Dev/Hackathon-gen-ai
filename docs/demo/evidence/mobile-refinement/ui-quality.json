@@ -15,7 +15,7 @@
     "apps/web/src/vite-env.d.ts": "eb4b7fce608c65170158a26c0de8710ab0e2fcb64e78c40493d25bd4ed1c89d8",
     "apps/web/src/style.css": "46cafb1683d9dad8b24137f6818445db911287c3f584d8ee1c9e982e09c7a79d",
     "apps/web/src/landing/LandingPage.tsx": "4cb1d568af0cf2fec9f6b4390bd8df1bb9eb3852a5918f785bab609f2500a706",
-    "apps/web/src/landing/landing.css": "0233f4402ffcd831e059263d7003089c5c276f09c89a6e9c06484db090305550",
+    "apps/web/src/landing/landing.css": "6dc99a54248fc873ccc0e3107ac32d5c7d60e36e6bb54dc8040033c85998f23d",
     "apps/web/src/components/CommandPalette.tsx": "e0cab6f6813a070971ce978b87c6e7aff9eb35b7e226fc93a203d49f36cf48ca",
     "apps/web/src/components/ui.tsx": "d436798e094ee010da8e068bd8ac5da1de9af973cffe1eec6f55141c6fcdc408",
     "apps/web/src/lib/operation-key.ts": "ecc8afed0868181b44079150fe862baca6a359dc2b049202bab01d2a4b4ba6be",
@@ -83,7 +83,7 @@
     {
       "id": "landing",
       "path": "docs/demo/evidence/mobile-refinement/landing-390.png",
-      "sha256": "bbae42dbf41b389d38999afd490fa344c1af8b22ad04318befbb8d8bd6f8c1ca",
+      "sha256": "ff9613a75c7c4461a28a0cf6409b70355a202ae7536431f8a08fda1ce5fa21bc",
       "kind": "image"
     },
     {
@@ -108,6 +108,12 @@
       "id": "http",
       "path": "docs/demo/evidence/mobile-refinement/public-local.json",
       "sha256": "02d1325648447f6114e16bfab7df3f9e9073145f9e94fb5c7555c3623a833dba",
+      "kind": "measurement"
+    },
+    {
+      "id": "contrast",
+      "path": "docs/demo/evidence/mobile-refinement/contrast.json",
+      "sha256": "68567aec142f0d7abc4c25e2faeefe69c1579c3f56ea9aa0b61e2ab90cd260e0",
       "kind": "measurement"
     }
   ],
@@ -272,6 +278,22 @@
       "evidence": [
         "journey",
         "mobile"
+      ]
+    },
+    {
+      "id": "M2",
+      "areas": [
+        "color",
+        "accessibility"
+      ],
+      "severity": "major",
+      "status": "resolved",
+      "location": "Gradient final CTA secondary text",
+      "observation": "Muted text on the golden gradient could fall below 4.5:1 contrast.",
+      "resolution": "Uses the darker secondary ink token. Browser regression samples all pairwise gradient stop interpolations and requires at least 4.5:1.",
+      "evidence": [
+        "contrast",
+        "landing"
       ]
     }
   ],
