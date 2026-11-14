@@ -1,0 +1,697 @@
+{
+  "origin": "https://faceful.dtheo.dev",
+  "verifiedAt": "2026-11-14T16:02:18.535Z",
+  "checks": 69,
+  "results": [
+    {
+      "path": "/",
+      "method": "GET",
+      "accept": "text/html",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 43428,
+      "finalUrl": "https://faceful.dtheo.dev/"
+    },
+    {
+      "path": "/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 2131,
+      "finalUrl": "https://faceful.dtheo.dev/"
+    },
+    {
+      "path": "/docs/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 5304,
+      "finalUrl": "https://faceful.dtheo.dev/docs/"
+    },
+    {
+      "path": "/docs/api/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 6412,
+      "finalUrl": "https://faceful.dtheo.dev/docs/api/"
+    },
+    {
+      "path": "/docs/cli/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 4996,
+      "finalUrl": "https://faceful.dtheo.dev/docs/cli/"
+    },
+    {
+      "path": "/docs/mcp/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 4777,
+      "finalUrl": "https://faceful.dtheo.dev/docs/mcp/"
+    },
+    {
+      "path": "/docs/setup/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 6418,
+      "finalUrl": "https://faceful.dtheo.dev/docs/setup/"
+    },
+    {
+      "path": "/docs/capabilities/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 5860,
+      "finalUrl": "https://faceful.dtheo.dev/docs/capabilities/"
+    },
+    {
+      "path": "/docs/security/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 6429,
+      "finalUrl": "https://faceful.dtheo.dev/docs/security/"
+    },
+    {
+      "path": "/docs/errors/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 5809,
+      "finalUrl": "https://faceful.dtheo.dev/docs/errors/"
+    },
+    {
+      "path": "/about/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": null,
+      "bytes": 4039,
+      "finalUrl": "https://faceful.dtheo.dev/about/"
+    },
+    {
+      "path": "/contact/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": null,
+      "bytes": 3927,
+      "finalUrl": "https://faceful.dtheo.dev/contact/"
+    },
+    {
+      "path": "/privacy/",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "vary": null,
+      "bytes": 4486,
+      "finalUrl": "https://faceful.dtheo.dev/privacy/"
+    },
+    {
+      "path": "/docs/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1257,
+      "finalUrl": "https://faceful.dtheo.dev/docs/"
+    },
+    {
+      "path": "/docs/api/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 2937,
+      "finalUrl": "https://faceful.dtheo.dev/docs/api/"
+    },
+    {
+      "path": "/docs/cli/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1630,
+      "finalUrl": "https://faceful.dtheo.dev/docs/cli/"
+    },
+    {
+      "path": "/docs/mcp/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1640,
+      "finalUrl": "https://faceful.dtheo.dev/docs/mcp/"
+    },
+    {
+      "path": "/docs/setup/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1396,
+      "finalUrl": "https://faceful.dtheo.dev/docs/setup/"
+    },
+    {
+      "path": "/docs/capabilities/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1666,
+      "finalUrl": "https://faceful.dtheo.dev/docs/capabilities/"
+    },
+    {
+      "path": "/docs/security/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1755,
+      "finalUrl": "https://faceful.dtheo.dev/docs/security/"
+    },
+    {
+      "path": "/docs/errors/",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 1479,
+      "finalUrl": "https://faceful.dtheo.dev/docs/errors/"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 891,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/status"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/status"
+    },
+    {
+      "path": "/api/public/permissions",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1134,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/permissions"
+    },
+    {
+      "path": "/api/public/permissions",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/permissions"
+    },
+    {
+      "path": "/api/public/docs",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1699,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs"
+    },
+    {
+      "path": "/api/public/docs",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs"
+    },
+    {
+      "path": "/api/public/docs/overview",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1525,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/overview"
+    },
+    {
+      "path": "/api/public/docs/overview",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/overview"
+    },
+    {
+      "path": "/api/public/docs/api",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 3217,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/api"
+    },
+    {
+      "path": "/api/public/docs/api",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/api"
+    },
+    {
+      "path": "/api/public/docs/cli",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1886,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/cli"
+    },
+    {
+      "path": "/api/public/docs/cli",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/cli"
+    },
+    {
+      "path": "/api/public/docs/mcp",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1909,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/mcp"
+    },
+    {
+      "path": "/api/public/docs/mcp",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/mcp"
+    },
+    {
+      "path": "/api/public/docs/setup",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1691,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/setup"
+    },
+    {
+      "path": "/api/public/docs/setup",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/setup"
+    },
+    {
+      "path": "/api/public/docs/capabilities",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1936,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/capabilities"
+    },
+    {
+      "path": "/api/public/docs/capabilities",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/capabilities"
+    },
+    {
+      "path": "/api/public/docs/security",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 2017,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/security"
+    },
+    {
+      "path": "/api/public/docs/security",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/security"
+    },
+    {
+      "path": "/api/public/docs/errors",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 1722,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/errors"
+    },
+    {
+      "path": "/api/public/docs/errors",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/errors"
+    },
+    {
+      "path": "/openapi.json",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 20683,
+      "finalUrl": "https://faceful.dtheo.dev/openapi.json"
+    },
+    {
+      "path": "/openapi.json",
+      "method": "HEAD",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 0,
+      "finalUrl": "https://faceful.dtheo.dev/openapi.json"
+    },
+    {
+      "path": "/api/public/absent",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 250,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/absent"
+    },
+    {
+      "path": "/api/public/docs/nope",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 252,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/docs/nope"
+    },
+    {
+      "path": "/api/missing",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 348,
+      "finalUrl": "https://faceful.dtheo.dev/api/missing"
+    },
+    {
+      "path": "/.well-known/oauth-authorization-server",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 375,
+      "finalUrl": "https://faceful.dtheo.dev/.well-known/oauth-authorization-server"
+    },
+    {
+      "path": "/.well-known/oauth-protected-resource",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 373,
+      "finalUrl": "https://faceful.dtheo.dev/.well-known/oauth-protected-resource"
+    },
+    {
+      "path": "/mcp",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 340,
+      "finalUrl": "https://faceful.dtheo.dev/mcp"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "POST",
+      "accept": null,
+      "status": 405,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 249,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/status"
+    },
+    {
+      "path": "/not-a-castroom-page",
+      "method": "GET",
+      "accept": "text/markdown",
+      "status": 404,
+      "contentType": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 122,
+      "finalUrl": "https://faceful.dtheo.dev/not-a-castroom-page"
+    },
+    {
+      "path": "/not-a-castroom-page",
+      "method": "GET",
+      "accept": null,
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "bytes": 503,
+      "finalUrl": "https://faceful.dtheo.dev/not-a-castroom-page"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 891,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/status"
+    },
+    {
+      "path": "/api/public/status",
+      "method": "GET",
+      "accept": null,
+      "status": 400,
+      "contentType": "application/problem+json; charset=utf-8",
+      "vary": "X-API-Version",
+      "bytes": 291,
+      "finalUrl": "https://faceful.dtheo.dev/api/public/status"
+    },
+    {
+      "path": "/llms.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 4087,
+      "finalUrl": "https://faceful.dtheo.dev/llms.txt"
+    },
+    {
+      "path": "/robots.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 106,
+      "finalUrl": "https://faceful.dtheo.dev/robots.txt"
+    },
+    {
+      "path": "/sitemap.xml",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "application/xml",
+      "vary": null,
+      "bytes": 1179,
+      "finalUrl": "https://faceful.dtheo.dev/sitemap.xml"
+    },
+    {
+      "path": "/design.css",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/css; charset=utf-8",
+      "vary": null,
+      "bytes": 2589,
+      "finalUrl": "https://faceful.dtheo.dev/design.css"
+    },
+    {
+      "path": "/docs/docs.css",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/css; charset=utf-8",
+      "vary": null,
+      "bytes": 6221,
+      "finalUrl": "https://faceful.dtheo.dev/docs/docs.css"
+    },
+    {
+      "path": "/favicon.svg",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/svg+xml",
+      "vary": null,
+      "bytes": 319,
+      "finalUrl": "https://faceful.dtheo.dev/favicon.svg"
+    },
+    {
+      "path": "/icons/claude.svg",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/svg+xml",
+      "vary": null,
+      "bytes": 2558,
+      "finalUrl": "https://faceful.dtheo.dev/icons/claude.svg"
+    },
+    {
+      "path": "/icons/codex.svg",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/svg+xml",
+      "vary": null,
+      "bytes": 4258,
+      "finalUrl": "https://faceful.dtheo.dev/icons/codex.svg"
+    },
+    {
+      "path": "/og.png",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/png",
+      "vary": null,
+      "bytes": 171591,
+      "finalUrl": "https://faceful.dtheo.dev/og.png"
+    },
+    {
+      "path": "/fonts/InterVariable.woff2",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "font/woff2",
+      "vary": null,
+      "bytes": 638129,
+      "finalUrl": "https://faceful.dtheo.dev/fonts/InterVariable.woff2"
+    },
+    {
+      "path": "/fonts/LICENSE.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 4380,
+      "finalUrl": "https://faceful.dtheo.dev/fonts/LICENSE.txt"
+    },
+    {
+      "path": "/art/grainient-sunlit.webp",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "image/webp",
+      "vary": null,
+      "bytes": 21443,
+      "finalUrl": "https://faceful.dtheo.dev/art/grainient-sunlit.webp"
+    },
+    {
+      "path": "/art/ATTRIBUTION.txt",
+      "method": "GET",
+      "accept": null,
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "vary": null,
+      "bytes": 699,
+      "finalUrl": "https://faceful.dtheo.dev/art/ATTRIBUTION.txt"
+    }
+  ]
+}
