@@ -55,3 +55,8 @@ test("front-end API and unavailable authentication endpoints return truthful JSO
   const response=proxy(new Request('https://castroom.test/',{method:'POST'}));assert.equal(response.status,405);assert.equal(response.headers.get('allow'),'GET, HEAD');
   for(const path of ['/studio/','/dev/studio/','/api/v1/campaigns','/v1/context']) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1');
 });
+
+test("only the licensed local art and attribution pass through the public file allowlist",()=>{
+  for(const path of ['/art/grainient-sunlit.webp','/art/ATTRIBUTION.txt']) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1');
+  assert.equal(proxy(new Request('https://castroom.test/art/missing.webp')).status,404);
+});

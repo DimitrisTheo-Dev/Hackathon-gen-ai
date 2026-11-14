@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { SurfaceDialog } from "./SurfaceDialog";
 import {
   X,
   Copy,
@@ -75,39 +76,32 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  animateEntry = true,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  animateEntry?: boolean;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const id = useId();
-  useEffect(() => {
-    const dialog = ref.current!;
-    dialog.showModal();
-    return () => dialog.close();
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      className={`modal ${wide ? "wide" : ""}`}
-      aria-labelledby={id}
-      onClose={onClose}
-    >
+    <SurfaceDialog title={title} className={`modal ${wide ? "wide" : ""}`} animateEntry={animateEntry} onClose={onClose}>
+      {({ close, grip }) => <>
+      {grip}
       <header className="modal-header">
-        <h2 id={id}>{title}</h2>
+        <h2>{title}</h2>
         <button
           className="icon-button"
-          autoFocus
+          data-surface-focus
           aria-label="Close dialog"
-          onClick={() => ref.current?.close()}
+          onClick={close}
         >
           <X size={19} />
         </button>
       </header>
-      {children}
-    </dialog>
+      <div className="modal-content">{children}</div>
+      </>}
+    </SurfaceDialog>
   );
 }
 export function Notice({

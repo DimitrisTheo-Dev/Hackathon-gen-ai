@@ -1,0 +1,163 @@
+/* Phone navigation and task surfaces. Same state and operations as the desktop. */
+@layer responsive {
+  html.studio-open { overscroll-behavior: none; }
+  .workspace-main, .editor-scroll, .modal-content { overscroll-behavior: contain; }
+  .button, .icon-button, .text-button, .content-select { transition: background-color 160ms var(--ease), transform 120ms var(--ease-out), border-color 160ms var(--ease); }
+  .surface-dialog:not([open]) { display: none; }
+  .surface-dialog { color: var(--ink); }
+  .surface-dialog::backdrop { background: rgba(42,42,39,.28); backdrop-filter: none; }
+  .surface-dialog.editor { position: static; margin: 0; padding: 0; border: 0; border-inline-start: 1px solid var(--border); width: auto; max-width: none; height: auto; max-height: none; overflow: hidden; box-sizing: border-box; }
+  .surface-dialog.editor[open] { display: flex; }
+  .surface-dialog.modal { padding: 0; overflow: hidden; }
+  .surface-dialog.modal[open] { display: flex; flex-direction: column; }
+  .modal-header { padding: 20px 24px 16px; flex: 0 0 auto; border-bottom: 1px solid var(--border); }
+  .modal-content { overflow: auto; min-height: 0; padding: 24px; }
+  .modal-content > p { font-size: 14px; line-height: 1.65; color: var(--text-secondary); }
+  .sheet-grip { display: none; }
+  .editor-back { display: flex; align-items: center; gap: 5px; }
+  .editor-back span { display: none; }
+  .editor-heading { flex: 0 0 auto; }
+  .editor-heading > div { margin-left: auto; }
+  .editor-footer { flex: 0 0 auto; }
+  .editor-footer > .notice { margin-bottom: 10px; font-size: 12px; }
+  .editor-offline { font-size: 12px; color: var(--danger); margin-bottom: 8px; }
+  .mobile-dock, .mobile-project-switch, .mobile-filter-toggle, .mobile-activity, .mobile-campaign-brief { display: none; }
+  .project-switch-workspace { padding-bottom: 16px; }
+  .project-switch-workspace > span { color: var(--text-secondary); }
+  .mobile-project-list { display: grid; gap: 8px; }
+  .mobile-project-list > button { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; background: var(--background); border: 1px solid var(--border); padding: 12px; border-radius: 12px; }
+  .mobile-project-list > button[aria-current="page"] { border-color: var(--ink); }
+  .mobile-project-list > button > span:nth-child(2) { flex: 1; min-width: 0; }
+  .mobile-project-list strong { display: block; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+  .mobile-project-list small { display: block; color: var(--text-secondary); margin-top: 4px; }
+  .project-thumbnail { display: grid; place-items: center; flex: 0 0 44px; height: 52px; border-radius: 8px; background: var(--art-wash); color: var(--ink); }
+  .project-create { margin-block: 20px; width: 100%; }
+  .project-quick-links { display: grid; gap: 4px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .project-quick-links > :is(button,a) { display: flex; gap: 10px; align-items: center; min-height: 48px; padding: 8px 4px; font-size: 14px; border: 0; background: transparent; text-align: left; text-decoration: none; }
+  .project-quick-links > :is(button,a) > svg:last-child:not(:first-child) { margin-left: auto; }
+  .project-fixture-note { padding-top: 20px; font-size: 12px !important; }
+  .poster { background-image: linear-gradient(160deg, rgba(250,250,247,.5), rgba(250,250,247,.15)), var(--art-image); background-size: cover; background-position: 35% center; color: var(--ink); }
+  .poster-1 { background-position: 70% center; }
+  .poster-2 { background-position: 95% center; }
+  .empty-state > svg { padding: 24px; border-radius: 20px; background: var(--art-wash); color: var(--ink); margin-bottom: 20px; }
+  .loading-page .castroom-mark { padding: 20px; border-radius: 18px; background: var(--art-wash); }
+  .fixture-banner > .fixture-detail { font-weight: 400; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .mobile-project-list > button:hover { background: var(--subtle); }
+    .project-quick-links > :is(button,a):hover { color: var(--ink); background: var(--subtle); }
+  }
+  @media (pointer: coarse) {
+    .button, .icon-button, .text-button, .sidebar nav button, .segmented button, .editor-tabs button, .platform-tabs button, .setup-tabs button, .agent-card, .source-detail summary { min-height: 44px; }
+    .icon-button { min-width: 44px; }
+    .field input:not([type="checkbox"]), .field select, .field textarea, .title-input, .canvas-tools input, .canvas-tools select { font-size: 16px; }
+    .check-label { min-height: 44px; gap: 12px; }
+  }
+  @media (max-width: 1220px) {
+    /* Compact rail stays on tablet; navigation now opens the project dialog. */
+    .nav-open .sidebar { position: static; box-shadow: none; width: auto; z-index: auto; }
+  }
+  @media (min-width: 761px) and (max-width: 1000px) {
+    .studio-shell.has-editor { grid-template-columns: 72px minmax(0,1fr); }
+    .has-editor .sidebar { display: flex; }
+  }
+  @media (max-width: 1000px) {
+    .has-editor .workspace { display: flex; }
+    .surface-dialog.editor { position: fixed; inset: var(--surface-top, 0px) 0 auto; margin: 0; width: 100%; height: var(--surface-height, 100dvh); max-height: 100dvh; padding-top: env(safe-area-inset-top, 0px); border: 0; border-radius: 0; background: var(--background); }
+    .surface-dialog.editor .sheet-grip { display: flex; }
+    .sheet-grip { touch-action: pan-x pinch-zoom; width: 100%; flex: 0 0 44px; min-height: 44px; align-items: center; justify-content: center; border: 0; padding: 0; color: var(--text-muted); background: transparent; cursor: grab; }
+    .sheet-grip > span { width: 36px; height: 4px; border-radius: 3px; background: currentColor; }
+    .sheet-grip:active { transform: none; cursor: grabbing; color: var(--ink); }
+    .sheet-grip:focus-visible { outline-offset: -5px; }
+    .editor-heading { padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); min-height: 48px; }
+    .editor-back { font-size: 14px; min-height: 44px; }
+    .editor-back span { display: inline; }
+    .editor-heading > div { color: var(--text-secondary); }
+    .editor-heading > div > svg { display: none; }
+    .editor-scroll { width: 100%; max-width: 620px; padding: 20px max(20px,env(safe-area-inset-left)) 24px; scroll-padding-block: 24px; }
+    .editor-preview { width: min(220px, calc(var(--surface-height, 100dvh) * .43 * 9 / 16)); }
+    .editor-preview .poster { min-height: 0; }
+    .preview-description { white-space: normal; text-align: center; font-size: 12px; line-height: 1.5; }
+    .editor-title-row { margin-top: 24px; }
+    .editor .title-input { font-size: 20px; line-height: 1.35; min-height: 44px; }
+    .editor-tabs { position: sticky; top: -1px; z-index: 2; }
+    .editor-footer { padding: 10px max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); max-height: 42%; overflow: auto; overscroll-behavior: contain; }
+    .editor-actions { margin-top: 6px; }
+    .editor-actions .button { font-size: 14px; min-height: 46px; }
+    .editor-history-actions .icon-button { min-height: 44px; min-width: 44px; }
+    .editor-footer small { line-height: 1.4; }
+  }
+  @media (max-width: 760px) {
+    .app-frame { padding: env(safe-area-inset-top,0px) 0 0; }
+    .studio-shell, .studio-shell.has-editor { grid-template-columns: minmax(0,1fr); }
+    .sidebar, .nav-open .sidebar, .has-editor .sidebar { display: none; }
+    .fixture-banner { padding: 4px 16px; min-height: 28px; flex-shrink: 0; align-items: center; justify-content: center; background: var(--subtle); }
+    .fixture-banner .fixture-detail { display: none; }
+    .fixture-banner > a { display: inline-flex; margin: 0; min-height: 32px; }
+    .fixture-banner > span { font-size: 11px; font-weight: 500; }
+    .topbar { padding: 6px max(16px,env(safe-area-inset-right)) 6px max(16px,env(safe-area-inset-left)); min-height: 52px; flex-shrink: 0; background: var(--background); }
+    .breadcrumbs > .mobile-menu { display: none; }
+    .breadcrumbs > svg, .breadcrumbs > span, .breadcrumbs > strong { display: none; }
+    .mobile-project-switch { display: flex; align-items: center; gap: 8px; padding: 8px 0; min-height: 44px; min-width: 0; border: 0; background: transparent; font-size: 16px; font-weight: 550; text-align: left; }
+    .mobile-project-switch > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .topbar-right { gap: 0; }
+    .topbar-right > a { display: none; }
+    .timezone-label { display: none; }
+    .mobile-dock { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); padding: 6px max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); border-top: 1px solid var(--border); background: var(--background); flex-shrink: 0; gap: 4px; }
+    .mobile-dock button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 0; padding: 6px 2px; min-height: 52px; border-radius: 12px; background: transparent; color: var(--text-secondary); font-size: 11px; }
+    .mobile-dock button[aria-current="page"] { color: var(--ink); background: var(--subtle); }
+    .mobile-dock button:active { background: var(--muted-surface); }
+    .campaign-heading { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; padding: 16px 20px 12px; gap: 8px; }
+    .campaign-heading > div:first-child { display: contents; }
+    .campaign-heading h1 { grid-column: 1 / -1; font-size: 28px; line-height: 1.12; letter-spacing: -.03em; }
+    .campaign-heading > div:first-child { min-width: 0; }
+    .campaign-heading .campaign-meta, .campaign-heading > div > p, .campaign-actions .new-campaign-button { display: none; }
+    .mobile-campaign-brief { display: block; grid-column: 1; grid-row: 2; font-size: 13px; color: var(--text-secondary); }
+    .mobile-campaign-brief[open] { grid-column: 1 / -1; }
+    .campaign-heading:has(.mobile-campaign-brief[open]) .campaign-actions { grid-row: 3; }
+    .mobile-campaign-brief summary { min-height: 44px; align-content: center; cursor: pointer; }
+    .mobile-campaign-brief p { line-height: 1.6; margin-top: 4px; }
+    .campaign-actions { grid-column: 2; grid-row: 2; flex-wrap: nowrap; }
+    .campaign-actions .button { min-height: 44px; font-size: 13px; }
+    .canvas { padding-inline: max(20px,env(safe-area-inset-left)); }
+    .content-grid { width: 100%; max-width: 340px; margin-inline: auto; gap: 24px; }
+    .content-select { width: 100%; }
+    .poster-title { letter-spacing: -.03em; }
+    .canvas-tools { gap: 8px; }
+    .canvas-tools label { flex: 1 1 0; min-width: 0; }
+    .canvas-tools .mobile-filter-toggle, .canvas-tools .mobile-activity { display: inline-flex; min-width: 44px; min-height: 44px; background: var(--surface); border: 1px solid var(--border); }
+    .canvas-tools > select { display: none; }
+    .canvas-tools.filters-open > select { display: block; flex-basis: calc(50% - 8px); }
+    .view-toolbar { display: none; }
+    .view-toolbar .segmented button { min-height: 44px; padding-inline: 12px; }
+    .view-toolbar { gap: 8px; }
+    .board-caption { font-size: 12px; line-height: 1.5; }
+    .surface-dialog.modal { position: fixed; inset: auto 0 max(0px, calc(100dvh - var(--surface-top, 0px) - var(--surface-height, 100dvh))); width: 100%; max-width: none; max-height: calc(var(--surface-height, 100dvh) - env(safe-area-inset-top,0px) - 12px); border: 0; border-radius: 20px 20px 0 0; margin: 0; padding: 0 0 env(safe-area-inset-bottom,0px); box-shadow: 0 -8px 40px rgba(42,42,39,.08); }
+    .surface-dialog.modal .sheet-grip { display: flex; }
+    .modal-header { padding: 0 20px 12px; min-height: 48px; gap: 12px; }
+    .modal-header h2 { font-size: 20px; line-height: 1.3; font-weight: 550; }
+    .modal-header .icon-button { min-width: 44px; min-height: 44px; }
+    .modal-content { padding: 20px max(20px,env(safe-area-inset-right)) 24px max(20px,env(safe-area-inset-left)); }
+    .modal-content input:not([type="checkbox"]), .modal-content textarea, .modal-content select { font-size: 16px; }
+    .modal-content .button { min-height: 44px; }
+    .modal-actions { flex-wrap: wrap; }
+    .modal-actions .button { flex: 1; }
+    .source-detail summary { min-height: 44px; align-content: center; }
+    .auth-page { padding-top: max(32px,env(safe-area-inset-top)); padding-bottom: max(32px,env(safe-area-inset-bottom)); }
+  }
+  @media (max-width: 370px) {
+    .canvas, .campaign-heading { padding-inline: 16px; }
+    .campaign-actions { gap: 6px; }
+    .campaign-actions .button { padding-inline: 10px; font-size: 12px; }
+    .mobile-project-switch { max-width: 230px; }
+    .editor-heading > div { font-size: 12px; }
+    .editor-scroll { padding-inline: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .button:active, .icon-button:active, .text-button:active, .content-select:active { transform: none; }
+  }
+  @media (prefers-contrast: more) {
+    .surface-dialog { border: 1px solid var(--ink); }
+    .sheet-grip { color: var(--ink); }
+  }
+}

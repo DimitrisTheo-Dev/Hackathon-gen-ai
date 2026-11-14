@@ -273,9 +273,9 @@
     color: var(--text-secondary);
     font-weight: 600;
   }
-  .sidebar nav button:hover:not(.active) {
+  @media (hover: hover) and (pointer: fine) { .sidebar nav button:hover:not(.active) {
     background: var(--subtle);
-  }
+  } }
   .nav-count {
     margin-inline-start: auto;
     font-size: 12px;
@@ -520,18 +520,18 @@
     color: var(--surface);
     box-shadow: 0 2px 3px rgba(42,42,39,0.075);
   }
-  .primary:hover:not(:disabled) {
+  @media (hover: hover) and (pointer: fine) { .primary:hover:not(:disabled) {
     background: var(--accent-dark);
-  }
+  } }
   .secondary {
     background: var(--surface);
     border-color: var(--border);
     color: var(--ink-secondary);
     box-shadow: 0 1px 2px rgba(42,42,39,0.016);
   }
-  .secondary:hover:not(:disabled) {
+  @media (hover: hover) and (pointer: fine) { .secondary:hover:not(:disabled) {
     background: var(--background);
-  }
+  } }
   .icon-button {
     display: inline-flex;
     align-items: center;
@@ -545,9 +545,9 @@
     color: var(--muted);
     text-decoration: none;
   }
-  .icon-button:hover {
+  @media (hover: hover) and (pointer: fine) { .icon-button:hover {
     background: var(--subtle);
-  }
+  } }
   .text-button {
     background: none;
     border: 0;
@@ -560,9 +560,9 @@
     min-block-size: 28px;
     text-align: start;
   }
-  .text-button:hover {
+  @media (hover: hover) and (pointer: fine) { .text-button:hover {
     text-decoration: underline;
-  }
+  } }
   .segmented {
     display: inline-flex;
     padding: 3px;
@@ -1178,10 +1178,10 @@
     background: transparent;
     margin-block: 4px 11px;
   }
-  .title-input:hover {
+  @media (hover: hover) and (pointer: fine) { .title-input:hover {
     border-color: var(--line);
     padding-inline: 7px;
-  }
+  } }
   .editor-tabs {
     display: flex;
     inline-size: 100%;
@@ -2740,10 +2740,10 @@
 @layer components {
   .button { min-height: 40px; font-size: 13px; border-radius: 999px; }
   .button.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-  .button.primary:hover:not(:disabled) { background: var(--accent-dark); }
+  @media (hover: hover) and (pointer: fine) { .button.primary:hover:not(:disabled) { background: var(--accent-dark); } }
   .icon-button { min-width: 36px; min-height: 36px; }
   .content-card.selected { border-color: var(--ink-secondary); box-shadow: 0 0 0 1px rgba(42,42,39,.1), var(--shadow); }
-  .content-card:hover { border-color: var(--text-muted); }
+  @media (hover: hover) and (pointer: fine) { .content-card:hover { border-color: var(--text-muted); } }
   .poster-title { font-weight: 500; letter-spacing: -.035em; }
   .poster-bottom { font-size: 12px; }
   .notice { overflow-wrap: anywhere; }

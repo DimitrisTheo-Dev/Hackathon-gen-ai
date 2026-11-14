@@ -22,6 +22,7 @@ import type {
   StudioContext,
 } from "@castroom/contracts";
 import { Preview, Notice, PlatformIcon, platformNames } from "../components/ui";
+import { SurfaceDialog } from "../components/SurfaceDialog";
 import { exactInstant, localInput } from "../lib/time";
 import {
   affectsVideo,
@@ -48,6 +49,8 @@ type Props = {
   jobs?: Campaign["jobs"];
   onReset?: () => void;
   brandName?: string;
+  error?: string;
+  offline?: boolean;
 };
 
 export function Editor({
@@ -64,6 +67,8 @@ export function Editor({
   jobs = [],
   onReset,
   brandName = context.brand.name,
+  error,
+  offline = false,
 }: Props) {
   const [tab, setTab] = useState("script");
   const [platform, setPlatform] = useState<Platform>(
@@ -235,19 +240,15 @@ export function Editor({
   const handoff = agentHandoff(item, context, jobs, handoffTask, dirty);
 
   return (
-    <aside className="editor" aria-label="Content editor">
+    <SurfaceDialog title="Content editor" className="editor" editor onClose={onClose}>
+      {({ close, grip }) => <>
+      {grip}
       <header className="editor-heading">
+        <button className="editor-back text-button" data-surface-focus onClick={close} aria-label="Return to campaign"><ArrowLeft size={18} /><span>Campaign</span></button>
         <div>
           <SlidersHorizontal size={15} />
           <strong>Content details</strong>
         </div>
-        <button
-          className="icon-button"
-          onClick={onClose}
-          aria-label="Return to campaign"
-        >
-          <ArrowLeft size={17} />
-        </button>
       </header>
       <div className="editor-scroll">
         <div className="editor-preview">
@@ -907,6 +908,8 @@ export function Editor({
         )}
       </div>
       <footer className="editor-footer">
+        {error && <Notice error>{error}</Notice>}
+        {offline && <p className="editor-offline" role="status">You’re offline. Your unsaved draft stays here.</p>}
         <div className="save-state">
           {dirty ? <span className="unsaved-dot" /> : <Check size={13} />}
           <span>
@@ -942,6 +945,7 @@ export function Editor({
             className="button secondary"
             disabled={
               !dirty ||
+              offline ||
               !editable ||
               changedRemotely ||
               submitted ||
@@ -957,6 +961,7 @@ export function Editor({
             className="button primary"
             disabled={
               busy ||
+              offline ||
               dirty ||
               changedRemotely ||
               submitted ||
@@ -996,6 +1001,7 @@ export function Editor({
         )}
         {feedback && <small role="status">{feedback}</small>}
       </footer>
-    </aside>
+      </>}
+    </SurfaceDialog>
   );
 }
