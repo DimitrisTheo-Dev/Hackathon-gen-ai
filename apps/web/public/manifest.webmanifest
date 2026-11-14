@@ -1,0 +1,25 @@
+{
+  "name": "Faceful",
+  "short_name": "Faceful",
+  "description": "Describe a video. A presenter-led draft appears — and your own AI agent can work in the same studio.",
+  "id": "/studio/",
+  "start_url": "/studio/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#FAFAF7",
+  "theme_color": "#FAFAF7",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "photo", "social"],
+  "icons": [
+    { "src": "/icons/app-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/app-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Create", "short_name": "Create", "url": "/studio/?view=home&source=pwa-shortcut", "icons": [{ "src": "/icons/app-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Schedule", "short_name": "Schedule", "url": "/studio/?view=schedule&source=pwa-shortcut", "icons": [{ "src": "/icons/app-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

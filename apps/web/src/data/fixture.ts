@@ -510,5 +510,16 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     createConnection: unavailable,
     revokeConnection: unavailable,
     createGrant: unavailable,
+    // The fixture never drafts, bills or switches workspaces. Exact local edits stay in the Director panel.
+    directorTurn: unavailable,
+    listTemplates: async () => [],
+    createFromTemplate: unavailable,
+    createSampleProject: unavailable,
+    listVersions: unavailable,
+    restoreVersion: unavailable,
+    getBilling: unavailable,
+    createCheckout: unavailable,
+    createPortal: unavailable,
+    selectWorkspace: unavailable,
   };
 }

@@ -1,0 +1,115 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
+import type { LlmConfig } from "./config.js";
+import { EngineError } from "./errors.js";
+
+/**
+ * The planner turns a request into a typed proposal. It has no tools and no credentials: it cannot
+ * render, charge, approve or publish. Everything it returns is validated and authorized by the engine.
+ */
+const platform = z.enum(["instagram", "tiktok", "youtube"]);
+const slot = z.object({ platform, localDateTime: z.string().describe("Local wall-clock time in the workspace timezone, formatted YYYY-MM-DDTHH:mm") });
+export const plannerOutputSchema = z.object({
+  intent: z
+    .enum(["create", "edit", "schedule", "render", "find", "billing", "review_schedule", "answer"])
+    .describe("create: new project with drafts. edit: change existing items. schedule: propose posting times for existing items. render: start video rendering for existing items. find: locate/open/play existing content. billing: credits, plan or upgrade. review_schedule: open the exact schedule for human approval. answer: anything else, including clarifying questions."),
+  reply: z.string().describe("One to three sentences to the person, in their language. Describe what you drafted or propose. Never claim that anything was rendered, scheduled, paid for or published."),
+  project: z
+    .object({
+      title: z.string(),
+      brandName: z.string(),
+      brandDescription: z.string().describe("Only what the person or the workspace context supplied. Do not invent facts."),
+      audience: z.string(),
+      tone: z.string(),
+      language: z.string().describe("Language code of the scripts, e.g. en or el"),
+      items: z.array(
+        z.object({
+          title: z.string(),
+          script: z.string().describe("Exactly what the presenter says. About 2.5 words per second of requested duration."),
+          caption: z.string(),
+          avatarId: z.string().nullable().describe("An id from the authorized presenters list, or null"),
+          schedule: z.array(slot),
+        }),
+      ),
+    })
+    .nullable()
+    .describe("Required for intent=create, otherwise null. One to three items."),
+  edits: z.array(
+    z.object({
+      itemId: z.string(),
+      title: z.string().nullable(),
+      script: z.string().nullable().describe("The complete new script, or null to leave it unchanged"),
+      avatarId: z.string().nullable(),
+      language: z.string().nullable(),
+      captions: z.array(z.object({ platform, caption: z.string() })),
+      burnedInCaptions: z.boolean().nullable(),
+      schedule: z.array(slot).nullable().describe("The complete list of requested posting times for this item, or null to leave them unchanged"),
+    }),
+  ),
+  renderItemIds: z.array(z.string()),
+  find: z.object({ campaignId: z.string().nullable(), itemId: z.string().nullable(), play: z.boolean() }).nullable(),
+  wantsCheckout: z.boolean().describe("True only when the person explicitly asks to upgrade, subscribe, buy credits or open checkout."),
+});
+export type PlannerOutput = z.infer<typeof plannerOutputSchema>;
+
+export interface Planner {
+  plan(input: { system: string; user: string }): Promise<PlannerOutput>;
+}
+
+export function createPlanner(config: LlmConfig): Planner {
+  const firstParty = config.provider === "anthropic";
+  async function client() {
+    if (firstParty) return new Anthropic({ apiKey: config.apiKey, timeout: 90_000, maxRetries: 1 });
+    // The gateway exposes the same Messages API. Its credential is a gateway key or, on Vercel, the deployment's
+    // short-lived OIDC token — read per request because it rotates.
+    const token = config.apiKey ?? (await (await import("@vercel/functions/oidc")).getVercelOidcToken());
+    return new Anthropic({ baseURL: "https://ai-gateway.vercel.sh", apiKey: null, authToken: token, timeout: 90_000, maxRetries: 1 });
+  }
+  return {
+    async plan({ system, user }) {
+      const request = {
+        model: config.model,
+        max_tokens: 16000,
+        system,
+        messages: [{ role: "user" as const, content: user }],
+        // Interactive planning: keep latency down.
+        output_config: { effort: "low" as const, format: zodOutputFormat(plannerOutputSchema) },
+      };
+      let response;
+      try {
+        const anthropic = await client();
+        response = firstParty
+          ? // A policy decline is retried server-side on a fallback model instead of failing the turn.
+            await anthropic.beta.messages.create({ ...request, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+          : await anthropic.messages.create(request);
+      } catch (error) {
+        if (error instanceof Anthropic.RateLimitError) throw new EngineError("quota_exceeded", "The creative model is busy. Nothing was changed; try again in a moment.", { retryAfterSeconds: 20 });
+        if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError)
+          throw new EngineError(
+            "provider_unavailable",
+            firstParty
+              ? "The creative model rejected this deployment’s credentials. Nothing was changed."
+              : "The AI gateway did not accept this deployment’s request (its account may need a payment method or access to this model). Nothing was changed.",
+          );
+        if (error instanceof Anthropic.APIError) {
+          console.error(JSON.stringify({ level: "error", event: "planner_error", status: error.status ?? null }));
+          throw new EngineError("provider_unavailable", "The creative model could not prepare a plan. Nothing was changed; try again.");
+        }
+        throw new EngineError("provider_unavailable", "The creative model could not be reached. Nothing was changed.");
+      }
+      if (response.stop_reason === "refusal") throw new EngineError("unsupported", "The creative model declined this request. Rephrase it, or edit the script yourself in Details.");
+      if (response.stop_reason === "max_tokens") throw new EngineError("provider_unavailable", "The plan was too long to finish. Ask for fewer items at once.");
+      const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
+      let json: unknown;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new EngineError("provider_unavailable", "The creative model returned an unreadable plan. Nothing was changed; try again.");
+      }
+      const parsed = plannerOutputSchema.safeParse(json);
+      if (!parsed.success) throw new EngineError("provider_unavailable", "The creative model returned an invalid plan. Nothing was changed; try again.");
+      return parsed.data;
+    },
+  };
+}

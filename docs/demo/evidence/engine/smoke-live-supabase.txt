@@ -1,0 +1,36 @@
+# corepack pnpm smoke:engine · 2026-11-14T16:28:43Z · LIVE: hosted Supabase project hgsgvdujzatfhsjoojll (Auth, Postgres via PostgREST, RLS, Storage); two dedicated smoke accounts; created project removed afterwards
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+PASS  rejects a forged token (JWKS signature check)
+PASS  context for a real Supabase session  — workspace “Engine smoke’s studio”
+PASS  provisioning is idempotent
+PASS  rendering reported as not connected
+PASS  sample project persisted with 3 labelled drafts
+PASS  revise saves revision 2
+PASS  same operation key replays, no duplicate revision
+PASS  stale revision → 409 revision_conflict
+PASS  both versions retrievable
+PASS  state survives a fresh read
+PASS  other account cannot list it
+PASS  other account cannot read it by ID (404)
+PASS  other account cannot edit it (404)
+PASS  RLS: member reads only their own org's projects
+PASS  RLS: another member sees zero rows for it
+PASS  RLS: browser cannot write projects
+PASS  RLS: credit ledger is not readable by browsers
+PASS  RLS: agent tokens are not readable by browsers
+PASS  conversation access was provisioned by the engine
+PASS  director retrieval opens existing content without generation  — “Find your next moment” is the closest match, but it has no rendered video yet — it is still a draft storyboard. Nothing was generated.
+PASS  billing status from server truth  — mode not_configured, 2 credits
+PASS  render refused honestly when no renderer is attached (503)
+PASS  presenter from the configured catalog can be selected
+PASS  render admitted and one credit held atomically (Postgres function)
+PASS  worker claims the queued job  — claimed the smoke job
+PASS  completion without an uploaded file is refused
+PASS  signed upload URL accepts the renderer's PUT  — HTTP 200
+PASS  completion verified against the stored object  — {"state":"succeeded","mediaAssetId":"4f0b1366-2bbd-4986-b96d-d40595e301cc"}
+PASS  item is ready with a signed playback URL
+PASS  signed URL serves exactly the uploaded bytes (sha256 matches)
+PASS  media is private without the signature
+PASS  job status and event trail readable  — queued → claimed → succeeded
+
+32/32 live checks passed

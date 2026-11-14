@@ -1,0 +1,2 @@
+# node scripts/test-engine-rls.mjs · 2026-11-14T16:28:43Z · local PostgreSQL 14.24 throwaway database
+PASS: migration applies; credit hold is atomic, replay-safe and cannot overdraw; members read only their organization; no browser writes; ledgers, tokens, billing and Stripe events are server-only; anonymous access denied.

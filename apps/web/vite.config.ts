@@ -19,6 +19,12 @@ export default defineConfig(({ mode, command }) => {
       ),
     },
     build: { outDir: "../../dist", emptyOutDir: true },
-    server: { host: "127.0.0.1" },
+    server: {
+      host: "127.0.0.1",
+      // Same-origin API in development: `corepack pnpm dev:api` serves the engine on this port.
+      proxy: Object.fromEntries(
+        ["/v1", "/mcp", "/.well-known/oauth-protected-resource"].map((path) => [path, { target: `http://127.0.0.1:${env.API_PORT || 8787}`, changeOrigin: false }]),
+      ),
+    },
   };
 });

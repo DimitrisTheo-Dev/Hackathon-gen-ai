@@ -35,6 +35,10 @@ import {
 
 import { DirectorPanel } from '../director/DirectorPanel';
 import type { DirectorAction, DirectorEntry } from '../director/model';
+import type { DirectorTurn } from '../director/planner';
+import type { ContentVersion, DirectorTurnResult } from "@castroom/contracts";
+import { failedRender, itemBadge } from "../lib/status";
+import { Versions } from "./Versions";
 export { contentPatch } from "./editor/model";
 export type Draft = { baseRevision: number; value: ContentItem };
 type Props = {
@@ -45,6 +49,18 @@ type Props = {
   onStart?: () => void;
   onCreate?: () => void;
   onShowContent?: () => void;
+  /** Sends a conversational turn to the shared engine. */
+  onDirectorTurn: DirectorTurn;
+  onDirectorCreated?: (campaign: Campaign, entry: DirectorEntry) => void;
+  onDirectorOpen?: (target: NonNullable<DirectorTurnResult["open"]>) => void;
+  onTemplates?: () => void;
+  onBilling?: () => void;
+  focusDirector?: boolean;
+  /** Open Details and start the saved video once, e.g. after "find … and play it". */
+  playOnOpen?: boolean;
+  onPlayed?: () => void;
+  /** Present only when the workspace keeps server-side version history. */
+  versions?: { load: (contentId: string) => Promise<ContentVersion[]>; restore: (revision: number) => Promise<ContentItem> };
   campaign: Campaign;
   director: { entries: DirectorEntry[]; error: string; record: (entry:DirectorEntry)=>Promise<void>; retry:()=>Promise<void> };
   onDirectorAction: (action:DirectorAction,key:string,reconcile?:boolean)=>Promise<DirectorEntry['results'][string]>;
@@ -67,6 +83,7 @@ type Props = {
 
 export function Editor({
   campaign, director, onDirectorAction, directorInstruction, onDirectorInstruction, home=false, open=true, onStart, onCreate, onShowContent,
+  onDirectorTurn, onDirectorCreated, onDirectorOpen, onTemplates, onBilling, focusDirector=false, playOnOpen=false, onPlayed, versions,
   item,
   index,
   context,
@@ -142,12 +159,24 @@ export function Editor({
   const selectedAccount = context.channels.find(
     (channel) => channel.id === variant?.accountId,
   );
+  const badge = itemBadge(item, jobs);
+  const failure = failedRender(item, jobs);
   const renderStale = Boolean(
     item.media &&
       (item.renderRevision === null ||
         item.media.revision !== item.renderRevision),
   );
 
+  useEffect(() => {
+    if (!playOnOpen) return;
+    setMode("details");
+    const frame = requestAnimationFrame(() => {
+      // Playback is a request: if the browser blocks it, the visible controls remain.
+      void document.querySelector<HTMLVideoElement>(".editor-preview video")?.play().catch(() => undefined);
+      onPlayed?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [playOnOpen]);
   useEffect(() => {
     if (draft.baseRevision === item.revision) {
       setHistory([]);
@@ -269,8 +298,8 @@ export function Editor({
         <button aria-pressed={mode==='details'} onClick={()=>{onStart?.();setMode('details');}}>Details</button>
       </div>
       {mode==='chat' && <>
-        <div className="director-selected"><div className="director-thumb"><Preview item={item} index={index} compact brandName={brandName}/></div><div><strong>{item.title}</strong><small>Version {item.revision} · {item.status.replaceAll('_',' ')}</small></div><button className="text-button" onClick={()=>{onStart?.();setMode('details');}}>View</button></div>
-        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');setTab('script');}} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
+        <div className="director-selected"><div className="director-thumb"><Preview item={item} index={index} compact brandName={brandName}/></div><div><strong>{item.title}</strong><small>Version {item.revision} · {badge.label}</small></div><button className="text-button" onClick={()=>{onStart?.();setMode('details');}}>View</button></div>
+        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');setTab('script');}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onVersions={versions?()=>{onStart?.();setMode('details');setTab('versions');}:undefined} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
       </>}
       <div className="editor-details" hidden={mode!=='details'}>
       <div className="editor-scroll">
@@ -284,8 +313,8 @@ export function Editor({
           )}
         </div>
         <div className="editor-title-row">
-          <span className="status-chip">
-            {item.status.replaceAll("_", " ")}
+          <span className={`status-chip ${badge.tone}`}>
+            {badge.label}
           </span>
           <span className="revision">Version {item.revision}</span>
         </div>
@@ -300,6 +329,15 @@ export function Editor({
           disabled={!editable}
           onChange={(event) => update({ title: event.target.value })}
         />
+        {failure && (
+          <Notice error>
+            <strong>The last render did not finish.</strong>
+            <p>{failure.error?.message ?? "The renderer reported a failure."} Credits held for it were returned.</p>
+            {context.capabilities.canRetry && !dirty && (
+              <button className="text-button" disabled={busy || offline} onClick={onRender}>Try the render again</button>
+            )}
+          </Notice>
+        )}
         {renderStale && (
           <Notice>
             This is a previous render. Save your edits and regenerate before
@@ -389,6 +427,7 @@ export function Editor({
             ["script", "Script"],
             ["style", "Avatar & style"],
             ["publish", "Channels"],
+            ...(versions ? [["versions", "Versions"]] : []),
           ].map(([id, label]) => (
             <button
               key={id}
@@ -399,6 +438,15 @@ export function Editor({
             </button>
           ))}
         </div>
+        {tab === "versions" && versions && (
+          <Versions
+            item={item}
+            timezone={campaign.timezone}
+            load={versions.load}
+            restore={versions.restore}
+            blocked={dirty ? "Save or discard your unsaved edits before restoring a version." : offline ? "Reconnect to restore a version." : submitted ? "A destination has been submitted for this item, so it can’t be changed here." : !canEdit ? "Your access allows viewing only." : ""}
+          />
+        )}
         {tab === "script" && (
           <>
             <div className="field">
@@ -1020,7 +1068,7 @@ export function Editor({
           <small>Fix the invalid draft time in Channels before saving.</small>
         )}
         {!context.capabilities.canRender && (
-          <small>Rendering is unavailable in this workspace.</small>
+          <small className="render-blocker">{context.capabilities.renderBlocker ?? "Rendering is unavailable in this workspace."}</small>
         )}
         {feedback && <small role="status">{feedback}</small>}
       </footer>

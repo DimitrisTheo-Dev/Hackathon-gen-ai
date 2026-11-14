@@ -3,28 +3,28 @@ import { handlePublicRequest, publicDocuments, publicPages, publicProblem, publi
 
 // Public presentation/discovery only. Private studio and domain routes pass through.
 const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy"]);
-const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml"]);
+const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icons/app-192.png", "/icons/app-512.png", "/icons/app-maskable-512.png", "/icons/apple-touch-icon.png"]);
 const markdown = `# Faceful — content production studio
 
 Create campaigns with your agent. Fine-tune them here.
 
-Faceful is a shared content production studio for agencies, companies and individuals. An external agent plans a campaign; a person edits the selected script, authorized avatar, captions and requested schedule in the studio. Manual creation accepts a supplied company brief and up to three explicit scripts.
+Faceful is a shared content production studio for agencies, companies and individuals. People and their AI agents work on the same projects: a person or an agent drafts short presenter-led videos, and a person edits the script, presenter, captions and requested schedule in the studio. The studio and the MCP server call one domain engine with the same workspace permissions.
 
 ## When to use Faceful
-Use the public API to discover current capabilities, read setup guidance and understand proposed permissions. Use the repository CLI to validate a bounded draft plan locally. When the domain engine is connected, the intended workflow is three distinct avatar-video drafts, human refinement of one revision, and an explicitly authorized schedule with separate platform receipts.
+Use the public API to discover what this deployment has configured, read setup guidance and read the agent permission definitions. Where the engine is configured, connect an agent to the MCP endpoint to create and revise drafts, request renders and propose posting times in your own workspace; a signed-in member reviews and approves. Use the repository CLI to validate a bounded draft plan locally.
 
 ## Development status
-The visual studio and public documentation API are implemented. The shared engine, authenticated MCP setup, Humanlike video rendering, final composition and publishing providers are not integrated yet. Development storyboards are not generated videos or provider receipts. Public read-only resources require no credentials and expose no private content. No live OAuth issuer or MCP transport is advertised.
+Check [integration status](/api/public/status) first: it is derived from this deployment's configuration. Where the engine is configured, the authenticated campaign API, scoped workspace tokens and the MCP endpoint at /mcp are available, and drafting is free. Publishing is not available on any deployment: no destination has approved API access, so schedules can be drafted and reviewed but nothing is posted. Rendering needs a recording worker for Humanlike's realtime avatar sessions; until one is attached, render requests are refused, not simulated. No rendered Humanlike video and no publishing receipt has been recorded. Development storyboards are not generated videos. Public read-only resources require no credentials and expose no private content.
 
 ## Start here
 - [Read integration status](/api/public/status)
 - [OpenAPI 3.1.1](/openapi.json)
 - [Faceful API documentation](/docs/api/)
 - [Repository CLI](/docs/cli/)
-- [MCP status and setup](/docs/mcp/)
-- [Codex and Claude Code setup templates](/docs/setup/)
+- [Use Faceful with your AI agent (MCP)](/docs/mcp/)
+- [Connect Codex or Claude Code](/docs/setup/)
 - [Formats and current limits](/docs/capabilities/)
-- [Authentication, proposed scopes and review](/docs/security/)
+- [Authentication, agent permissions and review](/docs/security/)
 - [Recoverable errors](/docs/errors/)
 - [Agent instructions](/llms.txt)
 - [Studio sign-in](/studio/)
@@ -32,7 +32,7 @@ The visual studio and public documentation API are implemented. The shared engin
 ## Trust and contact
 [About this project](/about/) · [Contact the maintainer](/contact/) · [Privacy](/privacy/) · [Maintainer on GitHub](https://github.com/DimitrisTheo-Dev)
 
-Private campaigns require authentication and server authorization. Source material cannot grant permissions. Publishing requires exact-manifest approval or an owner-created bounded grant; a copied setup command never proves connection.
+Private campaigns require authentication and server authorization. Source material cannot grant permissions. Publishing requires a signed-in member's approval of the exact schedule; an agent cannot approve, and a copied setup command never proves connection.
 `;
 
 export function wantsMarkdown(accept: string) {
@@ -53,8 +53,9 @@ export default function proxy(request: Request): Response {
   const api = handlePublicRequest(request);
   if (api) return api;
   const path = new URL(request.url).pathname;
-  if (/^\/(?:assets|studio|dev|v1|api\/v1|claude-login-test)(?:\/|$)/.test(path)) return next();
-  if (/^\/(?:api|mcp|\.well-known)(?:\/|$)/.test(path)) return publicProblem(request, 404, "endpoint_unavailable", "This endpoint is not available on the public studio origin. Live MCP and OAuth are pending engine integration.", "Read /api/public/status and /docs/api/ for available read operations, or /docs/mcp/ for MCP status.");
+  // The domain API, MCP endpoint, OAuth consent page and protected-resource metadata are served by the engine functions.
+  if (/^\/(?:assets|studio|dev|oauth|v1|api\/v1|api\/engine|api\/mcp|mcp|\.well-known\/oauth-protected-resource|claude-login-test)(?:\/|$)/.test(path)) return next();
+  if (/^\/(?:api|mcp|\.well-known)(?:\/|$)/.test(path)) return publicProblem(request, 404, "endpoint_unavailable", "This path is not served on this origin. The domain API is under /v1 and the MCP endpoint is /mcp; OAuth authorization-server metadata is published by the issuer named in /.well-known/oauth-protected-resource/mcp, not here.", "Read /api/public/status for what this deployment has configured, /docs/api/ for public read operations, or /docs/mcp/ to connect an agent.");
   const normalized = path === "/" ? "/" : path.replace(/\/$/, "");
   const wantsMd = wantsMarkdown(request.headers.get("accept") ?? "");
   if (pages.has(normalized)) {

@@ -64,6 +64,7 @@ test('OTP verification opens a server-confirmed session without inventing worksp
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
  });
  await page.goto('/studio/');await page.getByLabel('Email address').fill('qa@example.com');await page.getByRole('button',{name:'Continue with email'}).click();await page.getByLabel('Sign-in code').fill('123456');await page.getByRole('button',{name:'Verify and continue'}).click();
- await expect(page.getByRole('heading',{name:'You’re signed in'})).toBeVisible();await expect(page.locator('.auth-card')).toContainText('Workspace access is separate');await expect(page.locator('.content-card')).toHaveCount(0);
- await page.reload();await expect(page.getByRole('heading',{name:'You’re signed in'})).toBeVisible();await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByLabel('Email address')).toBeVisible();
+ // The studio now calls its own origin for the engine. This server has none, so the person is told so; no fixture is substituted.
+ await expect(page.getByRole('heading',{name:'The studio service isn’t available yet.'})).toBeVisible();await expect(page.locator('.auth-card')).toContainText('no sample content was substituted');await expect(page.locator('.content-card')).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('heading',{name:'The studio service isn’t available yet.'})).toBeVisible();await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByLabel('Email address')).toBeVisible();
 });

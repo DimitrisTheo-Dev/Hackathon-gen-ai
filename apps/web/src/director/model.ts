@@ -1,25 +1,21 @@
 import { z } from 'zod';
-import { idSchema, patchSchema, type Campaign, type ContentItem, type StudioContext } from '@castroom/contracts';
+import { directorActionSchema, directorAssetSchema, directorPlanSchema, idSchema, patchSchema, type Campaign, type ContentItem, type DirectorAction, type DirectorPlan, type StudioContext } from '@castroom/contracts';
 import { contentPatch } from '../views/editor/model';
 
-export const directorActionSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('revise'), itemId: idSchema, expectedRevision: z.number().int().positive(), patch: patchSchema }).strict(),
-  z.object({ kind: z.literal('render'), itemId: idSchema, expectedRevision: z.number().int().positive() }).strict(),
-  z.object({ kind: z.literal('review_schedule'), campaignId: idSchema, expectedRevision: z.number().int().positive() }).strict(),
-]);
-export type DirectorAction = z.infer<typeof directorActionSchema>;
-export const directorPlanSchema = z.object({
-  summary: z.string().min(1).max(1000),
-  actions: z.array(directorActionSchema).min(1).max(3),
-}).strict();
-export type DirectorPlan = z.infer<typeof directorPlanSchema>;
+// One definition, shared with the engine and MCP: see packages/contracts.
+export { directorActionSchema, directorPlanSchema };
+export type { DirectorAction, DirectorPlan };
 export type DirectorScope = 'item' | 'project';
 export const directorEntrySchema = z.object({
   id: z.uuid(), at: z.iso.datetime(), itemId: idSchema, itemTitle: z.string().max(120),
   scope: z.enum(['item', 'project']), instruction: z.string().max(5000),
-  sourceIds: z.array(idSchema).max(20), summary: z.string().max(1000),
+  sourceIds: z.array(idSchema).max(20), summary: z.string().max(2000),
   plan: directorPlanSchema.nullable(),
-  results: z.record(z.string(), z.object({ state: z.enum(['saved','queued','review','failed','unknown','undone']), message: z.string().max(1000), revision: z.number().int().positive().optional(), before: patchSchema.optional() }).strict()),
+  // Optional so conversations saved before the engine was connected still load.
+  mode: z.enum(['ai','basic','local']).optional(),
+  assets: z.array(directorAssetSchema).max(20).optional(),
+  suggestions: z.array(z.string().max(80)).max(4).optional(),
+  results: z.record(z.string(), z.object({ state: z.enum(['saved','queued','review','failed','unknown','undone']), message: z.string().max(1000), revision: z.number().int().positive().optional(), before: patchSchema.optional(), reviewUrl: z.string().max(300).optional() }).strict()),
 }).strict();
 export type DirectorEntry = z.infer<typeof directorEntrySchema>;
 
@@ -60,6 +56,8 @@ export function validateDirectorPlan(plan: unknown,campaign: Campaign,selected: 
       if(action.campaignId!==campaign.id||action.expectedRevision!==campaign.revision)throw new Error('The campaign has changed. Prepare a new plan.');
       continue;
     }
+    // Checkout touches no content. The engine checks billing permission; payment happens on Stripe's page.
+    if(action.kind==='checkout')continue;
     if(seen.has(action.itemId))throw new Error('A plan must have only one action per item.');seen.add(action.itemId);
     const item=campaign.items.find(i=>i.id===action.itemId);
     if(!item||item.workspaceId!==context.workspace.id||(scope==='item'&&item.id!==selected.id))throw new Error('This action is outside the selected scope.');

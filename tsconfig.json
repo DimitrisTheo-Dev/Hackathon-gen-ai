@@ -24,6 +24,8 @@
     "proxy.ts",
     "packages/public-api/src",
     "packages/cli/src",
+    "packages/engine/src",
+    "api",
     "apps/claude-runner"
   ]
 }
