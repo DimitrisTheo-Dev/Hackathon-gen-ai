@@ -22,4 +22,4 @@ The browser authenticates to Supabase with its existing session/public key. No s
 
 ## Verification limits
 
-OTP screens use Supabase Auth. The intended sender is Faceful `<signin@faceful.dtheo.dev>`; the Resend domain is verified, SMTP and both six-digit OTP templates are saved (see resend-otp.md). Mocked browser auth tests do not prove email delivery. Chat-to-canvas tests use actual local transport revisions/storage; no Humanlike render or publication is claimed. Physical iOS/Android testing remains pending.
+OTP screens use Supabase Auth. The intended sender is Faceful `<signin@faceful.dtheo.dev>`; the Resend domain is verified, SMTP and both six-digit OTP templates are saved (see resend-otp.md). One live owner-account OTP request, Resend delivery, verification, session refresh and sign-out passed; fresh-address signup remains untested. Mocked browser tests cover additional error states. Chat-to-canvas tests use actual local transport revisions/storage; no Humanlike render or publication is claimed. Physical iOS/Android testing remains pending.

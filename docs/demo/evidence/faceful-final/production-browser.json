@@ -1,0 +1,40 @@
+{
+  "verifiedAt": "2026-11-14T16:03:25.778Z",
+  "checks": [
+    {
+      "engine": "chromium",
+      "path": "/",
+      "status": 200,
+      "overflow": false,
+      "heading": "What if \nClaude Code\nCodex\nmade your next video campaign?",
+      "cache": "public, max-age=0, must-revalidate"
+    },
+    {
+      "engine": "chromium",
+      "path": "/studio/",
+      "status": 200,
+      "overflow": false,
+      "heading": "Your next campaign starts here.",
+      "robots": "noindex, nofollow",
+      "cache": "private, no-store"
+    },
+    {
+      "engine": "webkit",
+      "path": "/",
+      "status": 200,
+      "overflow": false,
+      "heading": "What if Claude Code\nCodex\nmade your next video campaign?",
+      "cache": "public, max-age=0, must-revalidate"
+    },
+    {
+      "engine": "webkit",
+      "path": "/studio/",
+      "status": 200,
+      "overflow": false,
+      "heading": "Your next campaign starts here.",
+      "robots": "noindex, nofollow",
+      "cache": "private, no-store"
+    }
+  ],
+  "consoleErrors": 0
+}
