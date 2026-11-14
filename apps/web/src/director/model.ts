@@ -28,7 +28,7 @@ export function localDirectorPlan(instruction: string, campaign: Campaign, selec
   const literal=text.match(/^set (script|title):\s*([\s\S]+)$/i);
   if(literal) patch=literal[1].toLowerCase()==='script'?{script:literal[2]}:{title:literal[2]};
   const caption=text.match(/^set (instagram|tiktok|youtube) caption:\s*([\s\S]+)$/i);
-  if(caption) return directorPlanSchema.parse({summary:'Replace the channel caption. Reuse the video; schedule approval must be reviewed again.',actions:items.map(item=>{
+  if(caption) return directorPlanSchema.parse({summary:'I’ll replace the caption with your exact wording. The video is reused; the schedule needs a fresh review.',actions:items.map(item=>{
     const platform=caption[1].toLowerCase();
     if(!item.variants.some(v=>v.platform===platform)) throw new Error(`This item has no ${platform} variant.`);
     return {kind:'revise',itemId:item.id,expectedRevision:item.revision,patch:{variants:item.variants.map(v=>v.platform===platform?{...v,caption:caption[2]}:v)}};
@@ -40,10 +40,11 @@ export function localDirectorPlan(instruction: string, campaign: Campaign, selec
     if(items.some(i=>!match.languages.includes(i.language)))throw new Error('This avatar does not support the current script language.');
     patch={avatarId:match.id};
   }
-  if(/^(enable|disable) captions$/i.test(text))return directorPlanSchema.parse({summary:'Update burned-in caption preferences. A new composition is required before review.',actions:items.map(item=>({kind:'revise',itemId:item.id,expectedRevision:item.revision,patch:{style:{...item.style,captions:/^enable/i.test(text)}}}))});
-  if(patch)return directorPlanSchema.parse({summary:'Apply your exact wording to the selected scope. Save a new revision and invalidate any previous approval.',actions:items.map(item=>({kind:'revise',itemId:item.id,expectedRevision:item.revision,patch}))});
-  if(/^regenerate( (this|selected) (video|scene))?$/i.test(text))return {summary:'Render the current saved revision only. Existing campaign items are unchanged.',actions:items.map(item=>({kind:'render',itemId:item.id,expectedRevision:item.revision}))};
-  if(/^review schedule$/i.test(text))return {summary:'Prepare the exact campaign schedule for review. This does not approve, schedule or publish anything.',actions:[{kind:'review_schedule',campaignId:campaign.id,expectedRevision:campaign.revision}]};
+  const captions=text.match(/^(enable|disable|show|hide)( burned-in)? captions$/i);
+  if(captions){const on=/^(enable|show)$/i.test(captions[1]);return directorPlanSchema.parse({summary:`I’ll turn burned-in captions ${on?'on':'off'}. The video needs a new composition before review.`,actions:items.map(item=>({kind:'revise',itemId:item.id,expectedRevision:item.revision,patch:{style:{...item.style,captions:on}}}))});}
+  if(patch)return directorPlanSchema.parse({summary:`${patch.avatarId?'I’ll switch the presenter.':'I’ll use your exact wording.'} Applying saves a new version and resets any earlier approval.`,actions:items.map(item=>({kind:'revise',itemId:item.id,expectedRevision:item.revision,patch}))});
+  if(/^regenerate( (this|selected) (video|scene))?$/i.test(text))return {summary:'I’ll render the current saved version only. Nothing else in the campaign changes.',actions:items.map(item=>({kind:'render',itemId:item.id,expectedRevision:item.revision}))};
+  if(/^review schedule$/i.test(text))return {summary:'Here is the exact schedule to review. Opening it doesn’t approve, schedule or publish anything.',actions:[{kind:'review_schedule',campaignId:campaign.id,expectedRevision:campaign.revision}]};
   return null;
 }
 
@@ -72,8 +73,37 @@ export function validateDirectorPlan(plan: unknown,campaign: Campaign,selected: 
   }
   return parsed;
 }
-export function changedFields(item: ContentItem, patch: z.infer<typeof patchSchema>, before?: z.infer<typeof patchSchema>) {
-  return Object.entries(patch).map(([field,after])=>({field,before:JSON.stringify(before?.[field as keyof typeof before]??item[field as keyof ContentItem],null,2),after:typeof after==='string'?after:JSON.stringify(after,null,2)}));
+const platformLabel:Record<string,string>={instagram:'Instagram',tiktok:'TikTok',youtube:'YouTube'};
+const partLabel:Record<string,string>={title:'title',caption:'caption',visibility:'visibility',aiDisclosure:'AI disclosure',accountId:'account',captions:'Captions',captionPosition:'Caption position',brandColor:'Brand color'};
+const positionLabel:Record<string,string>={bottom:'Lower third',center:'Center'};
+function readable(value:unknown,key=''):string {
+  if(value===null||value===undefined)return 'None';
+  if(typeof value==='boolean')return value?'On':'Off';
+  if(typeof value==='string')return value===''?'Empty':key==='captionPosition'?positionLabel[value]??value:value;
+  return JSON.stringify(value,null,2);
+}
+type Change={field:string;before:string;after:string};
+/**
+ * What a proposal changes, as plain before/after text. Channel copy and style are broken down to
+ * the parts that actually differ ("Instagram caption"), so a diff never shows a wall of JSON.
+ */
+export function changedFields(item: ContentItem, patch: z.infer<typeof patchSchema>, before?: z.infer<typeof patchSchema>): Change[] {
+  return Object.entries(patch).flatMap(([field,after]):Change[]=>{
+    const prior:unknown=before?.[field as keyof typeof before]??item[field as keyof ContentItem];
+    if(field==='variants'&&Array.isArray(after)&&Array.isArray(prior)){
+      const parts=(after as Array<Record<string,unknown>>).flatMap(next=>{
+        const old=(prior as Array<Record<string,unknown>>).find(candidate=>candidate.platform===next.platform);
+        return Object.keys(partLabel).filter(key=>key in next&&next[key]!==old?.[key]).map(key=>({field:`${platformLabel[String(next.platform)]??String(next.platform)} ${partLabel[key]}`,before:readable(old?.[key],key),after:readable(next[key],key)}));
+      });
+      if(parts.length)return parts;
+    }
+    if(field==='style'&&after&&prior&&typeof after==='object'&&typeof prior==='object'){
+      const next=after as Record<string,unknown>,old=prior as Record<string,unknown>;
+      const parts=Object.keys(next).filter(key=>next[key]!==old[key]).map(key=>({field:partLabel[key]??key,before:readable(old[key],key),after:readable(next[key],key)}));
+      if(parts.length)return parts;
+    }
+    return [{field,before:readable(prior),after:readable(after)}];
+  });
 }
 export function restorePatch(before: ContentItem, after: ContentItem) { return contentPatch(after,before); }
 

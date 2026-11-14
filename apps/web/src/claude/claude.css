@@ -1,382 +1,501 @@
+/*
+ * Claude Code on your server. Tokens come from /design.css; the finish follows the sign-in and agent
+ * connection surfaces: 20px cards, pill buttons, 44px fields, quiet borders, one type scale (12/13/14/15/16).
+ * Motion: under 300ms, transform and opacity only, ease-out for entrances and presses, plain ease for colour.
+ * Typing and streaming never animate. Reduced motion keeps fades only.
+ */
 @layer views {
   .cc-page {
+    --cc-fast: 150ms;
+    --cc-base: 220ms;
+    --cc-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --cc-measure: 720px;
+    --cc-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E");
     min-block-size: 100dvh;
-    background: var(--background);
-    color: var(--ink);
     display: flex;
     flex-direction: column;
+    background: var(--background);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
   }
+
+  /* ───────────── header ───────────── */
   .cc-header {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 18px 24px;
-    border-block-end: 1px solid var(--line);
+    box-sizing: border-box;
+    min-block-size: 56px;
+    padding: env(safe-area-inset-top) max(24px, env(safe-area-inset-right)) 0 max(24px, env(safe-area-inset-left));
+    border-block-end: 1px solid var(--border);
     background: var(--surface);
   }
-  .cc-header .wordmark { font-size: 19px; }
+  .cc-header .wordmark { font-size: 19px; letter-spacing: -0.03em; gap: 7px; min-block-size: 44px; border-radius: 10px; }
+  .cc-header .castroom-mark { scale: 0.82; }
   .cc-header-title {
+    min-inline-size: 0;
     padding-inline-start: 14px;
-    border-inline-start: 1px solid var(--line);
+    border-inline-start: 1px solid var(--border);
     color: var(--text-secondary);
     font-size: 13px;
+    font-weight: 400;
+    line-height: 1.25;
+    text-wrap: balance;
   }
+  .cc-header-tag { margin-inline-start: auto; flex: 0 0 auto; }
+
+  /* ───────────── layout ───────────── */
   .cc-layout {
     flex: 1;
     display: grid;
-    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 368px) minmax(0, 1fr);
     gap: 20px;
-    padding: 20px 24px 24px;
     box-sizing: border-box;
     inline-size: 100%;
     max-inline-size: 1440px;
     margin-inline: auto;
+    padding: 20px max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
     min-block-size: 0;
   }
-  .cc-setup {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    min-inline-size: 0;
-  }
+  .cc-setup { display: flex; flex-direction: column; gap: 12px; min-inline-size: 0; }
+
+  /* ───────────── setup cards ───────────── */
   .cc-card {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    padding: 20px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--surface);
-    box-shadow: var(--shadow);
     min-inline-size: 0;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(42, 42, 39, 0.03);
   }
-  .cc-card.is-waiting { opacity: 0.72; }
-  .cc-card p, .cc-details ol, .cc-steps span {
-    font-size: 13px;
-    line-height: 1.7;
+  /* Not reachable yet: flatter, never dimmer, so the text keeps its contrast. */
+  .cc-card.is-waiting { background: transparent; box-shadow: none; }
+  .cc-card.is-waiting h2 { color: var(--text-secondary); }
+  .cc-card.is-waiting .cc-step { background: var(--muted-surface); }
+  .cc-card p, .cc-details ol, .cc-steps > li > span {
+    font-size: 14px;
+    line-height: 1.55;
     color: var(--text-secondary);
+    text-wrap: pretty;
   }
-  .cc-card code, .cc-details code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
+  .cc-card code {
+    font-family: var(--cc-mono);
+    font-size: 0.88em;
     padding: 1px 5px;
     border-radius: 5px;
     background: var(--subtle);
     color: var(--ink-secondary);
     overflow-wrap: anywhere;
   }
-  .cc-card-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .cc-card-head h2, .cc-console-title h2 {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-  }
+  .cc-card-head { display: flex; align-items: center; gap: 10px; min-block-size: 32px; }
+  .cc-card-head h2, .cc-console-title h2 { font-size: 16px; font-weight: 550; line-height: 1.3; letter-spacing: -0.012em; }
+  .cc-card-head h2 { min-inline-size: 0; text-wrap: balance; }
   .cc-card-head .cc-chip { margin-inline-start: auto; }
   .cc-step {
     display: grid;
     place-items: center;
-    inline-size: 30px;
-    block-size: 30px;
-    border-radius: 9px;
+    flex: 0 0 auto;
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: 10px;
     background: var(--subtle);
     color: var(--ink-secondary);
-    flex-shrink: 0;
   }
   .cc-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 3px 9px;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    padding: 2px 9px;
+    border: 1px solid var(--border);
     border-radius: 999px;
-    border: 1px solid var(--line);
     background: var(--background);
     color: var(--text-secondary);
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 500;
+    line-height: 1.6;
     white-space: nowrap;
-    max-inline-size: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .cc-chip.positive {
-    background: var(--positive-surface);
-    border-color: transparent;
-    color: var(--positive-ink);
+  .cc-chip.positive { flex: 0 0 auto; background: var(--positive-surface); border-color: transparent; color: var(--positive-ink); animation: cc-pop var(--cc-base) var(--ease-out) both; }
+  .cc-mono { font-family: var(--cc-mono); letter-spacing: 0; }
+  .cc-chip.cc-mono { font-size: 11.5px; line-height: 1.67; }
+
+  .cc-form { display: flex; flex-direction: column; gap: 8px; }
+  .cc-form label:not(.cc-check) { margin-block-start: 6px; font-size: 13px; font-weight: 550; line-height: 1.3; color: var(--ink); }
+  .cc-form > label:first-child { margin-block-start: 0; }
+  .cc-page input:not([type="checkbox"]) {
+    min-block-size: 44px;
+    padding: 0 13px;
+    border-radius: 12px;
+    background: var(--surface);
+    font-size: 15px;
+    line-height: 1.3;
+    transition: border-color var(--cc-fast) ease;
   }
-  .cc-form {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .cc-form label:not(.cc-check) {
-    font-size: 12px;
-    font-weight: 550;
-    color: var(--ink-secondary);
-    margin-block-start: 4px;
-  }
-  .cc-form .button { margin-block-start: 6px; min-block-size: 40px; }
+  .cc-page input.cc-mono { font-size: 14px; }
+  .cc-page :is(input, textarea)::placeholder { color: var(--text-muted); opacity: 1; }
+  .cc-page :is(input, textarea, select):disabled { cursor: not-allowed; }
+  .cc-form .button { margin-block-start: 8px; min-block-size: 44px; font-size: 14px; font-weight: 550; }
   .cc-check {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
+    gap: 9px;
+    min-block-size: 32px;
+    font-size: 13px;
+    line-height: 1.4;
     color: var(--text-secondary);
-    margin-block-start: 2px;
+    cursor: pointer;
   }
-  .cc-check input { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--ink); }
+  .cc-check input { flex: 0 0 auto; inline-size: 16px; block-size: 16px; margin: 0; padding: 0; border-radius: 4px; accent-color: var(--ink); cursor: pointer; }
   .cc-facts {
     display: grid;
-    gap: 8px;
     margin: 0;
-    padding: 12px;
-    border-radius: 10px;
+    padding: 3px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
     background: var(--background);
-    border: 1px solid var(--subtle);
+    animation: cc-in var(--cc-base) var(--ease-out) both;
   }
-  .cc-facts div {
-    display: grid;
-    grid-template-columns: 92px minmax(0, 1fr);
-    gap: 10px;
-    font-size: 12.5px;
-  }
-  .cc-facts dt { color: var(--text-muted); }
-  .cc-facts dd { margin: 0; color: var(--ink-secondary); overflow-wrap: anywhere; }
+  .cc-facts div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding: 9px 0; font-size: 13px; line-height: 1.45; }
+  .cc-facts div + div { border-block-start: 1px solid var(--border); }
+  .cc-facts dt { color: var(--text-secondary); }
+  .cc-facts dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
   .cc-capitalize { text-transform: capitalize; }
-  .cc-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 18px;
-  }
+  .cc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }
+  .cc-page .text-button { min-block-size: 32px; padding: 0; border-radius: 6px; color: var(--ink-secondary); font-size: 13px; text-underline-offset: 3px; }
+  .cc-page .notice { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; text-wrap: pretty; animation: cc-in var(--cc-base) var(--ease-out) both; }
+
+  /* Disclosures: a chevron that turns, one quiet line above. */
+  .cc-details { padding-block-start: 8px; border-block-start: 1px solid var(--border); }
   .cc-details summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    inline-size: fit-content;
+    min-block-size: 32px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 12.5px;
-    color: var(--ink-secondary);
-    font-weight: 500;
-  }
-  .cc-details[open] summary { margin-block-end: 10px; }
-  .cc-details ol { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; }
-  .cc-steps {
-    margin: 0;
-    padding: 0;
     list-style: none;
-    display: grid;
-    gap: 14px;
-    counter-reset: cc-step;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-secondary);
   }
-  .cc-steps > li {
-    display: grid;
-    gap: 10px;
-    padding-inline-start: 34px;
-    position: relative;
-    counter-increment: cc-step;
+  .cc-details summary::-webkit-details-marker { display: none; }
+  .cc-details summary::before {
+    content: "";
+    flex: 0 0 auto;
+    inline-size: 14px;
+    block-size: 14px;
+    background: var(--text-secondary);
+    -webkit-mask: var(--cc-chevron) center / contain no-repeat;
+    mask: var(--cc-chevron) center / contain no-repeat;
+    transition: transform var(--cc-fast) var(--ease-out);
   }
+  .cc-details[open] summary::before { transform: rotate(90deg); }
+  .cc-details[open] summary { margin-block-end: 6px; }
+  .cc-details ol { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; font-size: 13px; }
+  .cc-details .cc-form p { font-size: 13px; }
+
+  /* Sign-in steps: the same numbered rail as the agent connection steps. */
+  .cc-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; counter-reset: cc-step; animation: cc-in var(--cc-base) var(--ease-out) both; }
+  .cc-steps > li { position: relative; display: grid; gap: 12px; padding-inline-start: 38px; counter-increment: cc-step; }
   .cc-steps > li::before {
     content: counter(cc-step);
     position: absolute;
     inset-inline-start: 0;
-    inset-block-start: 0;
-    inline-size: 22px;
-    block-size: 22px;
-    border-radius: 50%;
+    inset-block-start: -2px;
     display: grid;
     place-items: center;
-    background: var(--ink);
-    color: var(--surface);
-    font-size: 11.5px;
-    font-weight: 600;
+    box-sizing: border-box;
+    inline-size: 26px;
+    block-size: 26px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 550;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
   }
-  .cc-steps .button { justify-self: start; }
+  .cc-steps > li:not(:last-child)::after { content: ""; position: absolute; inset-block: 30px -14px; inset-inline-start: 12.5px; inline-size: 1px; background: var(--border); }
+  .cc-steps .button { justify-self: start; min-block-size: 44px; font-size: 14px; font-weight: 550; }
+  .cc-steps .cc-form .button { justify-self: stretch; }
   .cc-steps .cc-form label { margin-block-start: 0; }
 
-  /* Console */
+  /* ───────────── console ───────────── */
   .cc-console {
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
     min-block-size: 0;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    border-radius: 20px;
     background: var(--surface);
-    box-shadow: var(--shadow);
+    box-shadow: 0 1px 2px rgba(42, 42, 39, 0.03), 0 16px 40px -24px rgba(42, 42, 39, 0.14);
     overflow: hidden;
   }
-  .cc-console-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px 16px;
-    padding: 14px 16px 8px;
-  }
-  .cc-console-title { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+  .cc-console-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 14px 16px 6px 20px; }
+  .cc-console-title { display: flex; align-items: center; gap: 8px; min-inline-size: 0; min-block-size: 36px; }
+  /* The session id is always whole; a long model name gives way with an ellipsis. */
+  .cc-console-title .cc-chip { display: block; }
+  .cc-console-title .cc-chip.cc-mono { flex: 0 0 auto; }
   .cc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .cc-controls select { padding: 7px 10px; font-size: 12.5px; background: var(--surface); }
-  .cc-mode-help {
-    padding: 0 16px 12px;
-    font-size: 12px;
-    color: var(--text-muted);
-    border-block-end: 1px solid var(--subtle);
+  .cc-controls select {
+    -webkit-appearance: none;
+    appearance: none;
+    min-block-size: 36px;
+    padding: 0 30px 0 13px;
+    border-radius: 999px;
+    /* The chevron is drawn in --text-secondary; a data URL cannot read the token. */
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236E6C66' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E") no-repeat right 10px center / 14px 14px;
+    color: var(--ink-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+    cursor: pointer;
+    transition: border-color var(--cc-fast) ease, background-color var(--cc-fast) ease;
   }
+  .cc-controls select:disabled { opacity: 0.5; }
+  .cc-controls .button { min-block-size: 36px; padding-block: 0; }
+  .cc-mode-help { padding: 0 20px 12px; border-block-end: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+
   .cc-transcript {
-    list-style: none;
-    margin: 0;
-    padding: 18px 16px;
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    flex: 1;
+    list-style: none;
+    margin: 0;
+    padding: 24px 20px 28px;
+    min-block-size: 220px;
     overflow-y: auto;
-    min-block-size: 240px;
     overscroll-behavior: contain;
+    /* The last lines dissolve into the composer instead of meeting a rule. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
   }
-  .cc-empty {
+  .cc-transcript > li { box-sizing: border-box; inline-size: min(100%, var(--cc-measure)); margin-inline: auto; }
+  .cc-transcript > .cc-empty {
     margin: auto;
     display: grid;
     justify-items: center;
-    gap: 8px;
-    text-align: center;
+    gap: 6px;
     max-inline-size: 360px;
+    text-align: center;
     color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 1.6;
-  }
-  .cc-empty svg { color: var(--text-muted); }
-  .cc-empty strong { color: var(--ink); font-weight: 600; font-size: 14px; }
-  .cc-msg { display: grid; gap: 4px; }
-  .cc-who {
-    font-size: 11.5px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .cc-text {
     font-size: 14px;
-    line-height: 1.65;
+    line-height: 1.55;
+    text-wrap: balance;
+    animation: cc-in 280ms var(--ease-out) both;
+  }
+  .cc-empty-icon { display: grid; place-items: center; inline-size: 44px; block-size: 44px; margin-block-end: 8px; border-radius: 14px; background: var(--subtle); color: var(--ink-secondary); }
+  /* Ready is the one moment the sunlit art appears, as it does on other empty states. */
+  .cc-empty[data-ready] .cc-empty-icon { background: var(--art-wash); color: var(--ink); }
+  .cc-empty strong { color: var(--ink); font-size: 16px; font-weight: 550; line-height: 1.3; letter-spacing: -0.012em; }
+
+  .cc-msg { display: grid; gap: 6px; min-inline-size: 0; }
+  .cc-who { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font-size: 12px; font-weight: 550; line-height: 1.3; color: var(--text-secondary); }
+  .cc-text { min-inline-size: 0; font-size: 15px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cc-text strong { font-weight: 600; }
+  .cc-text code { font-family: var(--cc-mono); font-size: 0.87em; padding: 1px 5px; border-radius: 5px; background: var(--subtle); color: var(--ink-secondary); }
+  .cc-text pre {
+    margin: 8px 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--background);
+    font-family: var(--cc-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    tab-size: 2;
   }
-  .cc-msg.user .cc-text {
-    padding: 10px 13px;
-    border-radius: 12px;
-    background: var(--subtle);
-    justify-self: start;
-    max-inline-size: 100%;
-  }
+  .cc-text pre:first-child { margin-block-start: 0; }
+  .cc-text pre:last-child { margin-block-end: 0; }
+  .cc-text pre code { padding: 0; background: none; font-size: inherit; color: var(--ink); }
+  /* Your prompt sits on the right, like the Director's. A new turn gets a little more air. */
+  .cc-msg.user { justify-items: end; animation: cc-in var(--cc-base) var(--ease-out) both; }
+  .cc-msg.user:not(:first-child) { margin-block-start: 10px; }
+  .cc-msg.user .cc-text { max-inline-size: min(100%, 560px); padding: 9px 14px; border-radius: 18px 18px 5px 18px; background: var(--subtle); font-size: 14px; line-height: 1.55; }
   .cc-caret {
     display: inline-block;
-    inline-size: 7px;
-    block-size: 1em;
-    margin-inline-start: 2px;
-    vertical-align: text-bottom;
+    inline-size: 8px;
+    block-size: 8px;
+    margin-inline-start: 5px;
+    border-radius: 999px;
     background: var(--ink);
-    animation: cc-blink 1s steps(2) infinite;
+    opacity: 0.7;
+    animation: cc-breathe 900ms ease-in-out infinite alternate;
   }
-  @keyframes cc-blink { 50% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .cc-caret { animation: none; } }
-  .cc-tool {
-    border: 1px solid var(--subtle);
-    border-radius: 9px;
-    background: var(--background);
-    font-size: 12.5px;
-  }
-  .cc-tool summary, .cc-tool-line {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-    min-inline-size: 0;
-  }
-  .cc-tool summary { cursor: pointer; list-style: none; }
+
+  /* Tool activity: one quiet line each; the output opens underneath. */
+  .cc-tool { display: grid; gap: 6px; min-inline-size: 0; font-size: 13px; animation: cc-in var(--cc-base) var(--ease-out) both; }
+  .cc-tool + .cc-tool { margin-block-start: -8px; }
+  .cc-tool > details, .cc-tool-line { min-inline-size: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--background); }
+  .cc-tool summary, .cc-tool-line { display: flex; align-items: center; gap: 8px; box-sizing: border-box; min-block-size: 34px; padding: 0 10px; min-inline-size: 0; }
+  /* A running line is exactly as tall as the finished row it becomes (its border is inside its own box). */
+  .cc-tool-line { min-block-size: 36px; }
+  .cc-tool summary { border-radius: 9px; cursor: pointer; list-style: none; }
   .cc-tool summary::-webkit-details-marker { display: none; }
-  .cc-tool strong { font-weight: 600; color: var(--ink-secondary); flex-shrink: 0; }
-  .cc-tool code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11.5px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-inline-size: 0;
-  }
-  .cc-tool-icon { display: inline-flex; color: var(--text-muted); }
+  .cc-tool strong { flex: 0 0 auto; font-weight: 550; color: var(--ink); }
+  .cc-tool code { flex: 1 1 auto; min-inline-size: 0; font-family: var(--cc-mono); font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cc-tool-icon { display: inline-grid; place-items: center; flex: 0 0 auto; inline-size: 16px; color: var(--text-secondary); }
+  .cc-tool-chevron { flex: 0 0 auto; color: var(--text-secondary); transition: transform var(--cc-fast) var(--ease-out); }
+  .cc-tool details[open] .cc-tool-chevron { transform: rotate(90deg); }
   .cc-tool pre {
     margin: 0;
     padding: 10px 12px;
-    border-block-start: 1px solid var(--subtle);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11.5px;
-    line-height: 1.55;
+    border-block-start: 1px solid var(--border);
+    border-radius: 0 0 9px 9px;
+    font-family: var(--cc-mono);
+    font-size: 12px;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     max-block-size: 320px;
     overflow: auto;
     color: var(--ink-secondary);
   }
-  .cc-tool.is-error { border-color: var(--danger-border); }
-  .cc-tool.is-error .cc-tool-icon, .cc-tool.is-error strong { color: var(--danger); }
-  .cc-result {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    color: var(--positive-ink);
-  }
+  .cc-tool.is-error > details, .cc-tool.is-error .cc-tool-line { border-color: var(--danger-border); }
+  .cc-tool.is-error .cc-tool-icon { color: var(--danger); }
+  .cc-tool.is-error pre { border-color: var(--danger-border); }
+  .cc-result { display: flex; align-items: center; gap: 7px; font-size: 13px; line-height: 1.4; color: var(--positive-ink); font-variant-numeric: tabular-nums; animation: cc-in var(--cc-base) var(--ease-out) both; }
   .cc-result.is-error { color: var(--danger); align-items: flex-start; }
   .cc-result.is-error svg { margin-block-start: 2px; }
-  .cc-working, .cc-quiet {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-  .cc-notice .notice { margin: 0; }
-  .cc-composer {
-    display: grid;
-    gap: 8px;
-    padding: 12px 16px 14px;
-    border-block-start: 1px solid var(--subtle);
-    background: var(--surface);
-  }
-  .cc-composer textarea {
-    inline-size: 100%;
-    min-block-size: 76px;
-    max-block-size: 40dvh;
-    font-size: 14px;
-    border-radius: 10px;
-  }
-  .cc-composer-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .cc-composer-bar small { font-size: 11.5px; color: var(--text-muted); }
+  .cc-result svg { flex: 0 0 auto; }
+  .cc-working { display: grid; gap: 6px; justify-items: start; animation: cc-fade var(--cc-base) ease both; }
+  .cc-working-line, .cc-quiet { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
+  .cc-notice { animation: cc-in var(--cc-base) var(--ease-out) both; }
 
+  /* Composer: one surface. The field has no border of its own; the box carries the focus line. */
+  .cc-composer { padding: 0 20px 20px; background: var(--surface); }
+  .cc-composer-box {
+    display: grid;
+    gap: 2px;
+    box-sizing: border-box;
+    inline-size: min(100%, var(--cc-measure));
+    margin-inline: auto;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(42, 42, 39, 0.04), 0 10px 24px -14px rgba(42, 42, 39, 0.16);
+    transition: border-color var(--cc-fast) ease, box-shadow var(--cc-fast) ease;
+  }
+  .cc-composer-box[data-disabled] { background: var(--background); box-shadow: none; }
+  .cc-composer textarea {
+    display: block;
+    inline-size: 100%;
+    min-block-size: 56px;
+    max-block-size: 40dvh;
+    padding: 9px 12px 4px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    font-size: 15px;
+    line-height: 1.5;
+    resize: none;
+    field-sizing: content;
+  }
+  .cc-composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-block-size: 36px; padding-inline-start: 12px; }
+  .cc-composer-bar small { font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
+  .cc-composer-bar .button { min-block-size: 36px; padding-block: 0; padding-inline: 12px 15px; font-weight: 550; }
+
+  /* Presses and colour. */
+  .cc-page .button { transition: background-color var(--cc-fast) ease, border-color var(--cc-fast) ease, color var(--cc-fast) ease, opacity var(--cc-fast) ease, transform var(--cc-fast) var(--ease-out); }
+  .cc-page .button:active:not(:disabled) { transform: scale(0.97); }
+  .cc-page .spin { animation-duration: 0.8s; }
+  @media (hover: hover) and (pointer: fine) {
+    .cc-controls select:hover:not(:disabled) { background-color: var(--background); }
+    .cc-details summary:hover, .cc-page .text-button:hover:not(:disabled) { color: var(--ink); }
+    .cc-tool summary:hover strong { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: from-font; }
+  }
+
+  @keyframes cc-in { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes cc-fade { from { opacity: 0; } }
+  @keyframes cc-pop { from { opacity: 0; transform: scale(0.9); } }
+  @keyframes cc-breathe { from { opacity: 0.25; transform: scale(0.8); } to { opacity: 0.8; transform: scale(1); } }
+
+  /* ───────────── sizes ───────────── */
   @media (min-width: 1000px) {
     .cc-page { block-size: 100dvh; }
     .cc-layout { overflow: hidden; }
     .cc-setup { overflow-y: auto; padding-block-end: 4px; }
   }
   @media (max-width: 999px) {
-    .cc-layout { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; }
-    .cc-console { min-block-size: 70dvh; }
-    .cc-composer { position: sticky; inset-block-end: 0; }
+    .cc-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+    .cc-console { min-block-size: 420px; }
+    /* Once a session can run, the console is one screen tall: the transcript scrolls inside it and the composer stays in reach. */
+    .cc-page[data-stage="ready"] .cc-console { block-size: calc(100dvh - 32px); max-block-size: 900px; }
+    .cc-transcript { overscroll-behavior: auto; }
+  }
+  @media (pointer: coarse) {
+    .cc-details summary, .cc-check, .cc-page .text-button, .cc-tool summary { min-block-size: 44px; }
+    .cc-tool-line { min-block-size: 46px; }
+    .cc-page .button, .cc-controls select { min-block-size: 44px; }
+    /* 16px keeps iOS from zooming the page when a field takes focus. */
+    .cc-page input:not([type="checkbox"]), .cc-page input.cc-mono, .cc-composer textarea, .cc-controls select { font-size: 16px; }
+    .cc-composer-bar small { display: none; }
+    .cc-composer-bar { justify-content: flex-end; }
   }
   @media (max-width: 560px) {
-    .cc-header { padding: 14px 16px; gap: 10px; }
-    .cc-header-title { font-size: 12px; padding-inline-start: 10px; }
-    .cc-card { padding: 16px; }
-    .cc-page .button, .cc-controls select, .cc-page input:not([type="checkbox"]) { min-block-size: 44px; }
-    .cc-page .text-button { min-block-size: 44px; }
-    .cc-controls { inline-size: 100%; }
-    .cc-controls select { flex: 1 1 140px; }
-    .cc-facts div { grid-template-columns: 80px minmax(0, 1fr); }
+    .cc-header { gap: 10px; padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); }
+    .cc-header-title { padding-inline-start: 10px; }
+    .cc-card { padding: 16px; border-radius: 18px; }
+    .cc-console { border-radius: 18px; }
+    .cc-facts div { grid-template-columns: 84px minmax(0, 1fr); }
+    .cc-page .button, .cc-controls select, .cc-details summary, .cc-check, .cc-page .text-button, .cc-tool summary { min-block-size: 44px; }
+    .cc-tool-line { min-block-size: 46px; }
+    /* Title and New session share the first row; the two choices share the second. */
+    .cc-console-head { gap: 8px; padding: 12px 12px 8px 16px; }
+    .cc-controls { display: contents; }
+    .cc-console-title { flex: 1 1 calc(100% - 54px); min-block-size: 44px; }
+    .cc-controls .cc-new { order: 1; flex: 0 0 44px; inline-size: 44px; padding: 0; }
+    .cc-new span { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; overflow: clip; clip-path: inset(50%); white-space: nowrap; }
+    .cc-controls select { order: 2; flex: 1 1 calc(50% - 4px); min-inline-size: 0; text-overflow: ellipsis; }
+    .cc-mode-help { padding-inline: 16px; }
+    .cc-transcript { padding: 20px 16px 24px; }
+    .cc-text { font-size: 15px; }
+    .cc-composer { padding: 0 12px 12px; }
+    .cc-composer-box { border-radius: 22px; }
+  }
+
+  /* Less motion: state changes stay as fades; nothing travels, scales or loops. */
+  @media (prefers-reduced-motion: reduce) {
+    .cc-facts, .cc-steps, .cc-page .notice, .cc-transcript > .cc-empty, .cc-msg.user, .cc-tool, .cc-result, .cc-notice, .cc-chip.positive { animation-name: cc-fade; animation-duration: 160ms; }
+    .cc-caret { animation: none; }
+    .cc-page .button { transition-property: background-color, border-color, color, opacity; }
+    .cc-page .button:active:not(:disabled) { transform: none; }
+    .cc-details summary::before, .cc-tool-chevron { transition: none; }
+  }
+  @media (prefers-contrast: more) {
+    .cc-card, .cc-console, .cc-composer-box, .cc-facts, .cc-tool > details, .cc-tool-line { border-color: var(--ink); }
+  }
+  @media (forced-colors: active) {
+    .cc-details summary::before { background: CanvasText; }
+    .cc-caret { background: CanvasText; }
   }
 }
+
+/*
+ * Focus. /design.css is unlayered, so these are too: one 2px ink ring, the same as sign-in and agent connection.
+ * Fields keep it inside their edge; the composer shows it on its box, not on the field within.
+ */
+.cc-page :is(a, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.cc-page input[type="checkbox"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cc-page :is(input:not([type="checkbox"]), select):is(:focus, :focus-visible) { border-color: var(--ink); outline: 2px solid var(--ink); outline-offset: -2px; }
+.cc-page .cc-composer textarea:is(:focus, :focus-visible) { outline: none; box-shadow: none; }
+.cc-page .cc-composer-box:focus-within { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink), 0 10px 24px -14px rgba(42, 42, 39, 0.16); }
+.cc-page .cc-transcript:focus-visible { outline-offset: -5px; border-radius: 12px; }
+.cc-page .cc-tool pre:focus-visible { outline-offset: -2px; }
+.cc-page .cc-tool summary:focus-visible { outline-offset: 1px; }

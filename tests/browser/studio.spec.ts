@@ -27,15 +27,19 @@ test('draft edits survive item switches, save and reload; palette and filters us
   await page.reload();await page.getByRole('button',{name:'Details',exact:true}).click();await expect(script).toHaveValue('A warmer opening for the BeWell story.');
   await page.getByRole('button',{name:'Channels',exact:true}).click();await page.locator('#channel-copy').fill('An updated Instagram caption.');await page.getByRole('button',{name:'Save changes',exact:true}).click();await expect(page.locator('.save-state')).toContainText('version 3');
   await page.getByRole('button',{name:'Find projects or content'}).click();await page.getByRole('combobox',{name:'Search projects, content and actions'}).fill('familiar');await page.keyboard.press('Enter');await page.getByRole('button',{name:'Details',exact:true}).click();await expect(page.locator('#item-title')).toHaveValue('A familiar feeling');
+  // Search, filter and sort sit behind one button, and only exist once a project has more than six drafts.
+  await expect(page.getByRole('button',{name:'Filter and sort content'})).toHaveCount(0);await expect(page.getByRole('searchbox',{name:'Filter campaign content'})).toHaveCount(0);
+  await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);const items=state.campaigns[0].items;for(let n=4;n<=7;n++)items.push({...structuredClone(items[0]),id:`fixture-extra-${n}`,title:`Extra draft ${n}`});localStorage.setItem(key,JSON.stringify(state));});
+  await page.reload();await expect(page.locator('.content-card')).toHaveCount(7);await page.getByRole('button',{name:'Filter and sort content'}).click();
   await page.getByRole('searchbox',{name:'Filter campaign content'}).fill('no matching item');await expect(page.locator('.content-card')).toHaveCount(0);
   await page.getByRole('searchbox',{name:'Filter campaign content'}).fill('');await page.getByRole('combobox',{name:'Filter by content status'}).selectOption('ready');await expect(page.locator('.content-card')).toHaveCount(0);
-  await page.getByRole('combobox',{name:'Filter by content status'}).selectOption('all');await expect(page.locator('.content-card')).toHaveCount(3);expect(errors).toEqual([]);
+  await page.getByRole('combobox',{name:'Filter by content status'}).selectOption('all');await expect(page.locator('.content-card')).toHaveCount(7);expect(errors).toEqual([]);
 });
 
 test('manual campaign saves supplied context and approval never implies publication in fixture mode',async({page})=>{
-  await page.goto('/dev/studio/?view=canvas');await page.getByRole('button',{name:'New campaign',exact:true}).click();
+  await page.goto('/dev/studio/?view=canvas');await page.getByRole('button',{name:'Create a campaign',exact:true}).click();
   await page.locator('#company-name').fill('Olive Works');await page.locator('#campaign-name').fill('A useful first week');await page.locator('#company-does').fill('We make reusable lunch containers.');
-  await page.getByRole('button',{name:'Review context & write drafts'}).click();
+  await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.locator('#draft-title-0').fill('Meet the reusable lunch box');await page.locator('#draft-script-0').fill('Make room for a reusable lunch box in your everyday bag.');
   await page.getByRole('button',{name:'Create draft',exact:true}).click();await expect(page.getByRole('heading',{name:'A useful first week',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Review schedule',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('cannot be approved or published');await expect(page.getByRole('dialog').getByRole('button',{name:/Approve/})).toBeDisabled();
@@ -68,7 +72,10 @@ test('long content, scroll ownership and keyboard shortcuts remain usable at 200
   await page.getByRole('button',{name:'Return to campaign'}).click();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.keyboard.press('Control+k');await expect(page.getByRole('dialog')).toBeVisible();await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.setViewportSize({width:390,height:900});await page.reload();await expect(page.locator('.content-card')).toHaveCount(3);
-  const geometry=await page.evaluate(()=>{const canvas=document.querySelector('.canvas')!;const grid=document.querySelector('.content-grid')!;const footer=document.querySelector('.run-summary')!;return {overflow:canvas.scrollHeight-canvas.clientHeight,gridEnd:grid.getBoundingClientRect().bottom,footerStart:footer.getBoundingClientRect().top};});
-  expect(geometry.overflow).toBeLessThanOrEqual(1);expect(geometry.footerStart).toBeGreaterThan(geometry.gridEnd);
-  await page.locator('.workspace-main').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.run-summary')).toBeVisible();await page.screenshot({path:'docs/demo/evidence/creative-director/mobile-scroll-end.png'});
+  // One scroll container: the canvas never scrolls inside the page, and the last card is reachable at the end of it.
+  const geometry=await page.evaluate(()=>{const canvas=document.querySelector('.canvas')!;return {overflow:canvas.scrollHeight-canvas.clientHeight};});
+  expect(geometry.overflow).toBeLessThanOrEqual(1);
+  // Nothing has been rendered, scheduled or published, so the header states no counts for them.
+  await expect(page.locator('.campaign-meta')).toContainText('3 drafts');await expect(page.locator('.campaign-meta')).not.toContainText(/ready|scheduled|published/);await expect(page.locator('.run-summary')).toHaveCount(0);
+  await page.locator('.workspace-main').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.content-card').last()).toBeInViewport();await page.screenshot({path:'docs/demo/evidence/creative-director/mobile-scroll-end.png'});
 });

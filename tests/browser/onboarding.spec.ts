@@ -12,6 +12,9 @@ const SUPABASE = 'https://hgsgvdujzatfhsjoojll.supabase.co';
 const SHOTS = Boolean(process.env.ONBOARDING_SHOTS);
 const shot = async (page: Page, name: string) => { if (SHOTS) await page.screenshot({ path: `docs/demo/evidence/polish/onboarding-${name}.png`, animations: 'disabled' }); };
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+/** Entrances have finished, so positions measured afterwards are the resting ones. Loops are left running. */
+const settled = (page: Page) => page.evaluate(() => Promise.all(document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => undefined))).then(() => undefined));
+const AGENT_NAMES = ['Claude Code', 'Codex', 'Cursor', 'Gemini CLI', 'VS Code', 'Windsurf', 'Zed', 'Any MCP client'];
 
 function session(id: string) {
   const user = { id, aud: 'authenticated', role: 'authenticated', email: `${id}@e2e.test`, app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
@@ -114,12 +117,38 @@ for (const width of [1440, 390]) test(`connect an agent at ${width}px: choose, c
   await signIn(page);
   await page.goto('/studio/?view=connect');
   await expect(page.getByRole('heading', { name: 'Connect your agent' })).toBeVisible();
-  for (const name of ['Claude Code', 'Codex', 'Cursor', 'Gemini CLI', 'VS Code', 'Any MCP client']) await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
+  for (const name of AGENT_NAMES) await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
+  // Each client shows its own mark and none is a broken image; "Any MCP client" is a neutral glyph, nobody's logo.
+  const cards = page.locator('.ob-agent-card');
+  await expect(cards).toHaveCount(AGENT_NAMES.length);
+  await expect(cards.locator('img')).toHaveCount(AGENT_NAMES.length - 1);
+  await expect.poll(() => page.locator('.ob-connect img').evaluateAll((images) => images.every((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  await expect(cards.last().locator('img')).toHaveCount(0);
+  await expect(cards.last().locator('svg')).toHaveCount(1);
   // Only the two clients that were actually exercised carry the word "Tested".
   await expect(page.locator('.ob-badge-tested')).toHaveCount(2);
   await expect(page.locator('.ob-connect')).toContainText('not yet verified by us');
+  // The runner page is linked as a preview on the person's own server, never as a tested Faceful feature.
+  const runner = page.getByRole('link', { name: /Claude Code in your browser/ });
+  await expect(runner).toHaveAttribute('href', '/claude-login-test/');
+  await expect(runner).toContainText('Preview');
+  await expect(runner).toContainText('Runs on your own server with your own Claude subscription.');
+  await expect(runner.locator('.ob-badge-tested')).toHaveCount(0);
   expect(await noOverflow(page)).toBe(true);
+  await settled(page);
   await shot(page, `connect-grid-${width}`);
+  if (width === 1440) {
+    // Hovering and pressing lift or press the card's face only: the button under the pointer and everything around it stay put.
+    const rects = () => page.locator('.ob-agent-card, .ob-runner-card, .ob-footnote, .ob-connect-foot').evaluateAll((nodes) => nodes.map((node) => { const box = node.getBoundingClientRect(); return [box.x, box.y, box.width, box.height].join(); }));
+    const resting = await rects();
+    await cards.nth(2).hover();
+    await expect.poll(() => cards.nth(2).locator('.ob-agent-face').evaluate((node) => getComputedStyle(node).transform)).not.toBe('none');
+    expect(await rects()).toEqual(resting);
+    await page.mouse.down();
+    expect(await rects()).toEqual(resting);
+    await page.mouse.move(0, 0);
+    await page.mouse.up();
+  }
 
   await page.getByRole('button', { name: /^Claude Code/ }).click();
   await expect(page.getByRole('heading', { name: 'Connect Claude Code' })).toBeFocused();
@@ -175,6 +204,16 @@ test('other clients get the standard MCP configuration, labelled as not verified
   await expect(view).toContainText('Streamable HTTP');
   await page.getByRole('button', { name: 'All agents' }).click();
   await expect(page.getByRole('button', { name: /^Cursor/ })).toBeFocused();
+  // Windsurf and Zed are set up with the same standard block.
+  for (const name of ['Windsurf', 'Zed']) {
+    await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+    await expect(page.getByRole('heading', { name: `Connect ${name}` })).toBeFocused();
+    await expect(view).toContainText('Standard MCP configuration. Not yet verified by us with this client.');
+    await expect(page.getByRole('heading', { name: 'Add the standard MCP configuration' })).toBeVisible();
+    await expect(view).toContainText('"url": "http://127.0.0.1');
+    await page.getByRole('button', { name: 'All agents' }).click();
+    await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toBeFocused();
+  }
 });
 
 const sandbox = { organizationId: 'org', mode: 'sandbox', configurationProblem: null, status: 'free', planKey: null, currentPeriodEnd: null, cancelAtPeriodEnd: false, creditBalance: 3, renderCreditCost: 1, rendersRemaining: 3, plans: [{ key: 'demo', creditsPerPeriod: 30 }], canManage: true, canCheckout: true, hasCustomer: false };

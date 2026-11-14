@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createFixtureClient} from '../apps/web/src/data/fixture';
-import {localDirectorPlan,validateDirectorPlan,restorePatch,directorPlanSchema,directorOperationKey,mergeDirectorEntry} from '../apps/web/src/director/model';
+import {localDirectorPlan,validateDirectorPlan,restorePatch,directorPlanSchema,directorOperationKey,mergeDirectorEntry,changedFields} from '../apps/web/src/director/model';
+import {renderBlockReason,saveHint,countLabel} from '../apps/web/src/views/editor/model';
 const setup=async()=>{const map=new Map<string,string>();const client=createFixtureClient({getItem:k=>map.get(k)??null,setItem:(k,v)=>{map.set(k,v)}} as Storage);return {client,context:await client.getContext(),campaign:(await client.listCampaigns())[0]};};
 test('director literal script plan saves same shared revision; undo restores as a new version',async()=>{
  const {client,context,campaign}=await setup();const item=campaign.items[0];
@@ -44,4 +45,36 @@ test('Director action identity survives sessions and history cannot regress conf
  assert.equal(mergeDirectorEntry(saved,base).results[0].state,'saved');
  assert.equal(mergeDirectorEntry(saved,{...base,results:{0:{state:'failed',message:'Late retry'}}}).results[0].state,'saved');
  assert.equal(mergeDirectorEntry(saved,{...base,results:{0:{state:'undone',message:'Restored',revision:3}}}).results[0].state,'undone');
+});
+
+test('a proposal diff reads as plain text: no JSON, and only the parts that change',async()=>{
+ const {context,campaign}=await setup();const item=campaign.items[0];
+ const title=localDirectorPlan('Set title: A calmer title',campaign,item,context,'item')!.actions[0];assert.equal(title.kind,'revise');if(title.kind!=='revise')return;
+ assert.deepEqual(changedFields(item,title.patch),[{field:'title',before:item.title,after:'A calmer title'}]);
+ const caption=localDirectorPlan('Set TikTok caption: Short and useful.',campaign,item,context,'item')!.actions[0];if(caption.kind!=='revise')return;
+ assert.deepEqual(changedFields(item,caption.patch),[{field:'TikTok caption',before:item.variants.find(v=>v.platform==='tiktok')!.caption,after:'Short and useful.'}]);
+ const captions=localDirectorPlan('Disable captions',campaign,item,context,'item')!.actions[0];if(captions.kind!=='revise')return;
+ assert.deepEqual(changedFields(item,captions.patch),[{field:'Captions',before:'On',after:'Off'}]);
+ // The starter chips use plainer words for the same exact edit.
+ assert.deepEqual(localDirectorPlan('Hide burned-in captions',campaign,item,context,'item')!.actions,[captions]);
+ const shown=localDirectorPlan('Show burned-in captions',campaign,{...item,style:{...item.style,captions:false}},context,'item')!.actions[0];assert.equal(shown.kind==='revise'&&shown.patch.style?.captions,true);
+ // After a change is applied the item already holds the new value; the recorded "before" still drives the diff.
+ assert.deepEqual(changedFields({...item,title:'A calmer title'},title.patch,{title:item.title}),[{field:'title',before:item.title,after:'A calmer title'}]);
+});
+
+test('the render action always knows why it is unavailable, and the save hint says what saving does',()=>{
+ const ready={kind:'avatar_video' as const,canRender:true,renderBlocker:null,canEdit:true,submitted:false,offline:false,changedRemotely:false,dirty:false,hasPresenter:true,languageSupported:true,hasScript:true};
+ assert.equal(renderBlockReason(ready),'');
+ // Every condition that used to disable the button still blocks it.
+ for(const blocked of [{canRender:false},{canEdit:false},{submitted:true},{offline:true},{changedRemotely:true},{dirty:true},{hasPresenter:false},{languageSupported:false},{hasScript:false},{kind:'image' as const}])assert.notEqual(renderBlockReason({...ready,...blocked}),'',JSON.stringify(blocked));
+ // A missing renderer outranks what the person could fix, and the server's own wording is used when it gives one.
+ assert.equal(renderBlockReason({...ready,canRender:false,dirty:true,hasPresenter:false}),'Rendering is unavailable in this workspace.');
+ assert.equal(renderBlockReason({...ready,canRender:false,renderBlocker:'Video rendering is not connected yet.'}),'Video rendering is not connected yet.');
+ assert.equal(renderBlockReason({...ready,dirty:true,hasPresenter:false}),'Save your changes first.');
+ const edit={dirty:true,nextRevision:3,kind:'avatar_video' as const,videoChanged:true,hasVideo:true};
+ assert.equal(saveHint(edit),'Saving creates v3 — the video will need a new render.');
+ assert.equal(saveHint({...edit,videoChanged:false}),'Saving creates v3 — the video is reused.');
+ assert.equal(saveHint({...edit,hasVideo:false}),'Saving creates v3.');
+ assert.equal(saveHint({...edit,dirty:false}),'');
+ assert.equal(countLabel(1,'source'),'1 source');assert.equal(countLabel(3,'draft'),'3 drafts');
 });

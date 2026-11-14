@@ -197,7 +197,7 @@ export function Preview({
             : failed
               ? "Preview unavailable"
               : item.kind === "avatar_video"
-                ? "Storyboard · no video yet"
+                ? "No video yet"
                 : "Draft preview"}
         </span>
       </div>

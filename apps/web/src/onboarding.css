@@ -149,6 +149,9 @@
 .ob-step { display: grid; justify-items: stretch; gap: 0; animation: ob-rise var(--ob-slow) var(--ease-out) both; }
 .ob-auth .ob-step > .ob-emblem { margin-block-end: 20px; }
 .ob-auth .ob-card h1 { margin: 0; font-size: 26px; font-weight: 550; line-height: 1.15; letter-spacing: -0.028em; text-wrap: balance; }
+/* The mark sits on the heading's first line, sized to its capitals, instead of in a block of its own above it. */
+.ob-auth .ob-step > h1 { display: flex; align-items: flex-start; gap: 9px; }
+.ob-auth .ob-step > h1 > .castroom-mark { flex: 0 0 auto; margin: calc((1.15em - 28px) / 2 - 0.5px) -2px 0 -3px; scale: 0.8; }
 .ob-auth .ob-card h1 + .ob-sub { margin-block-start: 8px; }
 .ob-auth .ob-card h1 + .ob-button, .ob-auth .ob-card .ob-sub + .ob-button { margin-block-start: 24px; }
 .ob-auth .ob-card form { display: grid; gap: 0; }
@@ -229,38 +232,50 @@
 .ob-agent-stack { display: flex; justify-content: center; padding-inline: 12px; margin-block-end: 22px; }
 .ob-agent-stack > span {
   --ob-offset: calc(var(--ob-i) - 2);
-  display: block; margin-inline: -6px;
+  display: grid; margin-inline: -6px;
   rotate: calc(var(--ob-offset) * 5deg); translate: 0 calc(max(var(--ob-offset), -1 * var(--ob-offset)) * 3px);
   animation: ob-tile-in var(--ob-slow) var(--ease-out) both; animation-delay: calc(var(--ob-i) * 40ms);
   transition: translate var(--ob-base) var(--ease-out), rotate var(--ob-base) var(--ease-out);
 }
 .ob-agent-stack > span:nth-child(2), .ob-agent-stack > span:nth-child(4) { z-index: 1; }
 .ob-agent-stack > span:nth-child(3) { z-index: 2; }
-.ob-agent-tile {
-  display: grid; place-items: center; flex: 0 0 auto; box-sizing: border-box; border-radius: 28%;
-  background: var(--surface); border: 1px solid var(--border); color: var(--ink); box-shadow: var(--ob-shadow-tile);
-}
-.ob-agent-tile[data-agent="cursor"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
-.ob-agent-tile[data-agent="gemini"] { background: linear-gradient(160deg, var(--surface), var(--warning-surface)); }
-.ob-agent-tile[data-agent="vscode"] { background: var(--subtle); }
-.ob-agent-tile[data-agent="generic"] { background: var(--background); border-style: dashed; box-shadow: none; }
+/* Each client's tile is drawn by AgentIcon, with its own surface and depth; nothing here restyles a mark. */
 
 .ob-section-title { margin: 0 0 12px; font-size: 13px; font-weight: 500; line-height: 1.3; color: var(--text-secondary); }
-.ob-agent-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
+.ob-agent-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .ob-agent-grid > li { display: grid; animation: ob-rise var(--ob-slow) var(--ease-out) both; animation-delay: calc(120ms + var(--ob-i) * 40ms); }
-.ob-agent-card {
-  display: grid; justify-items: center; align-content: start; gap: 3px; box-sizing: border-box; inline-size: 100%; min-block-size: 156px; padding: 20px 10px 14px;
-  border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--ink); text-align: center;
+/* The button is the hit area and never moves, so a card that lifts cannot slip out from under the pointer.
+   Its face carries the surface and all of the motion. */
+.ob-agent-card { display: grid; inline-size: 100%; margin: 0; padding: 0; border: 0; border-radius: 20px; background: none; color: var(--ink); text-align: center; }
+.ob-agent-card:active { transform: none; }
+.ob-agent-face {
+  display: grid; justify-items: center; align-content: start; gap: 3px; box-sizing: border-box; min-block-size: 156px; padding: 20px 10px 14px;
+  border: 1px solid var(--border); border-radius: 20px; background: var(--surface);
   box-shadow: 0 1px 2px rgba(42, 42, 39, 0.03);
-  transition: transform var(--ob-base) var(--ease-out), box-shadow var(--ob-base) var(--ease-out), border-color var(--ob-fast) ease, background-color var(--ob-fast) ease;
+  transition: transform var(--ob-base) var(--ease-out), box-shadow var(--ob-base) var(--ease-out), border-color var(--ob-fast) ease;
 }
-.ob-agent-card:active { transform: scale(0.97); }
-.ob-agent-card .ob-agent-tile { margin-block-end: 10px; transition: transform var(--ob-base) var(--ease-out); }
+.ob-agent-card:active .ob-agent-face { transform: scale(0.97); transition-duration: var(--ob-fast); }
+.ob-agent-mark { display: grid; margin-block-end: 10px; }
 .ob-agent-card strong { font-size: 14px; font-weight: 550; line-height: 1.25; letter-spacing: -0.01em; }
 .ob-agent-card small { font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
 .ob-badge { display: inline-flex; align-items: center; gap: 4px; margin-block-start: 8px; padding: 2px 8px; border-radius: 999px; background: var(--subtle); color: var(--text-secondary); font-size: 11px; font-weight: 500; line-height: 1.6; white-space: nowrap; }
 .ob-badge-tested { background: var(--positive-surface); color: var(--positive-ink); }
 .ob-footnote { margin: 14px 0 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); text-wrap: pretty; }
+
+/* One quiet link to a separate page: outlined, not a filled card, and labelled Preview. */
+.ob-runner-card { display: grid; border-radius: 18px; color: var(--ink); text-decoration: none; }
+.ob-runner-card:focus-visible { outline: 2px solid var(--ob-ring); outline-offset: 3px; }
+.ob-runner-face {
+  display: flex; align-items: center; gap: 14px; box-sizing: border-box; min-block-size: 68px; padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: 18px;
+  transition: background-color var(--ob-fast) ease, border-color var(--ob-fast) ease;
+}
+.ob-runner-card:active .ob-runner-face { background: var(--subtle); }
+.ob-runner-text { display: grid; gap: 2px; flex: 1; min-inline-size: 0; text-align: start; }
+.ob-runner-text strong { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; font-weight: 550; line-height: 1.3; letter-spacing: -0.01em; }
+.ob-runner-text .ob-badge { margin-block-start: 0; font-weight: 500; letter-spacing: 0; }
+.ob-runner-text small { font-size: 13px; line-height: 1.45; color: var(--text-secondary); text-wrap: pretty; }
+.ob-runner-arrow { flex: 0 0 auto; color: var(--text-secondary); transition: transform var(--ob-base) var(--ease-out), color var(--ob-fast) ease; }
 
 .ob-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-block-size: 36px; padding: 0 12px 0 8px; margin-inline-start: -8px; border: 0; border-radius: 999px; background: none; color: var(--text-secondary); font-size: 13px; transition: background-color var(--ob-fast) ease, color var(--ob-fast) ease; }
 .ob-setup-head { display: flex; align-items: center; gap: 16px; }
@@ -415,8 +430,11 @@
   .ob-copy-floating:hover:not(:disabled):not([data-state="copied"]) { background: rgba(243, 241, 234, 0.2); }
   .ob-icon-button:hover { background: var(--background); color: var(--ink); }
   .ob-back:hover { background: var(--subtle); color: var(--ink); }
-  .ob-agent-card:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--ink) 18%, var(--border)); box-shadow: 0 2px 4px rgba(42, 42, 39, 0.04), 0 16px 28px -14px rgba(42, 42, 39, 0.2); }
-  .ob-agent-card:hover .ob-agent-tile { transform: scale(1.06) rotate(-3deg); }
+  .ob-agent-card:hover .ob-agent-face { transform: translateY(-2px); border-color: color-mix(in srgb, var(--ink) 18%, var(--border)); box-shadow: 0 2px 4px rgba(42, 42, 39, 0.04), 0 16px 28px -14px rgba(42, 42, 39, 0.2); }
+  .ob-agent-card:hover:active .ob-agent-face { transform: scale(0.97); }
+  .ob-runner-card:hover .ob-runner-face { background: var(--surface); border-color: color-mix(in srgb, var(--ink) 18%, var(--border)); }
+  .ob-runner-card:hover:active .ob-runner-face { background: var(--subtle); }
+  .ob-runner-card:hover .ob-runner-arrow { transform: translate(2px, -2px); color: var(--ink); }
   .ob-agent-stack:hover > span { translate: 0 0; rotate: calc(var(--ob-offset) * 2deg); }
   .ob-template-option:hover { border-color: color-mix(in srgb, var(--ink) 18%, var(--border)); box-shadow: 0 10px 22px -14px rgba(42, 42, 39, 0.22); }
   .ob-template-option:hover .ob-template-arrow { transform: translateX(3px); color: var(--ink); }
@@ -435,7 +453,9 @@
 @media (max-width: 640px) {
   .ob-connect { inline-size: calc(100% - 32px); gap: 28px; padding-block-start: 24px; }
   .ob-agent-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .ob-agent-card { min-block-size: 148px; }
+  .ob-agent-face { min-block-size: 148px; }
+  .ob-runner-face { align-items: flex-start; gap: 12px; padding: 14px; }
+  .ob-runner-arrow { margin-block-start: 2px; }
   .ob-setup-head { align-items: flex-start; gap: 12px; }
   .ob-step-item { gap: 12px; }
   .ob-code-block pre { padding: 52px 14px 14px; padding-inline-end: 14px; font-size: 12px; }
@@ -462,7 +482,7 @@
   .ob-code-slots { gap: 5px; }
   .ob-code-slot { block-size: 46px; font-size: 20px; }
   .ob-connect, .billing-view.ob-billing { inline-size: calc(100% - 24px); }
-  .ob-agent-card { padding-inline: 6px; }
+  .ob-agent-face { padding-inline: 6px; }
 }
 
 /* ───────────────────────── motion ───────────────────────── */
@@ -483,17 +503,20 @@
   }
   .ob-copy[data-state="copied"] .ob-copy-icon, .ob-step-item[data-state="done"] .ob-step-badge svg, .ob-live-tick { animation-name: ob-fade-in; animation-duration: 120ms; }
   .ob-emblem-breathing, .ob-live-dot::after, .ob-code-slot[data-active]::after, .ob-skeleton-lines i, .ob-skeleton-card i, .ob-connections > ul > li[data-fresh] { animation: none; }
-  .ob-button, .ob-copy, .ob-icon-button, .ob-agent-card, .ob-agent-card .ob-agent-tile, .ob-template-option, .ob-template-arrow, .ob-agent-stack > span { transition-property: background-color, border-color, color, box-shadow; }
-  .ob-button:active:not(:disabled), .ob-copy:active:not(:disabled), .ob-icon-button:active, .ob-agent-card:active, .ob-template-option:active, .ob-agent-card:hover, .ob-agent-card:hover .ob-agent-tile, .ob-template-option:hover .ob-template-arrow { transform: none; }
+  .ob-button, .ob-copy, .ob-icon-button, .ob-template-option, .ob-template-arrow, .ob-agent-stack > span { transition-property: background-color, border-color, color, box-shadow; }
+  .ob-button:active:not(:disabled), .ob-copy:active:not(:disabled), .ob-icon-button:active, .ob-template-option:active, .ob-template-option:hover .ob-template-arrow { transform: none; }
   .ob-segmented::before, .ob-language::before { transition: none; }
+  .ob-agent-face, .ob-runner-arrow { transition-property: background-color, border-color, color, box-shadow; }
+  .ob-agent-card:hover .ob-agent-face, .ob-agent-card:active .ob-agent-face, .ob-agent-card:hover:active .ob-agent-face, .ob-runner-card:hover .ob-runner-arrow { transform: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
   .ob-auth .ob-card { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .ob-copy-floating { -webkit-backdrop-filter: none; backdrop-filter: none; background: #3A3833; }
 }
 @media (prefers-contrast: more) {
-  .ob-auth .ob-card, .ob-agent-card, .ob-billing-card, .ob-billing .ob-upgrade, .ob-template-option, .ob-code-slot { border-color: var(--ink); }
+  .ob-auth .ob-card, .ob-billing-card, .ob-billing .ob-upgrade, .ob-template-option, .ob-code-slot { border-color: var(--ink); }
   .ob-auth::before { display: none; }
+  .ob-agent-face, .ob-runner-face { border-color: var(--ink); }
 }
 @media (forced-colors: active) {
   .ob-segmented::before, .ob-language::before { border: 1px solid CanvasText; }

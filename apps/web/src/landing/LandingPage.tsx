@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
 import { ArrowRight, ArrowUpRight, Check, Copy, Menu, Minus, Plus, ShieldCheck, Sparkles, X } from "lucide-react";
 import { AgentList, RotatingAgentHeadline } from "./AgentRotator";
-import { StudioDemo } from "./StudioDemo";
+import { Caption, Presenter, StudioDemo, cast, type PresenterId } from "./StudioDemo";
 
 export { RotatingAgentHeadline } from "./AgentRotator";
 
@@ -117,6 +117,13 @@ function Reveal({ as: Tag = "div", className = "", children, ...rest }: { as?: "
   return <Element ref={node as Ref<HTMLDivElement>} className={`${className} ${state === "pending" ? "is-waiting" : state === "in" ? "is-in" : ""}`} {...rest}>{children}</Element>;
 }
 
+/** Three drafts from one prompt, each a presenter with the script line as its caption. */
+const promptDrafts: ReadonlyArray<{ title: string; tone: "a" | "b" | "c"; who: PresenterId; words: readonly string[] }> = [
+  { title: "Καλώς ήρθες", tone: "a", who: "eleni", words: ["Γεια!", "Αυτό", "είναι", "το", "BeWell."] },
+  { title: "Η μέρα σου", tone: "b", who: "nikos", words: ["Η", "μέρα", "σου,", "όπως", "τη", "θες."] },
+  { title: "Τα λέμε εκεί", tone: "c", who: "daphne", words: ["Τα", "λέμε", "εκεί,", "τη", "Δευτέρα."] },
+];
+
 function HowItWorks() {
   return <section id="how" className="landing-section landing-how" aria-labelledby="how-heading">
     <div className="landing-section-heading">
@@ -132,7 +139,16 @@ function HowItWorks() {
           <span className="lb-prompt"><Sparkles size={15} />A 15-second Reel for BeWell, friendly, in Greek.</span>
           <span className="lb-thread"><i /><i /><i /></span>
           <div className="lb-drafts">
-            {[["Καλώς ήρθες", "a"], ["Η μέρα σου", "b"], ["Τα λέμε εκεί", "c"]].map(([title, tone]) => <span className="lb-draft" key={title}><span className={`lb-thumb lb-thumb-${tone}`} /><span><strong>{title}</strong><small>15 s · Greek · Draft v1</small></span></span>)}
+            {promptDrafts.map(({ title, tone, who, words }) => (
+              <span className="lb-draft" key={title}>
+                <span className={`lb-reel lb-reel-${tone}`}>
+                  <Presenter who={who} />
+                  <span className="fd-presenter"><span className="fd-meter"><i /><i /><i /></span>{cast[who].name}</span>
+                  <span className="fd-caption"><Caption words={words} spoken={1} /></span>
+                </span>
+                <span className="lb-draft-meta"><strong>{title}</strong><small>15 s · Draft v1</small></span>
+              </span>
+            ))}
           </div>
         </div>
       </Reveal>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ArrowUp, Check, CircleCheck, CircleX, ExternalLink, LoaderCircle, Plus, RefreshCw, Server, Square, SquareTerminal, Wrench } from "lucide-react";
+import { ArrowUp, Check, ChevronRight, CircleCheck, CircleX, ExternalLink, LoaderCircle, Plus, RefreshCw, Server, Square, SquareTerminal, Wrench } from "lucide-react";
 import { AgentIcon } from "../components/AgentIcon";
 import { Mark, Notice } from "../components/ui";
 import { createRunnerClient, normalizeRunnerUrl, RunnerError, type Model, type PermissionMode, type RunnerStatus } from "./runner";
@@ -41,6 +41,8 @@ const MODES: { value: PermissionMode; label: string; help: string }[] = [
   { value: "bypassPermissions", label: "Full access", help: "Runs any command inside the server container without asking." },
   { value: "plan", label: "Plan only", help: "Reads and plans. Changes nothing." },
 ];
+/** Keys, codes and addresses are typed exactly: no capitals, corrections or spell checks on phones. */
+const exact = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false } as const;
 
 export default function ClaudeVpsPage() {
   const [connection, setConnection] = useState<Connection | null>(loadConnection);
@@ -62,6 +64,7 @@ export default function ClaudeVpsPage() {
   const [mode, setMode] = useState<PermissionMode>("acceptEdits");
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLOListElement | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
 
   const signedIn = status?.auth.loggedIn === true;
   const ready = Boolean(client && status && signedIn);
@@ -82,6 +85,20 @@ export default function ClaudeVpsPage() {
     const list = listRef.current;
     if (list && list.scrollHeight - list.scrollTop - list.clientHeight < 160) list.scrollTop = list.scrollHeight;
   }, [transcript]);
+
+  // Keyboard and screen-reader path: when a step finishes, its controls leave the page. If the page was
+  // in use, focus continues at the next thing to do instead of dropping back to the top of the document.
+  // It is only ever placed when nothing holds focus, and stops as soon as the person focuses something else.
+  const stage = !connection || !status ? "server" : signedIn ? "ready" : loginUrl ? "code" : "auth";
+  const stageSeen = useRef(stage);
+  const engaged = useRef(false);
+  const carryFocus = useRef(false);
+  useEffect(() => {
+    if (stageSeen.current !== stage) { stageSeen.current = stage; carryFocus.current = engaged.current; }
+    if (!carryFocus.current || busy) return;
+    const active = document.activeElement;
+    if (!active || active === document.body) pageRef.current?.querySelector<HTMLElement>(`[data-cc-focus="${stage}"]`)?.focus();
+  }, [stage, busy]);
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -146,6 +163,8 @@ export default function ClaudeVpsPage() {
     if (!client || !ready || running || !text) return;
     setPrompt("");
     setTranscript((current) => addUserPrompt(current, text));
+    // What was just sent is always brought into view, wherever the transcript was scrolled to.
+    requestAnimationFrame(() => { const list = listRef.current; if (list) list.scrollTop = list.scrollHeight; });
     setRunning(true);
     const controller = new AbortController();
     abortRef.current = controller;
@@ -166,11 +185,15 @@ export default function ClaudeVpsPage() {
   }
 
   const modeHelp = MODES.find((item) => item.value === mode)?.help;
+  const items = transcript.items;
+  // Claude is named once per turn, on whatever it does first.
+  const opensTurn = items.at(-1)?.kind === "user";
   return (
-    <div className="cc-page">
+    <div className="cc-page" ref={pageRef} data-stage={stage} onFocus={(event) => { engaged.current = true; if (!event.target.matches("[data-cc-focus]")) carryFocus.current = false; }}>
       <header className="cc-header">
         <a className="wordmark" href="/"><Mark />Faceful</a>
-        <span className="cc-header-title">Claude Code on your server</span>
+        <h1 className="cc-header-title">Claude Code on your server</h1>
+        <span className="cc-chip cc-header-tag">Preview</span>
       </header>
       <main className="cc-layout">
         <div className="cc-setup">
@@ -186,20 +209,22 @@ export default function ClaudeVpsPage() {
                 <div><dt>Claude Code</dt><dd>{status ? status.claudeVersion ?? "Not found on the server" : busy === "refresh" ? "Checking…" : "Unknown"}</dd></div>
                 <div><dt>Workspace</dt><dd>{status?.workspace ?? "…"}</dd></div>
               </dl>
+              {serverError && <Notice error>{serverError}</Notice>}
               <div className="cc-row">
-                <button className="text-button" type="button" onClick={() => void refresh()} disabled={busy !== null}><RefreshCw size={13} aria-hidden="true" />{busy === "refresh" ? "Checking…" : "Check again"}</button>
+                <button className="text-button" type="button" onClick={() => void refresh()} disabled={busy !== null}><RefreshCw className={busy === "refresh" ? "spin" : undefined} size={13} aria-hidden="true" />{busy === "refresh" ? "Checking…" : "Check again"}</button>
                 <button className="text-button" type="button" onClick={forget} disabled={running}>Forget server</button>
               </div>
             </> : <>
               <p>The runner on your VPS runs the official Claude Code CLI. Paste its address and the access key from its <code>.env</code> file.</p>
               <form className="cc-form" onSubmit={connect} aria-busy={busy === "connect"}>
                 <label htmlFor="cc-url">Runner address</label>
-                <input id="cc-url" type="url" inputMode="url" autoComplete="url" spellCheck={false} placeholder="https://claude.yourdomain.com" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} required disabled={busy !== null} />
+                <input id="cc-url" data-cc-focus="server" type="url" inputMode="url" autoComplete="url" {...exact} placeholder="https://claude.yourdomain.com" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
                 <label htmlFor="cc-key">Access key</label>
-                <input id="cc-key" type="password" autoComplete="off" spellCheck={false} placeholder="RUNNER_ACCESS_KEY" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} />
+                <input id="cc-key" type="password" autoComplete="off" {...exact} placeholder="RUNNER_ACCESS_KEY" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
                 <label className="cc-check"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy !== null} />Remember the key on this device</label>
                 <button className="button primary" disabled={busy !== null}>{busy === "connect" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />Connecting…</> : "Connect server"}</button>
               </form>
+              {serverError && <div id="cc-server-error"><Notice error>{serverError}</Notice></div>}
               <details className="cc-details">
                 <summary>Set up the runner on a VPS</summary>
                 <ol>
@@ -209,7 +234,6 @@ export default function ClaudeVpsPage() {
                 </ol>
               </details>
             </>}
-            {serverError && <Notice error>{serverError}</Notice>}
           </section>
 
           <section className={`cc-card ${connection && status ? "" : "is-waiting"}`} aria-labelledby="cc-auth-title">
@@ -231,12 +255,12 @@ export default function ClaudeVpsPage() {
                 <ol className="cc-steps">
                   <li>
                     <span>Sign in on Claude and approve access. Claude then shows a code.</span>
-                    <a className="button primary" href={loginUrl} target="_blank" rel="noopener noreferrer">Open Claude sign-in<ExternalLink size={14} aria-hidden="true" /></a>
+                    <a className="button primary" data-cc-focus="code" href={loginUrl} target="_blank" rel="noopener noreferrer">Open Claude sign-in<ExternalLink size={14} aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>
                   </li>
                   <li>
                     <form className="cc-form" onSubmit={finishLogin} aria-busy={busy === "finish"}>
                       <label htmlFor="cc-code">Paste the code from Claude</label>
-                      <input id="cc-code" autoComplete="off" spellCheck={false} value={code} onChange={(event) => setCode(event.target.value)} required disabled={busy !== null} />
+                      <input id="cc-code" className="cc-mono" autoComplete="off" {...exact} value={code} onChange={(event) => setCode(event.target.value)} required disabled={busy !== null} />
                       <button className="button primary" disabled={busy !== null || !code.trim()}>{busy === "finish" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />Finishing…</> : "Finish sign-in"}</button>
                     </form>
                   </li>
@@ -244,13 +268,13 @@ export default function ClaudeVpsPage() {
                 <button className="text-button" type="button" onClick={() => void cancelLogin()} disabled={busy === "finish"}>Cancel sign-in</button>
               </> : <>
                 <p>Sign in once on the server with your Pro or Max plan. This page never sees your Claude password.</p>
-                <button className="button primary" type="button" onClick={() => void startLogin()} disabled={busy !== null}>{busy === "login" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />Preparing sign-in…</> : "Sign in with Claude"}</button>
+                <button className="button primary" data-cc-focus="auth" type="button" onClick={() => void startLogin()} disabled={busy !== null}>{busy === "login" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />Preparing sign-in…</> : "Sign in with Claude"}</button>
                 <details className="cc-details">
                   <summary>Use a token instead</summary>
                   <form className="cc-form" onSubmit={saveToken} aria-busy={busy === "token"}>
                     <p>On a computer with Claude Code, run <code>claude setup-token</code> and paste the token it prints. It is stored only on your server.</p>
                     <label htmlFor="cc-token">Claude Code token</label>
-                    <input id="cc-token" type="password" autoComplete="off" spellCheck={false} placeholder="sk-ant-oat01-…" value={token} onChange={(event) => setToken(event.target.value)} required disabled={busy !== null} />
+                    <input id="cc-token" type="password" autoComplete="off" {...exact} placeholder="sk-ant-oat01-…" value={token} onChange={(event) => setToken(event.target.value)} required disabled={busy !== null} />
                     <button className="button secondary" disabled={busy !== null || !token.trim()}>{busy === "token" ? "Saving…" : "Save token on server"}</button>
                   </form>
                 </details>
@@ -263,8 +287,8 @@ export default function ClaudeVpsPage() {
           <div className="cc-console-head">
             <div className="cc-console-title">
               <h2 id="cc-console-title">Session</h2>
-              {transcript.sessionId && <span className="cc-chip" title={transcript.sessionId}>{transcript.sessionId.slice(0, 8)}</span>}
-              {transcript.model && <span className="cc-chip">{transcript.model}</span>}
+              {transcript.sessionId && <span className="cc-chip cc-mono" title={transcript.sessionId}>{transcript.sessionId.slice(0, 8)}</span>}
+              {transcript.model && <span className="cc-chip" title={transcript.model}>{transcript.model}</span>}
             </div>
             <div className="cc-controls">
               <label className="sr-only" htmlFor="cc-model">Model</label>
@@ -275,30 +299,33 @@ export default function ClaudeVpsPage() {
               <select id="cc-mode" value={mode} onChange={(event) => setMode(event.target.value as PermissionMode)} disabled={running} aria-describedby="cc-mode-help">
                 {MODES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
-              <button className="button secondary" type="button" onClick={() => setTranscript(emptyTranscript())} disabled={running || !transcript.items.length}><Plus size={14} aria-hidden="true" />New session</button>
+              <button className="button secondary cc-new" type="button" onClick={() => setTranscript(emptyTranscript())} disabled={running || !transcript.items.length}><Plus size={14} aria-hidden="true" /><span>New session</span></button>
             </div>
           </div>
           <p id="cc-mode-help" className="cc-mode-help">{modeHelp}</p>
 
-          <ol className="cc-transcript" ref={listRef} aria-live="polite">
-            {!transcript.items.length && !transcript.live && <li className="cc-empty">
-              <SquareTerminal size={22} aria-hidden="true" />
+          {/* Finished items are announced as they arrive; the reply still being written is read once it is complete. */}
+          <ol className="cc-transcript" ref={listRef} tabIndex={0} aria-label="Session transcript" aria-live="polite" aria-relevant="additions">
+            {!items.length && !transcript.live && <li className="cc-empty" data-ready={ready || undefined}>
+              <span className="cc-empty-icon"><SquareTerminal size={20} aria-hidden="true" /></span>
               <strong>{ready ? "Ready on your server" : "Not connected yet"}</strong>
               <span>{ready ? `Ask Claude Code to build, fix or explain something. It works in ${status?.workspace}.` : "Connect your server and your Claude subscription to start a session."}</span>
             </li>}
-            {transcript.items.map((item) => <TranscriptRow key={item.id} item={item} running={running} />)}
-            {transcript.live && <li className="cc-msg assistant"><span className="cc-who">Claude</span><div className="cc-text">{transcript.live}<span className="cc-caret" aria-hidden="true" /></div></li>}
-            {running && !transcript.live && <li className="cc-working"><LoaderCircle className="spin" size={14} aria-hidden="true" />Working…</li>}
+            {items.map((item, index) => <TranscriptRow key={item.id} item={item} running={running} lead={items[index - 1]?.kind === "user"} />)}
+            {transcript.live && <li className="cc-msg assistant" aria-hidden="true">{opensTurn && <Who />}<div className="cc-text"><Rich text={transcript.live} /><span className="cc-caret" /></div></li>}
+            {running && !transcript.live && <li className="cc-working">{opensTurn && <Who />}<span className="cc-working-line"><LoaderCircle className="spin" size={14} aria-hidden="true" />Working…</span></li>}
           </ol>
 
           <form className="cc-composer" onSubmit={send}>
-            <label className="sr-only" htmlFor="cc-prompt">Message Claude Code</label>
-            <textarea id="cc-prompt" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKey} placeholder={ready ? "Ask Claude Code…" : "Connect your server and subscription first"} disabled={!ready} />
-            <div className="cc-composer-bar">
-              <small>{ready ? "⌘ or Ctrl + Enter to send" : ""}</small>
-              {running
-                ? <button className="button secondary" type="button" onClick={() => void stop()}><Square size={13} aria-hidden="true" />Stop</button>
-                : <button className="button primary" disabled={!ready || !prompt.trim()}><ArrowUp size={14} aria-hidden="true" />Send</button>}
+            <div className="cc-composer-box" data-disabled={!ready || undefined}>
+              <label className="sr-only" htmlFor="cc-prompt">Message Claude Code</label>
+              <textarea id="cc-prompt" data-cc-focus="ready" rows={2} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKey} placeholder={ready ? "Ask Claude Code…" : "Connect your server and subscription first"} disabled={!ready} aria-keyshortcuts="Meta+Enter Control+Enter" />
+              <div className="cc-composer-bar">
+                <small>{ready ? "⌘ or Ctrl + Enter to send" : ""}</small>
+                {running
+                  ? <button className="button secondary" type="button" onClick={() => void stop()}><Square size={13} aria-hidden="true" />Stop</button>
+                  : <button className="button primary" disabled={!ready || !prompt.trim()}><ArrowUp size={14} aria-hidden="true" />Send</button>}
+              </div>
             </div>
           </form>
         </section>
@@ -307,17 +334,32 @@ export default function ClaudeVpsPage() {
   );
 }
 
-function TranscriptRow({ item, running }: { item: TranscriptItem; running: boolean }) {
+const Who = () => <span className="cc-who"><AgentIcon host="claude" size={14} />Claude</span>;
+
+const FENCE = /(```[^\n`]*\n[\s\S]*?(?:```|$))/;
+const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*)/;
+/** Display only: fenced blocks, `code` and **bold** in Claude's replies are drawn as such. Every other character stays as written. */
+function Rich({ text }: { text: string }) {
+  return <>{text.split(FENCE).map((part, index) => {
+    if (index % 2) return <pre key={index}><code>{part.replace(/^```[^\n]*\n/, "").replace(/\n?```$/, "")}</code></pre>;
+    const prose = part.replace(/^\n+|\n+$/g, "");
+    return prose ? <span key={index}>{prose.split(INLINE).map((piece, at) => (at % 2 === 0 ? piece : piece.startsWith("`") ? <code key={at}>{piece.slice(1, -1)}</code> : <strong key={at}>{piece.slice(2, -2)}</strong>))}</span> : null;
+  })}</>;
+}
+
+function TranscriptRow({ item, running, lead }: { item: TranscriptItem; running: boolean; lead: boolean }) {
   switch (item.kind) {
     case "user":
-      return <li className="cc-msg user"><span className="cc-who">You</span><div className="cc-text">{item.text}</div></li>;
+      return <li className="cc-msg user"><span className="sr-only">You</span><div className="cc-text">{item.text}</div></li>;
     case "assistant":
-      return <li className="cc-msg assistant"><span className="cc-who">Claude</span><div className="cc-text">{item.text}</div></li>;
+      return <li className="cc-msg assistant">{lead ? <Who /> : <span className="sr-only">Claude</span>}<div className="cc-text"><Rich text={item.text} /></div></li>;
     case "tool": {
-      const icon = item.result === undefined ? (running ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : <Wrench size={13} aria-hidden="true" />) : item.isError ? <CircleX size={13} aria-hidden="true" /> : <Wrench size={13} aria-hidden="true" />;
-      const head = <><span className="cc-tool-icon">{icon}</span><strong>{item.name}</strong><code>{item.summary}</code></>;
+      const pending = item.result === undefined;
+      const icon = pending ? (running ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : <Wrench size={13} aria-hidden="true" />) : item.isError ? <CircleX size={13} aria-hidden="true" /> : <Check size={13} aria-hidden="true" />;
+      const head = <><span className="cc-tool-icon">{icon}</span><strong>{item.name}</strong><code>{item.summary}</code>{!pending && <span className="sr-only">{item.isError ? " failed" : " finished"}</span>}</>;
       return <li className={`cc-tool ${item.isError ? "is-error" : ""}`}>
-        {item.result ? <details><summary>{head}</summary><pre>{item.result}</pre></details> : <div className="cc-tool-line">{head}</div>}
+        {lead && <Who />}
+        {item.result ? <details><summary>{head}<ChevronRight className="cc-tool-chevron" size={14} aria-hidden="true" /></summary><pre tabIndex={0} role="group" aria-label={`${item.name} output`}>{item.result}</pre></details> : <div className="cc-tool-line">{head}</div>}
       </li>;
     }
     case "result":

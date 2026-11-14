@@ -23,7 +23,9 @@
     cursor: pointer;
   }
   button:disabled {
-    cursor: not-allowed;
+    /* The arrow, as in a native app. A "not allowed" cursor flashed under the pointer every time an action
+       briefly disabled the button that started it. */
+    cursor: default;
     opacity: 0.48;
   }
   a {

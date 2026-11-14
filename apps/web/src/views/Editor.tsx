@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "rea
 import {
   ArrowLeft,
   Check,
-  ChevronDown,
   RefreshCw,
   Save,
   Video,
@@ -12,15 +11,15 @@ import {
   RotateCcw,
   Copy,
   ArrowUpRight,
+  X,
 } from "lucide-react";
 import type {
   Campaign,
   ContentItem,
-  ContentPatch,
   Platform,
   StudioContext,
 } from "@castroom/contracts";
-import { Preview, Notice, PlatformIcon, platformNames } from "../components/ui";
+import { Preview, Notice, PlatformIcon, dateLabel, platformNames } from "../components/ui";
 import { SurfaceDialog } from "../components/SurfaceDialog";
 import { exactInstant, localInput } from "../lib/time";
 import {
@@ -28,19 +27,27 @@ import {
   agentHandoff,
   applyLocalValues,
   contentPatch,
+  countLabel,
+  renderBlockReason,
   safeSourceUrl,
+  saveHint,
   wordingConcerns,
 } from "./editor/model";
+import { DetailSection } from "./editor/DetailSection";
+import { OverflowMenu, type OverflowItem } from "./editor/OverflowMenu";
 
 import { DirectorPanel } from '../director/DirectorPanel';
 import type { DirectorAction, DirectorEntry } from '../director/model';
 import type { DirectorTurn } from '../director/planner';
 import type { ContentVersion, DirectorTurnResult } from "@castroom/contracts";
 import { failedRender, itemBadge } from "../lib/status";
-// Version history is opened occasionally; it loads with the tab.
+import "../editor.css";
+// Version history is opened occasionally; it loads with its section.
 const Versions = lazy(() => import("./Versions").then((module) => ({ default: module.Versions })));
 export { contentPatch } from "./editor/model";
 export type Draft = { baseRevision: number; value: ContentItem };
+type SectionId = "guidance" | "presenter" | "channels" | "schedule" | "versions";
+const languageName = (code: string) => (code === "en" ? "English" : code === "el" ? "Greek" : code);
 type Props = {
   directorInstruction: string;
   onDirectorInstruction: (value: string) => void;
@@ -105,7 +112,9 @@ export function Editor({
   offline = false,
 }: Props) {
   const [mode, setMode] = useState<"chat"|"details">("chat");
-  const [tab, setTab] = useState("script");
+  // Details is one short list; each row opens in place and they open independently.
+  const [sections, setSections] = useState<Partial<Record<SectionId, boolean>>>({});
+  const [instantSection, setInstantSection] = useState<SectionId | "">("");
   const [platform, setPlatform] = useState<Platform>(
     item.variants[0]?.platform ?? "instagram",
   );
@@ -115,10 +124,15 @@ export function Editor({
   const [recovery, setRecovery] = useState<Draft | null>(null);
   const [feedback, setFeedback] = useState("");
   const [manualCopy, setManualCopy] = useState<string | null>(null);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  // The reason shown after someone presses Render while it is unavailable.
+  const [renderWhy, setRenderWhy] = useState("");
   const [handoffTask, setHandoffTask] = useState(
     "Review this item and propose a stronger opening. Explain the change before applying it.",
   );
   const editGroup = useRef({ field: "", at: 0 });
+  const scroller = useRef<HTMLDivElement>(null);
+  const pendingScroll = useRef("");
   const value = draft.value;
   const patch = contentPatch(item, value);
   const dirty = Object.keys(patch).length > 0;
@@ -163,6 +177,9 @@ export function Editor({
   const selectedAccount = context.channels.find(
     (channel) => channel.id === variant?.accountId,
   );
+  const platformAccounts = context.channels.filter(
+    (channel) => channel.platform === platform && channel.state === "connected",
+  );
   const badge = itemBadge(item, jobs);
   const failure = failedRender(item, jobs);
   const renderStale = Boolean(
@@ -170,6 +187,61 @@ export function Editor({
       (item.renderRevision === null ||
         item.media.revision !== item.renderRevision),
   );
+  const isVideo = item.kind === "avatar_video";
+  // Every condition that used to disable the render button, now with the reason attached.
+  const renderReason = renderBlockReason({
+    kind: item.kind,
+    canRender: context.capabilities.canRender,
+    renderBlocker: context.capabilities.renderBlocker,
+    canEdit,
+    submitted,
+    offline,
+    changedRemotely,
+    dirty,
+    hasPresenter: Boolean(avatar),
+    languageSupported,
+    hasScript: Boolean(value.script.trim()),
+  });
+  const renderReady = isVideo && !renderReason && !busy && !liveRender;
+  const titleMissing = dirty && !value.title.trim();
+  const hint = invalidTime
+    ? "Fix the posting time before saving."
+    : titleMissing
+      ? "Add a title before saving."
+      : feedback ||
+        (renderWhy && renderWhy === renderReason
+          ? renderReason
+          : saveHint({
+              dirty: dirty && !changedRemotely,
+              nextRevision: item.revision + 1,
+              kind: item.kind,
+              videoChanged,
+              hasVideo: Boolean(item.media),
+            }) ||
+            // Nothing else to say: name the one thing between this draft and a video.
+            (!dirty && isVideo && !liveRender ? renderReason : ""));
+  const zones = [...new Set(value.targets.map((target) => target.timezone))];
+  const sharedZone = zones.length <= 1 ? (zones[0] ?? context.workspace.timezone) : null;
+  const times = [...new Set(value.targets.map((target) => target.scheduledAt))].sort();
+  const scheduleValue = !times.length
+    ? "Not set"
+    : times.length > 1
+      ? `${times.length} draft times`
+      : `Draft · ${dateLabel(times[0], sharedZone ?? context.workspace.timezone)}`;
+  const guidanceValue = context.brand.rules.length
+    ? countLabel(context.brand.rules.length, "rule")
+    : item.sourceIds.length
+      ? countLabel(item.sourceIds.length, "source")
+      : "None yet";
+  const presenterValue = !isVideo
+    ? "Not used"
+    : avatar
+      ? avatar.name
+      : value.avatarId
+        ? "Unavailable"
+        : authorizedAvatars.length
+          ? "Not chosen"
+          : "None available";
 
   useEffect(() => {
     if (!playOnOpen) return;
@@ -187,7 +259,27 @@ export function Editor({
       editGroup.current = { field: "", at: 0 };
     }
   }, [item.revision]);
+  // After a section or the handoff is opened from elsewhere, bring it into view once it exists.
+  useEffect(() => {
+    if (!pendingScroll.current) return;
+    const target = document.getElementById(pendingScroll.current);
+    pendingScroll.current = "";
+    target?.scrollIntoView({ block: "nearest" });
+    if (target instanceof HTMLTextAreaElement) target.focus({ preventScroll: true });
+  });
 
+  function toggleSection(id: SectionId, viaKeyboard: boolean) {
+    setInstantSection(viaKeyboard ? id : "");
+    setSections((previous) => ({ ...previous, [id]: !previous[id] }));
+  }
+  /** Opens Details on one section — used by the chat ("show versions", "choose a presenter"). */
+  function reveal(id: SectionId) {
+    onStart?.();
+    setMode("details");
+    setInstantSection(id);
+    setSections((previous) => ({ ...previous, [id]: true }));
+    pendingScroll.current = `detail-${id}-trigger`;
+  }
   function update(
     next: Partial<ContentItem>,
     group = Object.keys(next).join(","),
@@ -224,7 +316,7 @@ export function Editor({
     setTimeErrors({});
     editGroup.current = { field: "", at: 0 };
     onChange(applyLocalValues(item, previous));
-    setFeedback("Last local edit undone.");
+    setFeedback("Last edit undone.");
   }
   function reset() {
     if (!onReset || busy) return;
@@ -236,7 +328,7 @@ export function Editor({
     onReset();
     setFeedback(
       dirty
-        ? "Latest saved version loaded. Your previous draft is kept below."
+        ? "Latest saved version loaded. Your previous draft is kept above."
         : "Latest saved version loaded.",
     );
   }
@@ -244,9 +336,7 @@ export function Editor({
     if (!recovery || !editable || changedRemotely) return;
     setHistory((previous) => [...previous.slice(-29), structuredClone(value)]);
     onChange(applyLocalValues(item, recovery.value));
-    setFeedback(
-      "Previous local draft restored as unsaved changes. Review it before saving.",
-    );
+    setFeedback("Previous draft restored as unsaved changes.");
   }
   async function copy(text: string, success: string) {
     try {
@@ -255,9 +345,8 @@ export function Editor({
       setFeedback(success);
     } catch {
       setManualCopy(text);
-      setFeedback(
-        "Clipboard access failed. Select the copy text above to copy it manually.",
-      );
+      pendingScroll.current = "manual-copy";
+      setFeedback("Clipboard access failed. Select the text to copy it.");
     }
   }
   function localDraftText(local: Draft) {
@@ -285,6 +374,29 @@ export function Editor({
     );
   }
   const handoff = agentHandoff(item, context, jobs, handoffTask, dirty);
+  const more: OverflowItem[] = [
+    ...(editable && history.length > 0 && !changedRemotely
+      ? [{ id: "undo", label: "Undo last edit", icon: <Undo2 size={15} aria-hidden="true" />, onSelect: undo }]
+      : []),
+    ...(dirty && onReset && !busy
+      ? [{ id: "discard", label: "Discard edits", icon: <RotateCcw size={15} aria-hidden="true" />, onSelect: reset }]
+      : []),
+    {
+      id: "handoff",
+      label: "Continue with your agent",
+      icon: <ArrowUpRight size={15} aria-hidden="true" />,
+      onSelect: () => {
+        setHandoffOpen(true);
+        pendingScroll.current = "handoff-task";
+      },
+    },
+  ];
+  const section = (id: SectionId) => ({
+    id: `detail-${id}`,
+    open: Boolean(sections[id]),
+    instant: instantSection === id,
+    onToggle: (viaKeyboard: boolean) => toggleSection(id, viaKeyboard),
+  });
 
   return (
     <SurfaceDialog title="Content editor" className={`editor ${home?"editor-home":""}`} editor inline={home} open={open} onClose={onClose}>
@@ -304,27 +416,15 @@ export function Editor({
       </div>
       {/* Kept mounted while Details is open so an in-flight plan, the scope and attachments are not lost. */}
       <div className="editor-chat" hidden={mode!=='chat'}>
-        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');setTab('script');}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>{onStart?.();setMode('details');setTab('versions');}:undefined} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
+        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');scroller.current?.scrollTo({top:0});}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>reveal('versions'):undefined} onPresenter={()=>reveal('presenter')} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
       </div>
       <div className="editor-details" hidden={mode!=='details'}>
-      <div className="editor-scroll">
-        <div className="editor-preview">
+      <div className="editor-scroll" ref={scroller}>
+        <div className={`editor-preview ${item.media ? "has-media" : "is-storyboard"}`}>
           <Preview item={item} index={index} compact brandName={brandName} />
-          {!item.media && (
-            <span className="preview-description">
-              <Video size={13} />
-              Preview appears after rendering
-            </span>
-          )}
-        </div>
-        <div className="editor-title-row">
-          <span className={`status-chip ${badge.tone}`}>
-            {badge.label}
-          </span>
-          <span className="revision">Version {item.revision}</span>
         </div>
         <label className="sr-only" htmlFor="item-title">
-          Content title
+          Title
         </label>
         <input
           className="title-input"
@@ -332,6 +432,7 @@ export function Editor({
           value={value.title}
           maxLength={120}
           disabled={!editable}
+          placeholder="Untitled draft"
           onChange={(event) => update({ title: event.target.value })}
         />
         {failure && (
@@ -345,21 +446,20 @@ export function Editor({
         )}
         {renderStale && (
           <Notice>
-            This is a previous render. Save your edits and regenerate before
-            reviewing the final video.
+            This video is from an earlier version. Save your edits and
+            regenerate before reviewing it.
           </Notice>
         )}
         {!canEdit && (
           <Notice>
-            Your current access allows viewing. Request content editing access
-            to make changes.
+            You can view this draft. Ask for editing access to change it.
           </Notice>
         )}
         {submitted && (
           <Notice>
-            Submitted destinations are protected from edits here. Check their
-            current status and explicitly cancel or reschedule when supported.
-            An existing post is not changed by a draft.
+            A destination was already submitted, so this draft is locked here.
+            Cancel or reschedule it from its status. An existing post is never
+            changed by a draft.
           </Notice>
         )}
         {changedRemotely && (
@@ -367,8 +467,7 @@ export function Editor({
             <strong>Version {item.revision} is now available.</strong>
             <p>
               Your draft is based on version {draft.baseRevision}. Copy it or
-              load the latest version before continuing. Loading latest keeps a
-              recoverable local copy.
+              load the latest version; loading keeps a recoverable copy.
             </p>
             <div className="editor-recovery-actions">
               <button
@@ -395,13 +494,14 @@ export function Editor({
           </Notice>
         )}
         {recovery && (
-          <details className="source-detail">
+          <details className="editor-recovery">
             <summary>
-              Previous local draft <RotateCcw size={13} />
+              <RotateCcw size={13} aria-hidden="true" />
+              Previous draft kept
             </summary>
             <p>
-              Kept from version {recovery.baseRevision}. This is a local
-              recovery copy, not version history.
+              From version {recovery.baseRevision}. A local recovery copy, not
+              version history.
             </p>
             <div className="editor-recovery-actions">
               <button
@@ -427,213 +527,178 @@ export function Editor({
           </details>
         )}
 
-        <div className="segmented editor-tabs" aria-label="Editor sections">
-          {[
-            ["script", "Script"],
-            ["style", "Avatar & style"],
-            ["publish", "Channels"],
-            ...(versions ? [["versions", "Versions"]] : []),
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              aria-pressed={tab === id}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="field script-field">
+          <label htmlFor="script">
+            {isVideo ? "What your presenter says" : "Content text"}
+          </label>
+          <textarea
+            id="script"
+            rows={6}
+            maxLength={5000}
+            value={value.script}
+            disabled={!editable}
+            aria-describedby="script-count"
+            onChange={(event) => update({ script: event.target.value })}
+          />
+          <span className="field-count" id="script-count">
+            <span className="sr-only">Characters used: </span>
+            {value.script.length.toLocaleString("en")} / 5,000
+          </span>
         </div>
-        {tab === "versions" && versions && (
-          <Suspense fallback={<div className="view-skeleton" role="status" aria-label="Loading versions"><span className="skeleton skeleton-line" /><span className="skeleton skeleton-block" /></div>}><Versions
-            item={item}
-            timezone={campaign.timezone}
-            load={versions.load}
-            restore={versions.restore}
-            blocked={dirty ? "Save or discard your unsaved edits before restoring a version." : offline ? "Reconnect to restore a version." : submitted ? "A destination has been submitted for this item, so it can’t be changed here." : !canEdit ? "Your access allows viewing only." : ""}
-          /></Suspense>
-        )}
-        {tab === "script" && (
-          <>
-            <div className="field">
-              <label htmlFor="script">
-                {item.kind === "avatar_video"
-                  ? "What your presenter says"
-                  : "Content text"}
-                <span>{value.script.length}/5000</span>
-              </label>
-              <textarea
-                id="script"
-                rows={8}
-                maxLength={5000}
-                value={value.script}
+        {concerns.map((concern) => (
+          <div className="brand-warning" key={concern.rule}>
+            <AlertTriangle size={15} aria-hidden="true" />
+            <div>
+              <p>
+                <strong>“{concern.phrase}”</strong> may conflict with your
+                rule “{concern.rule}”
+              </p>
+              <button
+                className="text-button"
                 disabled={!editable}
-                onChange={(event) => update({ script: event.target.value })}
-              />
+                onClick={() =>
+                  update({
+                    script: value.script
+                      .replace(concern.sentence, "")
+                      .replace(/\n{3,}/g, "\n\n")
+                      .trim(),
+                  })
+                }
+              >
+                Remove that sentence
+              </button>
               <small>
-                {item.kind === "avatar_video"
-                  ? "Script changes need a new video. Save before regenerating."
-                  : "Save text changes before preparing a new review."}
+                A narrow wording check. It doesn’t verify claims or authorize
+                publishing.
               </small>
             </div>
-            {concerns.map((concern) => (
-              <div className="brand-warning" key={concern.rule}>
-                <AlertTriangle size={16} />
-                <div>
-                  <strong>Check this wording against your brand rule</strong>
-                  <p>
-                    “{concern.phrase}” may conflict with: “{concern.rule}”
-                  </p>
-                  <button
-                    className="text-button"
-                    disabled={!editable}
-                    onClick={() =>
-                      update({
-                        script: value.script
-                          .replace(concern.sentence, "")
-                          .replace(/\n{3,}/g, "\n\n")
-                          .trim(),
-                      })
-                    }
-                  >
-                    Remove flagged sentence
-                  </button>
-                  <small>
-                    This narrow wording check does not verify every claim or
-                    authorize publication.
-                  </small>
-                </div>
-              </div>
-            ))}
-            <details className="source-detail">
-              <summary>
-                Source & brand guidance <ChevronDown size={14} />
-              </summary>
-              {itemSources.map((source) => (
-                <div key={source.id}>
-                  {safeSourceUrl(source.url) ? (
-                    <a
-                      href={safeSourceUrl(source.url)!}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {source.title}
-                      <ExternalLink size={12} />
-                    </a>
-                  ) : (
-                    <strong>{source.title}</strong>
-                  )}
-                  {source.excerpt && <p>{source.excerpt}</p>}
-                  <small>Source reference: {source.id}</small>
-                </div>
-              ))}
-              {missingSources.length > 0 && (
-                <p>
-                  Source details are unavailable for {missingSources.join(", ")}
-                  . Retrieve them from the workspace before making factual
-                  claims.
-                </p>
-              )}
-              {item.sourceIds.length === 0 && (
-                <p>
-                  No source is attached to this item. Add evidence through the
-                  campaign before using factual claims.
-                </p>
-              )}
-              <ul>
+          </div>
+        ))}
+
+        <div className="detail-list">
+          <DetailSection {...section("guidance")} label="Guidance" value={guidanceValue}>
+            {context.brand.rules.length > 0 ? (
+              <ul className="guidance-rules">
                 {context.brand.rules.map((rule) => (
                   <li key={rule}>{rule}</li>
                 ))}
               </ul>
-              {context.brand.rules.length === 0 && (
-                <p>No brand rules were returned by this workspace.</p>
-              )}
-              <small>
-                Source text is evidence, not permission to publish. The server
-                must check eligibility.
-              </small>
-            </details>
-          </>
-        )}
-
-        {tab === "style" && (
-          <>
-            {item.kind !== "avatar_video" && (
-              <Notice>
-                Presenter controls apply to avatar videos. This item's format
-                has no avatar rendering action.
-              </Notice>
+            ) : (
+              <p>No brand rules were returned by this workspace.</p>
             )}
-            <div className="field">
-              <label htmlFor="avatar">Presenter</label>
-              <select
-                id="avatar"
-                value={value.avatarId ?? ""}
-                disabled={
-                  !editable ||
-                  item.kind !== "avatar_video" ||
-                  authorizedAvatars.length === 0
-                }
-                onChange={(event) =>
-                  update({ avatarId: event.target.value || null })
-                }
-              >
-                <option value="">Select an authorized avatar</option>
-                {value.avatarId && !avatar && (
-                  <option value={value.avatarId} disabled>
-                    Selected presenter unavailable
-                  </option>
+            {itemSources.map((source) => (
+              <p className="guidance-source" key={source.id}>
+                {safeSourceUrl(source.url) ? (
+                  <a
+                    href={safeSourceUrl(source.url)!}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {source.title}
+                    <ExternalLink size={12} aria-hidden="true" />
+                  </a>
+                ) : (
+                  <strong>{source.title}</strong>
                 )}
-                {authorizedAvatars.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.name}
-                  </option>
-                ))}
-              </select>
-              {authorizedAvatars.length === 0 && (
-                <small>
-                  No authorized presenter is available in this workspace.
-                </small>
-              )}
-            </div>
-            <div className="field">
-              <label htmlFor="language">Script language</label>
-              <select
-                id="language"
-                value={value.language}
-                disabled={!editable || !avatar}
-                onChange={(event) => update({ language: event.target.value })}
-              >
+                {source.excerpt && <span>{source.excerpt}</span>}
+              </p>
+            ))}
+            {missingSources.length > 0 && (
+              <p>
+                Details for {countLabel(missingSources.length, "source")}{" "}
+                couldn’t be loaded. Retrieve them from the workspace before
+                making factual claims.
+              </p>
+            )}
+            {item.sourceIds.length === 0 && (
+              <p>
+                No source is attached. Add evidence through the campaign
+                before using factual claims.
+              </p>
+            )}
+            <small>
+              Sources are evidence, not permission to publish. The server
+              checks eligibility.
+            </small>
+          </DetailSection>
+
+          <DetailSection {...section("presenter")} label="Presenter & style" value={presenterValue}>
+            {!isVideo && (
+              <p>
+                Presenter controls apply to avatar videos. This format has no
+                avatar to render.
+              </p>
+            )}
+            {authorizedAvatars.length > 0 || value.avatarId ? (
+              <div className="field">
+                <label htmlFor="avatar">Presenter</label>
+                <select
+                  id="avatar"
+                  value={value.avatarId ?? ""}
+                  disabled={
+                    !editable || !isVideo || authorizedAvatars.length === 0
+                  }
+                  onChange={(event) =>
+                    update({ avatarId: event.target.value || null })
+                  }
+                >
+                  <option value="">Select an authorized avatar</option>
+                  {value.avatarId && !avatar && (
+                    <option value={value.avatarId} disabled>
+                      Selected presenter unavailable
+                    </option>
+                  )}
+                  {authorizedAvatars.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              isVideo && (
+                <p>No authorized presenter is available in this workspace yet.</p>
+              )
+            )}
+            {avatar ? (
+              <div className="field">
+                <label htmlFor="language">Script language</label>
+                <select
+                  id="language"
+                  value={value.language}
+                  disabled={!editable}
+                  onChange={(event) => update({ language: event.target.value })}
+                >
+                  {!languageSupported && (
+                    <option value={value.language}>
+                      {languageName(value.language)}
+                    </option>
+                  )}
+                  {avatar.languages.map((language) => (
+                    <option key={language} value={language}>
+                      {languageName(language)}
+                    </option>
+                  ))}
+                </select>
                 {!languageSupported && (
-                  <option value={value.language}>
-                    {value.language === "en"
-                      ? "English"
-                      : value.language === "el"
-                        ? "Greek"
-                        : value.language}
-                  </option>
+                  <small>
+                    This presenter doesn’t support that language. Choose one
+                    of theirs.
+                  </small>
                 )}
-                {avatar?.languages.map((language) => (
-                  <option key={language} value={language}>
-                    {language === "en"
-                      ? "English"
-                      : language === "el"
-                        ? "Greek"
-                        : language}
-                  </option>
-                ))}
-              </select>
-              {avatar && !languageSupported && (
-                <small>
-                  This presenter does not support the selected language. Choose
-                  one of its available languages.
-                </small>
-              )}
-            </div>
+              </div>
+            ) : (
+              <dl className="detail-facts">
+                <dt>Script language</dt>
+                <dd>{languageName(value.language)}</dd>
+              </dl>
+            )}
             <div className="field toggle-field">
               <label htmlFor="captions">Burned-in captions</label>
               <input
                 id="captions"
                 type="checkbox"
+                role="switch"
                 checked={value.style.captions}
                 disabled={!editable}
                 onChange={(event) =>
@@ -643,30 +708,33 @@ export function Editor({
                 }
               />
             </div>
-            <div className="field">
-              <label htmlFor="caption-position">Caption position</label>
-              <select
-                id="caption-position"
-                value={value.style.captionPosition}
-                disabled={!editable || !value.style.captions}
-                onChange={(event) =>
-                  update({
-                    style: {
-                      ...value.style,
-                      captionPosition: event.target.value as
-                        | "bottom"
-                        | "center",
-                    },
-                  })
-                }
-              >
-                <option value="bottom">Lower third</option>
-                <option value="center">Center</option>
-              </select>
-            </div>
-            <div className="field">
+            {value.style.captions && (
+              <div className="field">
+                <label htmlFor="caption-position">Caption position</label>
+                <select
+                  id="caption-position"
+                  value={value.style.captionPosition}
+                  disabled={!editable}
+                  onChange={(event) =>
+                    update({
+                      style: {
+                        ...value.style,
+                        captionPosition: event.target.value as
+                          | "bottom"
+                          | "center",
+                      },
+                    })
+                  }
+                >
+                  <option value="bottom">Lower third</option>
+                  <option value="center">Center</option>
+                </select>
+              </div>
+            )}
+            <div className="field toggle-field">
               <label htmlFor="brand-color">Brand color</label>
               <div className="color-field">
+                <code>{value.style.brandColor}</code>
                 <input
                   id="brand-color"
                   type="color"
@@ -678,88 +746,103 @@ export function Editor({
                     })
                   }
                 />
-                <code>{value.style.brandColor}</code>
               </div>
-              <small>
-                Saved as draft styling preferences. Renderer support must be
-                confirmed before export; style changes require a new
-                composition.
-              </small>
             </div>
-          </>
-        )}
+            <small>
+              Style is saved with the draft. Changing it needs a new render,
+              and the renderer confirms what it can apply.
+            </small>
+          </DetailSection>
 
-        {tab === "publish" && (
-          <>
+          <DetailSection
+            {...section("channels")}
+            label="Channels"
+            value={
+              value.variants.length ? (
+                <>
+                  <span className="sr-only">
+                    {countLabel(value.variants.length, "channel")}
+                  </span>
+                  {value.variants.map((candidate) => (
+                    <PlatformIcon key={candidate.platform} platform={candidate.platform} />
+                  ))}
+                </>
+              ) : (
+                "None"
+              )
+            }
+          >
             {/* Publishing accounts for this workspace, passed in by the studio (absent in local previews). */}
             {channels && <div className="channels-slot" data-slot="details-channels">{channels}</div>}
-            <div className="channel-tabs">
-              {value.variants.map((candidate) => (
-                <button
-                  key={candidate.platform}
-                  className="icon-button"
-                  aria-label={platformNames[candidate.platform]}
-                  aria-pressed={platform === candidate.platform}
-                  onClick={() => setPlatform(candidate.platform)}
-                >
-                  <PlatformIcon platform={candidate.platform} />
-                </button>
-              ))}
-            </div>
+            {value.variants.length > 1 && (
+              <div className="segmented channel-tabs" role="group" aria-label="Channel">
+                {value.variants.map((candidate) => (
+                  <button
+                    key={candidate.platform}
+                    aria-label={platformNames[candidate.platform]}
+                    aria-pressed={platform === candidate.platform}
+                    onClick={() => setPlatform(candidate.platform)}
+                  >
+                    <PlatformIcon platform={candidate.platform} />
+                    <span aria-hidden="true">{platformNames[candidate.platform].split(" ")[0]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {variant ? (
               <>
-                <h3>{platformNames[platform]}</h3>
                 {selectedFormat?.supported !== true && (
-                  <Notice>
+                  <p className="detail-note">
                     {selectedFormat?.reason ??
                       "This content format is not confirmed for this channel."}{" "}
                     You can keep draft copy here.
-                  </Notice>
+                  </p>
                 )}
-                <div className="field">
-                  <label htmlFor="channel-account">Publishing account</label>
-                  <select
-                    id="channel-account"
-                    value={variant.accountId ?? ""}
-                    disabled={!editable || submitted}
-                    onChange={(event) => {
-                      const accountId = event.target.value || null;
-                      update({
-                        variants: value.variants.map((candidate) =>
-                          candidate.platform === platform
-                            ? { ...candidate, accountId }
-                            : candidate,
-                        ),
-                        targets: value.targets.map((target) =>
-                          target.platform === platform
-                            ? { ...target, accountId }
-                            : target,
-                        ),
-                      });
-                    }}
-                  >
-                    <option value="">No account selected</option>
-                    {variant.accountId &&
-                      (!selectedAccount ||
-                        selectedAccount.state !== "connected") && (
-                        <option value={variant.accountId} disabled>
-                          {selectedAccount?.displayName ?? "Selected account"} ·
-                          reconnect required
-                        </option>
-                      )}
-                    {context.channels
-                      .filter(
-                        (channel) =>
-                          channel.platform === platform &&
-                          channel.state === "connected",
-                      )
-                      .map((channel) => (
+                {platformAccounts.length > 0 || variant.accountId ? (
+                  <div className="field">
+                    <label htmlFor="channel-account">Publishing account</label>
+                    <select
+                      id="channel-account"
+                      value={variant.accountId ?? ""}
+                      disabled={!editable || submitted}
+                      onChange={(event) => {
+                        const accountId = event.target.value || null;
+                        update({
+                          variants: value.variants.map((candidate) =>
+                            candidate.platform === platform
+                              ? { ...candidate, accountId }
+                              : candidate,
+                          ),
+                          targets: value.targets.map((target) =>
+                            target.platform === platform
+                              ? { ...target, accountId }
+                              : target,
+                          ),
+                        });
+                      }}
+                    >
+                      <option value="">No account selected</option>
+                      {variant.accountId &&
+                        (!selectedAccount ||
+                          selectedAccount.state !== "connected") && (
+                          <option value={variant.accountId} disabled>
+                            {selectedAccount?.displayName ?? "Selected account"} ·
+                            reconnect required
+                          </option>
+                        )}
+                      {platformAccounts.map((channel) => (
                         <option key={channel.id} value={channel.id}>
                           {channel.displayName}
                         </option>
                       ))}
-                  </select>
-                </div>
+                    </select>
+                  </div>
+                ) : (
+                  <dl className="detail-facts">
+                    <dt>Publishing account</dt>
+                    <dd>Not connected</dd>
+                  </dl>
+                )}
                 <div className="field">
                   <label htmlFor="channel-title">Title</label>
                   <input
@@ -776,7 +859,7 @@ export function Editor({
                   <label htmlFor="channel-copy">Caption</label>
                   <textarea
                     id="channel-copy"
-                    rows={5}
+                    rows={4}
                     maxLength={2200}
                     value={variant.caption}
                     disabled={!editable || submitted}
@@ -784,67 +867,78 @@ export function Editor({
                       updateVariant({ caption: event.target.value })
                     }
                   />
-                  <small>
-                    Channel copy can reuse the video. Changes still require a
-                    fresh schedule review.
-                  </small>
                 </div>
-                <div className="field">
-                  <label htmlFor="visibility">Visibility</label>
-                  <select
-                    id="visibility"
-                    value={variant.visibility}
-                    disabled={
-                      !editable ||
-                      submitted ||
-                      context.capabilities.visibility.length === 0
-                    }
-                    onChange={(event) =>
-                      updateVariant({
-                        visibility: event.target
-                          .value as ContentItem["variants"][number]["visibility"],
-                      })
-                    }
-                  >
-                    {!context.capabilities.visibility.includes(
-                      variant.visibility,
-                    ) && (
-                      <option value={variant.visibility}>
-                        {variant.visibility} · not confirmed
-                      </option>
-                    )}
-                    {context.capabilities.visibility.map((visibility) => (
-                      <option key={visibility} value={visibility}>
-                        {visibility}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <label className="check-label">
+                {context.capabilities.visibility.length > 0 && (
+                  <div className="field">
+                    <label htmlFor="visibility">Visibility</label>
+                    <select
+                      id="visibility"
+                      value={variant.visibility}
+                      disabled={!editable || submitted}
+                      onChange={(event) =>
+                        updateVariant({
+                          visibility: event.target
+                            .value as ContentItem["variants"][number]["visibility"],
+                        })
+                      }
+                    >
+                      {!context.capabilities.visibility.includes(
+                        variant.visibility,
+                      ) && (
+                        <option value={variant.visibility}>
+                          {variant.visibility} · not confirmed
+                        </option>
+                      )}
+                      {context.capabilities.visibility.map((visibility) => (
+                        <option key={visibility} value={visibility}>
+                          {visibility}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="field toggle-field">
+                  <label htmlFor="ai-disclosure">Disclose AI-generated content</label>
                   <input
+                    id="ai-disclosure"
                     type="checkbox"
+                    role="switch"
                     checked={variant.aiDisclosure}
                     disabled={!editable || submitted}
                     onChange={(event) =>
                       updateVariant({ aiDisclosure: event.target.checked })
                     }
                   />
-                  Disclose AI-generated content
-                </label>
-                {(value.targets.some((target) => target.platform === platform)
-                  ? value.targets.filter(
-                      (target) => target.platform === platform,
-                    )
-                  : [null]
-                ).map((target, targetIndex) => {
-                  const targetKey = `${platform}-${targetIndex}`;
+                </div>
+                <small>
+                  Channel copy reuses the video. Changing it needs a fresh
+                  schedule review.
+                </small>
+              </>
+            ) : (
+              <p>This item has no channel variant to edit.</p>
+            )}
+          </DetailSection>
+
+          <DetailSection {...section("schedule")} label="Posting times" value={scheduleValue}>
+            {value.variants.length === 0 && (
+              <p>This item has no channel to schedule.</p>
+            )}
+            {value.variants.flatMap((candidate) => {
+              const channel = candidate.platform;
+              const channelTargets = value.targets.filter(
+                (target) => target.platform === channel,
+              );
+              return (channelTargets.length ? channelTargets : [null]).map(
+                (target, targetIndex) => {
+                  const targetKey = `${channel}-${targetIndex}`;
                   const timezone =
                     target?.timezone ?? context.workspace.timezone;
                   return (
                     <div className="field" key={targetKey}>
                       <label htmlFor={`schedule-${targetKey}`}>
-                        {target ? "Draft time" : "Choose draft time"} ·{" "}
-                        {timezone}
+                        {platformNames[channel]}
+                        {(!sharedZone || !target) && <span>{timezone}</span>}
                       </label>
                       <input
                         id={`schedule-${targetKey}`}
@@ -857,7 +951,7 @@ export function Editor({
                         }
                         disabled={!editable || submitted}
                         aria-invalid={Boolean(timeErrors[targetKey])}
-                        aria-describedby={`schedule-help-${targetKey}`}
+                        aria-describedby="schedule-help"
                         onChange={(event) => {
                           const localTime = event.target.value;
                           setTimeInputs((previous) => ({
@@ -870,16 +964,16 @@ export function Editor({
                               timezone,
                             );
                             const targets = target
-                              ? value.targets.map((candidate) =>
-                                  candidate === target
-                                    ? { ...candidate, scheduledAt }
-                                    : candidate,
+                              ? value.targets.map((existing) =>
+                                  existing === target
+                                    ? { ...existing, scheduledAt }
+                                    : existing,
                                 )
                               : [
                                   ...value.targets,
                                   {
-                                    platform,
-                                    accountId: variant.accountId,
+                                    platform: channel,
+                                    accountId: candidate.accountId,
                                     scheduledAt,
                                     timezone,
                                     state: "draft" as const,
@@ -898,77 +992,95 @@ export function Editor({
                             setTimeErrors((previous) => ({
                               ...previous,
                               [targetKey]: localTime
-                                ? "This local time is invalid or ambiguous. Choose a time outside the daylight-saving transition."
+                                ? "That time is skipped or repeated when the clocks change. Choose another."
                                 : "Enter a complete date and time.",
                             }));
                           }
                         }}
                       />
-                      <small id={`schedule-help-${targetKey}`}>
-                        {target ? `UTC: ${target.scheduledAt}. ` : ""}Requested
-                        time; provider processing may delay delivery.
-                      </small>
                       {timeErrors[targetKey] && (
                         <Notice error>{timeErrors[targetKey]}</Notice>
                       )}
                       {target &&
                         new Date(target.scheduledAt).getTime() < Date.now() && (
                           <Notice error>
-                            This time has passed. Choose a future time before
-                            scheduling. It will not become “publish now.”
+                            This time has passed. Choose a future one; it will
+                            not become “publish now.”
                           </Notice>
                         )}
                     </div>
                   );
-                })}
-              </>
-            ) : (
-              <Notice>This item has no channel variant to edit.</Notice>
-            )}
-          </>
-        )}
-
-        <details className="source-detail editor-handoff">
-          <summary>
-            Continue with your agent <ArrowUpRight size={14} />
-          </summary>
-          <div className="field">
-            <label htmlFor="handoff-task">Task for your agent</label>
-            <textarea
-              id="handoff-task"
-              rows={3}
-              maxLength={600}
-              value={handoffTask}
-              onChange={(event) => setHandoffTask(event.target.value)}
-            />
-          </div>
-          <p>
-            Includes your task plus IDs, versions, job status and constraints.
-            Stored scripts, captions, source text and credentials are excluded.
-          </p>
-          {dirty && (
-            <small>
-              Save first if the agent should see your latest local changes.
+                },
+              );
+            })}
+            <small id="schedule-help">
+              Draft times{sharedZone ? ` in ${sharedZone}` : ""}. Nothing posts
+              until you approve the schedule, and a platform may deliver a
+              little late.
             </small>
+          </DetailSection>
+
+          {versions && (
+            <DetailSection {...section("versions")} label="Versions" value={`v${item.revision}`}>
+              <Suspense fallback={<div className="view-skeleton" role="status" aria-label="Loading versions"><span className="skeleton skeleton-line" /><span className="skeleton skeleton-block" /></div>}><Versions
+                item={item}
+                timezone={campaign.timezone}
+                load={versions.load}
+                restore={versions.restore}
+                blocked={dirty ? "Save or discard your unsaved edits before restoring a version." : offline ? "Reconnect to restore a version." : submitted ? "A destination has been submitted for this item, so it can’t be changed here." : !canEdit ? "Your access allows viewing only." : ""}
+              /></Suspense>
+            </DetailSection>
           )}
-          <button
-            className="button secondary"
-            disabled={!handoffTask.trim()}
-            onClick={() =>
-              void copy(
-                handoff,
-                "Handoff copied. Paste it into your connected agent.",
-              )
-            }
-          >
-            <Copy size={13} />
-            Copy handoff
-          </button>
-          <details>
-            <summary>Inspect copied handoff</summary>
-            <pre className="editor-handoff-code">{handoff}</pre>
-          </details>
-        </details>
+        </div>
+
+        {handoffOpen && (
+          <section className="editor-handoff" aria-labelledby="handoff-heading">
+            <div className="editor-handoff-head">
+              <h3 id="handoff-heading">Continue with your agent</h3>
+              <button
+                className="icon-button"
+                aria-label="Close agent handoff"
+                onClick={() => setHandoffOpen(false)}
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="field">
+              <label htmlFor="handoff-task">Task for your agent</label>
+              <textarea
+                id="handoff-task"
+                rows={3}
+                maxLength={600}
+                value={handoffTask}
+                onChange={(event) => setHandoffTask(event.target.value)}
+              />
+            </div>
+            <p>
+              Copies your task with IDs, versions and job status. Scripts,
+              captions, sources and credentials are left out.
+            </p>
+            {dirty && (
+              <p>Save first if the agent should see your latest edits.</p>
+            )}
+            <button
+              className="button secondary"
+              disabled={!handoffTask.trim()}
+              onClick={() =>
+                void copy(
+                  handoff,
+                  "Handoff copied. Paste it into your connected agent.",
+                )
+              }
+            >
+              <Copy size={13} />
+              Copy handoff
+            </button>
+            <details>
+              <summary>Inspect copied handoff</summary>
+              <pre className="editor-handoff-code">{handoff}</pre>
+            </details>
+          </section>
+        )}
         {manualCopy !== null && (
           <div className="field">
             <label htmlFor="manual-copy">Copy text manually</label>
@@ -987,40 +1099,60 @@ export function Editor({
       </div>
       <footer className="editor-footer">
         {error && <Notice error>{error}</Notice>}
-        {offline && <p className="editor-offline" role="status">You’re offline. Your unsaved draft stays here.</p>}
-        <div className="save-state">
-          {dirty ? <span className="unsaved-dot" /> : <Check size={13} />}
-          <span>
-            {changedRemotely
-              ? `Draft from v${draft.baseRevision} · latest v${item.revision}`
-              : dirty
-                ? "Unsaved changes"
-                : `Saved · version ${item.revision}`}
-          </span>
-          <div className="editor-history-actions">
-            <button
-              className="icon-button"
-              disabled={!editable || history.length === 0 || changedRemotely}
-              onClick={undo}
-              aria-label="Undo last local edit"
-              title="Undo last local edit"
-            >
-              <Undo2 size={14} />
-            </button>
-            <button
-              className="icon-button"
-              disabled={!dirty || !onReset || busy}
-              onClick={reset}
-              aria-label="Discard unsaved edits and keep a recovery copy"
-              title="Discard edits; keep recovery copy"
-            >
-              <RotateCcw size={14} />
-            </button>
-          </div>
+        <div className="editor-status">
+          <p className="save-state">
+            {dirty ? <span className="unsaved-dot" /> : <Check size={13} aria-hidden="true" />}
+            {changedRemotely ? (
+              <span>Draft from v{draft.baseRevision} · latest v{item.revision}</span>
+            ) : dirty ? (
+              <span>Unsaved changes</span>
+            ) : (
+              <>
+                <span aria-hidden="true">Saved · v{item.revision}</span>
+                <span className="sr-only">Saved · version {item.revision}</span>
+              </>
+            )}
+          </p>
+          {offline ? (
+            <p className="editor-hint editor-offline" role="status">You’re offline. Your unsaved draft stays here.</p>
+          ) : (
+            hint && <p className="editor-hint" role="status">{hint}</p>
+          )}
         </div>
         <div className="editor-actions">
+          <OverflowMenu label="More actions" items={more} />
+          {isVideo && (
+            <span className="editor-render" data-tip={renderReason && hint !== renderReason ? renderReason : undefined}>
+              <button
+                className={`button ${renderReady ? "primary" : "secondary"}`}
+                disabled={busy || liveRender}
+                aria-disabled={renderReason ? true : undefined}
+                aria-describedby={renderReason ? "render-reason" : undefined}
+                onClick={() => {
+                  // Still a guard, not only a style: a blocked render explains itself and goes no further.
+                  if (renderReason) {
+                    setRenderWhy(renderReason);
+                    return;
+                  }
+                  onRender();
+                }}
+              >
+                {item.media ? <RefreshCw size={14} aria-hidden="true" /> : <Video size={14} aria-hidden="true" />}
+                {activeRenderJob?.state === "queued"
+                  ? "Render queued"
+                  : activeRenderJob?.stage === "compose"
+                    ? "Composing…"
+                    : liveRender
+                      ? "Rendering…"
+                      : item.media
+                        ? "Regenerate"
+                        : "Render video"}
+              </button>
+              {renderReason && <span className="sr-only" id="render-reason">{renderReason}</span>}
+            </span>
+          )}
           <button
-            className="button secondary"
+            className={`button ${renderReady ? "secondary" : "primary"}`}
             disabled={
               !dirty ||
               offline ||
@@ -1032,52 +1164,10 @@ export function Editor({
             }
             onClick={onSave}
           >
-            <Save size={14} />
+            <Save size={14} aria-hidden="true" />
             {busy ? "Working…" : "Save changes"}
           </button>
-          <button
-            className="button primary"
-            disabled={
-              busy ||
-              offline ||
-              dirty ||
-              changedRemotely ||
-              submitted ||
-              !canEdit ||
-              !context.capabilities.canRender ||
-              !languageSupported ||
-              !value.script.trim() ||
-              item.kind !== "avatar_video" ||
-              liveRender
-            }
-            onClick={onRender}
-          >
-            <RefreshCw size={14} />
-            {activeRenderJob?.state === "queued"
-              ? "Render queued"
-              : activeRenderJob?.stage === "compose"
-                ? "Composing…"
-                : liveRender
-                  ? "Rendering…"
-                  : "Regenerate"}
-          </button>
         </div>
-        {dirty && (
-          <small>
-            {item.kind !== "avatar_video"
-              ? "Save these changes before preparing a fresh review."
-              : videoChanged
-                ? "These edits need a new video and a fresh schedule review."
-                : "The video can be reused. Review the updated copy and schedule before publishing."}
-          </small>
-        )}
-        {invalidTime && (
-          <small>Fix the invalid draft time in Channels before saving.</small>
-        )}
-        {!context.capabilities.canRender && (
-          <small className="render-blocker">{context.capabilities.renderBlocker ?? "Rendering is unavailable in this workspace."}</small>
-        )}
-        {feedback && <small role="status">{feedback}</small>}
       </footer>
       </div>
       </>}

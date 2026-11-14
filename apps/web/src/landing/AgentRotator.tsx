@@ -17,18 +17,26 @@ export const agents: ReadonlyArray<{ host: AgentHost; name: string; tested: bool
 ];
 
 const INTERVAL_MS = 2000;
-const EXIT_MS = 260;
 
 /**
  * The accessible sentence never changes ("your agent"); only the decorative client name rotates.
- * The slot hugs each name: its width animates to the measured width of the incoming label, so there
- * is never a gap beside a short name or a jump beside a long one.
+ *
+ * Nothing else may move when it does, so the chip has a line of its own and is centred on it: a
+ * longer or shorter name grows or shrinks the chip evenly about its middle and has no neighbour to
+ * push. The chip still hugs each name exactly. Its surface is drawn once at the widest name's width
+ * and cut to the current name's measured width with clip-path, so the change is paint only: no
+ * element is resized, and every transition retargets if it is interrupted.
  */
 export function RotatingAgentHeadline() {
   const [{ current, leaving }, setTurn] = useState<{ current: number; leaving: number | null }>({ current: 0, leaving: null });
   const [paused, setPaused] = useState(false);
   const [motion, setMotion] = useState(false);
+  const [restart, setRestart] = useState(0);
+  /** Label widths in em of the headline size, so they stay true while the fluid type scales. */
   const [widths, setWidths] = useState<number[] | null>(null);
+  /** Width changes ease only after the first measurement has been painted, so the chip never animates into place on load. */
+  const [armed, setArmed] = useState(false);
+  const chip = useRef<HTMLSpanElement>(null);
   const labels = useRef<(HTMLSpanElement | null)[]>([]);
 
   useEffect(() => {
@@ -42,20 +50,37 @@ export function RotatingAgentHeadline() {
   useEffect(() => {
     let alive = true;
     const measure = () => {
-      if (!alive) return;
-      const next = labels.current.map((node) => (node ? Math.ceil(node.getBoundingClientRect().width * 4) / 4 : 0));
+      const node = chip.current;
+      if (!alive || !node) return;
+      const em = parseFloat(getComputedStyle(node).fontSize);
+      if (!em) return;
+      const next = labels.current.map((label) => (label ? Math.ceil((label.getBoundingClientRect().width / em) * 1000) / 1000 : 0));
       if (next.some((width) => width === 0)) return;
-      setWidths((previous) => (previous && previous.every((width, index) => Math.abs(width - next[index]) < 0.25) ? previous : next));
+      setWidths((previous) => (previous && previous.every((width, index) => Math.abs(width - next[index]) < 0.004) ? previous : next));
     };
     const observer = new ResizeObserver(measure);
-    labels.current.forEach((node) => node && observer.observe(node));
+    labels.current.forEach((label) => label && observer.observe(label));
     measure();
+    // The web font can arrive after first paint; the chip then settles onto the new widths in place.
     void document.fonts?.ready.then(measure);
     return () => {
       alive = false;
       observer.disconnect();
     };
   }, []);
+
+  const measured = widths !== null;
+  useEffect(() => {
+    if (!measured) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setArmed(true));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [measured]);
 
   useEffect(() => {
     if (!motion || paused) return;
@@ -64,45 +89,53 @@ export function RotatingAgentHeadline() {
       if (!document.hidden) setTurn((turn) => ({ current: (turn.current + 1) % agents.length, leaving: turn.current }));
     }, INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [motion, paused]);
+  }, [motion, paused, restart]);
 
-  useEffect(() => {
-    if (leaving === null) return;
-    // Once the outgoing name has faded, park it back below the line so it next enters from below again.
-    const timer = window.setTimeout(() => setTurn((turn) => (turn.leaving === leaving ? { ...turn, leaving: null } : turn)), EXIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [leaving]);
+  /** Pressing the chip moves straight to the next client and gives it a full turn on screen. */
+  function advance() {
+    if (!motion) return;
+    setTurn((turn) => ({ current: (turn.current + 1) % agents.length, leaving: turn.current }));
+    setRestart((value) => value + 1);
+  }
 
-  const slotStyle = widths ? ({ width: `${widths[current]}px` } as CSSProperties) : undefined;
+  const chipStyle = widths ? ({ "--agent-w": `${widths[current]}em`, "--agent-max": `${Math.max(...widths)}em` } as CSSProperties) : undefined;
   return (
     <div className="landing-rotating-headline">
       <h1 id="landing-title" className="hero-title landing-question-title" aria-label="What if your agent made your next video campaign?">
-        <span aria-hidden="true">
-          <span className="landing-question-opening">
-            What if{" "}
-            <span className={`landing-agent-slot ${widths ? "is-measured" : ""}`} style={slotStyle}>
-              {/* An invisible copy of the current name keeps the slot on the headline's baseline and gives it
-                  its natural width before measurement (and without JavaScript). */}
-              <span className="landing-agent-sizer"><span className="landing-agent-logo" />{agents[current].name}</span>
-              <span className="landing-agent-clip">
-                {agents.map(({ host, name }, index) => (
-                  <span
-                    key={host}
-                    ref={(node) => {
-                      labels.current[index] = node;
-                    }}
-                    className={`landing-agent-name ${current === index ? "is-current" : ""} ${leaving === index ? "is-leaving" : ""}`}
-                  >
-                    <span className="landing-agent-logo">
-                      <AgentIcon host={host} size={32} />
+        <span className="landing-question" aria-hidden="true">
+          <span className="landing-question-opening">What if</span>
+          <span className="landing-question-agent">
+            <span ref={chip} className={`landing-agent-chip ${widths ? "is-measured" : ""} ${armed ? "is-armed" : ""} ${motion ? "is-live" : ""}`} style={chipStyle} onClick={advance}>
+              {/* An invisible in-flow copy of the current name gives the chip its natural size before
+                  measurement and without JavaScript. */}
+              <span className="landing-agent-sizer">
+                <span className="landing-agent-logo" />
+                {agents[current].name}
+              </span>
+              <span className="landing-agent-material">
+                <span className="landing-agent-ring" />
+                <span className="landing-agent-face">
+                  {agents.map(({ host, name }, index) => (
+                    <span
+                      key={host}
+                      ref={(node) => {
+                        labels.current[index] = node;
+                      }}
+                      className={`landing-agent-name ${current === index ? "is-current" : ""} ${leaving === index ? "is-leaving" : ""}`}
+                    >
+                      <span className="landing-agent-logo">
+                        <AgentIcon host={host} size={40} tile />
+                      </span>
+                      {name}
                     </span>
-                    {name}
-                  </span>
-                ))}
+                  ))}
+                </span>
               </span>
             </span>
           </span>
-          <span className="landing-question-outcome">made your next video campaign?</span>
+          <span className="landing-question-outcome">
+            <span>made your next</span> <span>video campaign?</span>
+          </span>
         </span>
       </h1>
       {motion && (
@@ -123,9 +156,7 @@ export function AgentList({ className = "" }: { className?: string }) {
     <ul className={`landing-agent-list ${className}`} aria-label="MCP clients">
       {agents.map(({ host, name }) => (
         <li key={host}>
-          <span className="landing-agent-tile">
-            <AgentIcon host={host} size={20} />
-          </span>
+          <AgentIcon host={host} size={26} tile />
           {name}
         </li>
       ))}

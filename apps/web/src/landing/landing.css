@@ -1,4 +1,9 @@
 /* Faceful landing. Tokens come from /design.css; anything landing-only is scoped here. */
+/* Stand-ins for the moment before Inter arrives. Each is a local face fitted to Inter's own line metrics and
+   average width (Inter runs narrower at display sizes than at text sizes, hence two), so the swap redraws the
+   letters without re-wrapping a line or moving anything below it. Liberation Sans and Arimo share Arial's widths. */
+@font-face { font-family: "Faceful Text Fallback"; src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Arimo"); size-adjust: 106%; ascent-override: 91.4%; descent-override: 22.75%; line-gap-override: 0%; }
+@font-face { font-family: "Faceful Display Fallback"; src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Arimo"); size-adjust: 100%; ascent-override: 96.875%; descent-override: 24.12%; line-gap-override: 0%; }
 .castroom-landing {
   --l-ink: var(--ink, #2a2a27);
   --l-ink-2: var(--ink-secondary, #45434a);
@@ -23,7 +28,7 @@
   --landing-art-wash: var(--art-wash, linear-gradient(120deg, #f6c40424, #ddcb9f3d 46%, #88b4c52e));
   color: var(--l-ink);
   background: var(--l-bg);
-  font-family: var(--font-inter, InterVariable, Inter, system-ui, sans-serif);
+  font-family: InterVariable, Inter, "Faceful Text Fallback", system-ui, -apple-system, sans-serif;
   font-size: 16px;
   font-weight: 400;
   line-height: 1.55;
@@ -41,7 +46,7 @@
 .castroom-landing :is(a, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--focus, #2a2a27); outline-offset: 3px; border-radius: 6px; }
 .castroom-landing :is(h1, h2, h3, p, dl, dd, ol, ul, pre) { margin: 0; }
 .castroom-landing :is(ol, ul) { padding: 0; list-style: none; }
-.castroom-landing :is(h1, h2, h3) { font-weight: 500; }
+.castroom-landing :is(h1, h2, h3) { font-family: InterVariable, Inter, "Faceful Display Fallback", system-ui, -apple-system, sans-serif; font-weight: 500; }
 .castroom-landing mark { background: rgba(255, 176, 0, .26); color: var(--l-ink-2); padding: .05em .28em .08em; border-radius: 6px; white-space: nowrap; }
 .castroom-landing ::selection { background: rgba(255, 176, 0, .38); color: var(--l-ink); }
 
@@ -81,38 +86,59 @@
 .landing-mobile-menu > .landing-button { width: 100%; }
 
 /* ───────────── Hero ───────────── */
-.landing-hero { text-align: center; max-width: 940px; margin: auto; padding: 56px 24px 52px; }
+/* The hero stacks above the demo's glow, so the light falls behind its text and never tints a button. */
+.landing-hero { position: relative; z-index: 1; text-align: center; max-width: 940px; margin: auto; padding: 44px 24px 50px; }
 .castroom-landing .hero-title-container { container-type: inline-size; max-width: 760px; margin: auto; }
-.castroom-landing .hero-title { font-weight: 500; font-size: clamp(20px, min(100cqi / 12.3, 36px + 1.2vw), 52px); line-height: 1.02; letter-spacing: -.03em; color: rgb(42, 42, 39); font-kerning: normal; }
+.castroom-landing .hero-title { font-weight: 500; font-size: clamp(26px, min(100cqi / 9.2, 36px + 1.2vw), 52px); line-height: 1.02; letter-spacing: -.03em; color: rgb(42, 42, 39); font-kerning: normal; }
 .landing-rotating-headline { position: relative; }
-.landing-question-opening { display: block; line-height: 1.42; white-space: nowrap; }
-.landing-question-outcome { display: block; margin-top: .1em; line-height: 1.08; text-wrap: balance; }
-/* The slot hugs the current name: its width is measured and eased, so neighbours never jump and no gap ever shows.
-   An invisible in-flow copy of the name puts the chip on the headline's own baseline; the visible names live in a
-   clipped layer above it, so a long name leaving a shrinking chip is cut cleanly at its edge. */
-.landing-agent-slot { position: relative; display: inline-block; vertical-align: baseline; height: 1.3em; margin: -.15em 0; line-height: 1.3; border-radius: .29em; background: var(--l-surface); box-shadow: inset 0 0 0 1px var(--l-border), 0 1px 1px rgba(42, 42, 39, .04), 0 .22em .6em -.3em rgba(42, 42, 39, .28); white-space: nowrap; }
-.landing-agent-slot.is-measured { transition: width 280ms var(--l-ease-out); }
-.landing-agent-sizer, .landing-agent-name { display: inline-block; padding: 0 .34em 0 .22em; white-space: nowrap; }
+/* Three centred lines. The middle one belongs to the agent chip alone, so a name of any length has
+   nothing beside it to push: it grows and shrinks evenly about the middle of the page. Every line has
+   a fixed height and never wraps by itself, so no name (and no late web font) can move the next one. */
+.landing-question { display: grid; justify-items: center; }
+.landing-question-opening, .landing-question-outcome { display: block; white-space: nowrap; }
+.landing-question-agent { display: flex; align-items: center; justify-content: center; justify-self: stretch; height: 1.34em; margin: .18em 0 .15em; }
+@container (max-width: 700px) {
+  .landing-question-outcome > span { display: block; }
+}
+/* The chip. Its box is an invisible in-flow copy of the current name, which is what it looks like before
+   JavaScript runs. Once the names are measured, the surface is drawn at the widest name's width and cut
+   to the current one with clip-path: the hairline ring and the face are two cuts one pixel apart. */
+.landing-agent-chip { --agent-r: .44em; position: relative; display: inline-flex; height: 1.34em; line-height: 1.34; white-space: nowrap; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; transition: transform 160ms var(--l-ease-out); }
+.landing-agent-chip.is-live { cursor: pointer; }
+.landing-agent-chip.is-live:active { transform: scale(.97); }
+.landing-agent-sizer, .landing-agent-name { display: inline-flex; align-items: center; height: 100%; padding: 0 .44em 0 .27em; white-space: nowrap; }
 .landing-agent-sizer { visibility: hidden; }
-.landing-agent-clip { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }
-.landing-agent-name { position: absolute; top: 0; left: 0; opacity: 0; transform: translateY(.36em); filter: blur(2px); transition: opacity 160ms ease-out, transform 260ms var(--l-ease-out), filter 200ms ease-out; pointer-events: none; }
-.landing-agent-name.is-current { opacity: 1; transform: none; filter: none; }
-.landing-agent-name.is-leaving { transform: translateY(-.36em); transition: opacity 120ms ease-out, transform 220ms var(--l-ease-out), filter 140ms ease-out; }
-.landing-agent-logo { display: inline-grid; place-items: center; width: .78em; height: .78em; margin-right: .2em; border-radius: .2em; background: var(--l-subtle); vertical-align: -.06em; }
-.landing-agent-logo > img { width: 68%; height: 68%; object-fit: contain; }
+.landing-agent-material { position: absolute; inset: 0; filter: drop-shadow(0 1px 1px rgba(42, 42, 39, .06)) drop-shadow(0 .15em .3em rgba(42, 42, 39, .12)); }
+.landing-agent-ring, .landing-agent-face { position: absolute; inset: 0; }
+.landing-agent-ring { background: linear-gradient(180deg, #e6e4dc, #d2cfc3); clip-path: inset(0 round var(--agent-r)); }
+.landing-agent-face { display: grid; justify-items: center; background: linear-gradient(180deg, #fff 14%, #f7f6f1); clip-path: inset(1px round calc(var(--agent-r) - 1px)); }
+.landing-agent-chip.is-measured :is(.landing-agent-ring, .landing-agent-face) { left: 50%; right: auto; width: var(--agent-max); margin-left: calc(var(--agent-max) / -2); }
+.landing-agent-chip.is-measured .landing-agent-ring { clip-path: inset(0 calc((var(--agent-max) - var(--agent-w)) / 2) round var(--agent-r)); }
+.landing-agent-chip.is-measured .landing-agent-face { clip-path: inset(1px calc((var(--agent-max) - var(--agent-w)) / 2 + 1px) round calc(var(--agent-r) - 1px)); }
+.landing-agent-chip.is-armed :is(.landing-agent-ring, .landing-agent-face) { transition: clip-path 300ms var(--l-ease-drawer); }
+/* Names wait below the line, rise into place, and leave upward a little faster than they arrived. */
+.landing-agent-name { grid-area: 1 / 1; opacity: 0; transform: translateY(.3em); filter: blur(2px); pointer-events: none; }
+.landing-agent-name.is-current { opacity: 1; transform: none; filter: none; transition: opacity 180ms ease-out 70ms, transform 280ms var(--l-ease-out) 20ms, filter 200ms ease-out 60ms; }
+.landing-agent-name.is-leaving { transform: translateY(-.3em); transition: opacity 110ms ease-out, transform 200ms var(--l-ease-out), filter 120ms ease-out; }
+.landing-agent-logo { --agent-icon-size: .8em; display: inline-grid; place-items: center; flex: 0 0 auto; width: .8em; height: .8em; margin-right: .25em; }
 /* A pause for the rotating name exists for anyone who needs it; it stays out of sight until hover or focus. */
 .landing-headline-controls { position: absolute; left: 50%; bottom: calc(100% + 2px); transform: translateX(-50%); }
 .landing-motion-control { display: inline-flex; min-height: 28px; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--l-border); border-radius: 999px; background: var(--l-surface); color: var(--l-ink-2); font-size: 11px; cursor: pointer; opacity: 0; transition: opacity 160ms ease, transform 160ms var(--l-ease-out); }
 .landing-motion-control:focus-visible, .landing-motion-control[aria-pressed="true"] { opacity: 1; }
-.landing-hero-description { max-width: 600px; margin: 22px auto 0 !important; font-size: 18px; line-height: 1.5; letter-spacing: -.012em; color: var(--l-text-2); text-wrap: pretty; }
+.landing-hero-description { max-width: 600px; margin: 24px auto 0 !important; font-size: 18px; line-height: 1.5; letter-spacing: -.012em; color: var(--l-text-2); text-wrap: pretty; }
+/* The promise always takes a line of its own, whichever font is drawing the sentence before it. */
+.landing-hero-description mark { display: table; margin: 5px auto 0; }
 .landing-cta-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin: 30px auto 0; }
-.landing-hero-status { margin-top: 20px !important; font-size: 13px; line-height: 1.5; color: var(--l-text-2); text-wrap: balance; }
+/* This line sits where the demo's glow begins, so it takes the stronger ink to keep its contrast. */
+.landing-hero-status { margin-top: 20px !important; font-size: 13px; line-height: 1.5; color: var(--l-ink-2); text-wrap: balance; }
 
 /* ───────────── Product demo ───────────── */
 .landing-wide { position: relative; isolation: isolate; max-width: 1240px; margin-inline: auto; padding-inline: 32px; }
 .landing-demo { position: relative; margin: 0; }
 /* Sunlit art, blurred into a glow: the light the window sits in front of. */
-.landing-demo-aura { position: absolute; z-index: -1; inset: -34px -14px 30px; border-radius: 48px; background: var(--art-image, url('/art/grainient-sunlit.webp')) center / cover; filter: blur(22px) saturate(1.08); opacity: .8; pointer-events: none; will-change: transform; }
+/* Two passes of the same art: a wide, faint bloom that warms the page, and a tighter one that hugs the window edge. */
+.landing-demo-aura { position: absolute; z-index: -1; inset: -30px -12px 26px; border-radius: 44px; background: var(--art-image, url('/art/grainient-sunlit.webp')) center / cover; filter: blur(20px) saturate(1.06); opacity: .74; pointer-events: none; will-change: transform; }
+.landing-demo-aura::before { content: ""; position: absolute; inset: -14px -40px -30px; border-radius: 90px; background: inherit; filter: blur(44px); opacity: .42; }
 .landing-demo-frame { position: relative; background: var(--l-surface); border: 1px solid #d9d6cc; border-radius: 18px; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 1px 2px rgba(42, 42, 39, .06), 0 14px 30px -14px rgba(42, 42, 39, .22), 0 44px 90px -40px rgba(42, 42, 39, .34); transform-origin: 50% 0; }
 /* Where the browser can tie motion to scrolling, the window tips up to meet the reader, then rests flat and sharp. */
 @supports (animation-timeline: view()) {
@@ -193,7 +219,7 @@
 .fd-pill-working i:nth-child(2), .fd-dots i:nth-child(2) { animation-delay: 140ms; }
 .fd-pill-working i:nth-child(3), .fd-dots i:nth-child(3) { animation-delay: 280ms; margin-right: .2em; }
 @keyframes fd-dot { 0%, 60%, 100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-.22em); } }
-.landing-demo[data-playing="false"] :is(.fd-pill-working i, .fd-dots i, .fd-caret) { animation-play-state: paused; }
+.landing-demo[data-playing="false"] :is(.fd-pill-working i, .fd-dots i, .fd-caret, .fd-figure, .fd-meter i, .fd-caption-line i::after, .fd-face) { animation-play-state: paused; }
 
 /* Drafts are dealt onto the canvas: each arrives a touch askew and settles square. */
 .fd-card { position: relative; flex: 0 0 12.4em; opacity: 0; transform: translateY(2em) rotate(var(--deal, -2.2deg)) scale(.95); transition: opacity 300ms ease-out, transform 620ms var(--l-ease-out); }
@@ -201,16 +227,69 @@
 .fd-card-c { --deal: 2.4deg; }
 .fd-card-d { --deal: -1.6deg; }
 .fd-card.is-in { opacity: 1; transform: none; }
-.fd-poster { position: relative; display: flex; flex-direction: column; aspect-ratio: 9 / 16; padding: 1.3em 1.15em 1em; border-radius: 1em; overflow: hidden; color: #3d3a30; box-shadow: 0 .1em .2em rgba(42, 42, 39, .06), 0 1em 2.2em -1.2em rgba(42, 42, 39, .35); transition: box-shadow 300ms ease; }
-.fd-card-a .fd-poster { background: linear-gradient(160deg, #f7d458 0%, #f3dfa6 48%, #ece5d0 100%); }
-.fd-card-b .fd-poster { background: linear-gradient(200deg, #ebe4d0 0%, #d9e4e6 58%, #b6d0da 100%); color: #33403f; }
-.fd-card-c .fd-poster { background: linear-gradient(150deg, #cddfe6 0%, #e7e2d0 56%, #f3dc94 100%); color: #3b3d35; }
-.fd-card-d .fd-poster { background: linear-gradient(170deg, #efece2 0%, #e1dccd 100%); }
+.fd-poster { position: relative; isolation: isolate; aspect-ratio: 9 / 16; border-radius: 1em; overflow: hidden; color: #3d3a30; box-shadow: 0 .1em .2em rgba(42, 42, 39, .06), 0 1em 2.2em -1.2em rgba(42, 42, 39, .35); transition: box-shadow 300ms ease; }
+/* Each draft is a take in front of a softly lit studio wall, from the same sunlit family as the page art. */
+.fd-card-a .fd-poster, .lb-reel-a { background: radial-gradient(120% 64% at 50% 20%, #fdecb0, rgba(253, 236, 176, 0) 72%), linear-gradient(172deg, #f4cb48, #eed79b 56%, #e0d4b7); }
+.fd-card-b .fd-poster, .lb-reel-b { background: radial-gradient(120% 64% at 50% 20%, #f4f7f5, rgba(244, 247, 245, 0) 72%), linear-gradient(188deg, #e2e6de, #c4d7dc 58%, #a6c4d1); }
+.fd-card-c .fd-poster, .lb-reel-c { background: radial-gradient(120% 64% at 50% 20%, #f8f3e4, rgba(248, 243, 228, 0) 72%), linear-gradient(160deg, #ebe5d4, #e7d8a6 58%, #edc55d); }
+.fd-card-d .fd-poster { background: radial-gradient(120% 64% at 50% 20%, #f8f6ef, rgba(248, 246, 239, 0) 72%), linear-gradient(176deg, #ebe8de, #d6d0be); }
 .fd-card.is-selected .fd-poster { box-shadow: 0 0 0 .16em var(--l-bg), 0 0 0 .3em var(--l-ink), 0 1em 2.2em -1.2em rgba(42, 42, 39, .35); }
-.fd-poster-brand { display: flex; align-items: baseline; justify-content: space-between; font-size: .84em; font-weight: 600; letter-spacing: -.02em; }
-.fd-poster-brand small { font-size: .82em; font-weight: 400; opacity: .7; font-variant-numeric: tabular-nums; }
-.fd-poster-words { margin-block: auto; display: grid; font-size: 1.62em; font-weight: 550; line-height: 1.06; letter-spacing: -.035em; }
-.fd-poster-foot { padding-top: .8em; border-top: 1px solid rgba(61, 58, 48, .22); font-size: .7em; opacity: .75; }
+/* The presenter. Each card frames them a little differently, the way separate takes would. */
+.fd-stage { position: absolute; inset: 0; transform-origin: 50% 100%; }
+.fd-card-a .fd-stage { transform: scale(1.05); }
+.fd-card-b .fd-stage { transform: translate(-4%, 0) scale(1.17); }
+.fd-card-c .fd-stage { transform: translate(5%, 0) scale(1.01); }
+.fd-card-d .fd-stage { transform: scale(1.1); }
+.fd .fd-figure, .lb-reel .fd-figure { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 50% 100%; }
+.fd .fd-figure { animation: fd-sway 2.8s ease-in-out infinite alternate; animation-delay: calc(var(--n, 0) * -900ms); }
+@keyframes fd-sway { from { translate: 0 0; rotate: -.5deg; } to { translate: 0 -.9%; rotate: .6deg; } }
+/* Choosing another presenter: they arrive over the first, who steps back a moment later. */
+.fd-figure.is-picked { opacity: 0; transform: scale(1.035); transition: opacity 300ms ease-out, transform 520ms var(--l-ease-out); transition-delay: calc(var(--n, 0) * 70ms); }
+.fd-figure.is-first { transition: opacity 280ms ease-out; transition-delay: calc(var(--n, 0) * 70ms + 40ms); }
+.fd.has-pick .fd-figure.is-picked { opacity: 1; transform: none; }
+.fd.has-pick .fd-figure.is-first { opacity: 0; }
+/* A faint floor shadow grounds the figure; the caption carries its own plate, so the art stays clean. */
+.fd-poster::after, .lb-reel::after { content: ""; position: absolute; inset: 62% 0 0; background: linear-gradient(180deg, rgba(30, 27, 20, 0), rgba(30, 27, 20, .2)); pointer-events: none; }
+.fd-poster-top { position: absolute; z-index: 1; inset: .68em .7em auto .62em; display: flex; align-items: center; justify-content: space-between; gap: .4em; }
+.fd-poster-top > small { font-size: .6em; font-weight: 550; color: rgba(42, 42, 39, .62); }
+.fd-presenter { display: inline-flex; align-items: center; gap: .45em; padding: .3em .7em .3em .55em; border-radius: 999px; background: rgba(255, 255, 255, .88); box-shadow: 0 .08em .22em rgba(42, 42, 39, .14); font-size: .68em; font-weight: 600; color: var(--l-ink); }
+.fd-meter { display: inline-flex; align-items: center; gap: .15em; height: .82em; }
+.fd-meter i { width: .17em; height: 100%; border-radius: 999px; background: currentColor; transform: scaleY(.55); animation: fd-meter 620ms ease-in-out infinite alternate; }
+.fd-meter i:nth-child(2) { transform: scaleY(1); animation-delay: -260ms; }
+.fd-meter i:nth-child(3) { transform: scaleY(.75); animation-delay: -470ms; }
+@keyframes fd-meter { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+.fd-swap { display: inline-grid; }
+.fd-swap > span { grid-area: 1 / 1; transition: opacity 200ms ease-out, transform 320ms var(--l-ease-out); transition-delay: calc(var(--n, 0) * 70ms); }
+.fd-swap > .is-picked { opacity: 0; transform: translateY(.5em); }
+.fd.has-pick .fd-swap > .is-first { opacity: 0; transform: translateY(-.5em); }
+.fd.has-pick .fd-swap > .is-picked { opacity: 1; transform: none; }
+/* Reel captions: the line sits over the presenter and each word lights as it is spoken. */
+.fd-caption { position: absolute; z-index: 1; inset: auto .55em .9em; display: grid; }
+.fd-caption-line { grid-area: 1 / 1; align-self: end; text-align: center; font-size: .98em; font-weight: 650; line-height: 1.52; letter-spacing: -.015em; color: #fff; transition: opacity 240ms ease-out, transform 380ms var(--l-ease-out); }
+/* Each wrapped line keeps its own rounded plate, the way reel captions are set. */
+.fd-caption-text { padding: .14em .42em .17em; border-radius: .4em; background: rgba(28, 26, 21, .74); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.fd-caption-line i { position: relative; display: inline-block; }
+.fd-caption-line i::after { content: attr(data-w); position: absolute; left: 0; top: 0; color: #ffd65a; opacity: 0; }
+.fd .fd-caption-line i::after { animation: fd-say 2600ms linear infinite; animation-delay: calc(var(--i) * 250ms - var(--n, 0) * 870ms); }
+@keyframes fd-say { 0%, 14%, 100% { opacity: 0; } 2.5%, 10% { opacity: 1; } }
+.fd-caption-line.is-next { opacity: 0; transform: translateY(.5em); }
+.fd-caption.is-revised > .fd-caption-line:first-child { opacity: 0; transform: translateY(-.5em); }
+.fd-caption.is-revised > .is-next { opacity: 1; transform: none; }
+/* The row a presenter is chosen from. One ring, moved rather than redrawn, so the choice reads as a single gesture. */
+.fd-cast { position: absolute; right: 13.8em; top: -3.42em; display: flex; align-items: center; gap: .75em; opacity: 0; transform: translateY(.5em); transition: opacity 240ms ease-out 80ms, transform 360ms var(--l-ease-out) 80ms; }
+.fd-cast.is-in { opacity: 1; transform: none; }
+.fd-cast > small { font-size: .8em; color: var(--l-text-2); }
+.fd-cast-row { position: relative; display: flex; gap: .6em; }
+.fd-face { width: 2.1em; height: 2.1em; border-radius: 50%; overflow: hidden; }
+.fd .fd-face svg { display: block; width: 100%; height: 100%; }
+.fd-face-eleni { background: #f4d886; }
+.fd-face-nikos { background: #c6d9df; }
+.fd-face-daphne { background: #ece2ca; }
+.fd-face-iris { background: #dfe4dc; }
+.fd-cast-ring { position: absolute; left: -.24em; top: -.24em; width: 2.58em; height: 2.58em; border: .14em solid var(--l-ink); border-radius: 50%; transition: transform 380ms var(--l-ease-in-out); }
+.fd-cast.is-picked .fd-cast-ring { transform: translateX(2.7em); }
+.fd-cast.is-picked .fd-face.is-target { animation: fd-tap 420ms var(--l-ease-out); }
+@keyframes fd-tap { 30% { transform: scale(.88); } }
 .fd-card-meta { display: grid; gap: .15em; padding: .8em .2em 0; }
 .fd-card-meta strong { font-size: .95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fd-state { display: flex; align-items: center; gap: .4em; font-size: .78em; color: var(--l-text-2); font-variant-numeric: tabular-nums; }
@@ -226,7 +305,7 @@
 .fd-slot.is-in { opacity: 1; transform: none; }
 .fd-slot i { width: .5em; height: .5em; border-radius: 50%; background: #e0a100; }
 .fd-slot small { font-weight: 400; }
-.fd-cursor { position: absolute; z-index: 2; left: 48.6em; top: 31.4em; display: flex; align-items: flex-start; opacity: 0; transform: translate(11em, 13em); transition: transform 780ms var(--l-ease-in-out), opacity 220ms ease-out; }
+.fd-cursor { position: absolute; z-index: 2; left: 48.6em; top: 26.2em; display: flex; align-items: flex-start; opacity: 0; transform: translate(11em, 13em); transition: transform 780ms var(--l-ease-in-out), opacity 220ms ease-out; }
 .fd-cursor.is-on { opacity: 1; transform: none; }
 .fd-cursor svg { width: 1.7em; height: 1.7em; fill: var(--l-ink); stroke: #fff; stroke-width: 1.4; filter: drop-shadow(0 .15em .3em rgba(42, 42, 39, .3)); transition: transform 160ms var(--l-ease-out); }
 .fd-cursor.is-clicked svg { transform: scale(.86); }
@@ -296,10 +375,10 @@
 }
 /* Phone: a focused crop — the canvas above, the Director as a sheet below. */
 @container fdemo (max-width: 600px) {
-  .fd { font-size: calc(100cqw / 39); height: 60em; }
-  .fd-home { inset: 14.6em 1.5em auto; }
+  .fd { font-size: calc(100cqw / 39); height: 61.7em; }
+  .fd-home { inset: 15.6em 1.5em auto; }
   .fd-home strong { font-size: 2.5em; }
-  .fd-chips { inset: 39.9em 0 auto; }
+  .fd-chips { inset: 41.4em 0 auto; }
   .fd-chips span:last-child { display: none; }
   .fd-canvas { inset: 0; }
   .fd-topbar { padding: 0 1.4em; }
@@ -309,19 +388,23 @@
   .fd-track, .fd.has-agent-card .fd-track { top: 13.4em; left: 1.5em; width: 42.5em; margin-left: 0; gap: 1.1em; transform: none; }
   .fd-pill { left: 0; }
   .fd-card { flex-basis: 9.8em; }
-  .fd-poster { padding: 1em .9em .8em; border-radius: .9em; }
-  .fd-poster-words { font-size: 1.3em; }
-  .fd-slot { top: auto; bottom: 3.9em; left: .45em; right: .45em; justify-content: center; padding-inline: .5em; font-size: .7em; }
-  .fd-slot small { display: none; }
-  .fd-cursor { left: 31em; top: 27.5em; }
-  .fd-chat { inset: auto 0 0 0; width: auto; height: 25.5em; border-left: 0; border-top: 1px solid var(--l-border); border-radius: 1.7em 1.7em 0 0; box-shadow: 0 -1.2em 3em -1.6em rgba(42, 42, 39, .35); transform: translateY(104%); }
+  .fd-poster { border-radius: .9em; }
+  .fd-poster-top { inset: .55em .55em auto .5em; }
+  .fd-poster-top > small { display: none; }
+  .fd-caption { inset: auto .45em .8em; }
+  .fd-caption-line { font-size: .86em; }
+  .fd-cast { right: 6.5em; }
+  .fd-slot { top: calc(100% + .5em); font-size: .72em; }
+  .fd-cursor { left: 32.7em; top: 24.4em; }
+  .fd-chat { inset: auto 0 0 0; width: auto; height: 24.7em; border-left: 0; border-top: 1px solid var(--l-border); border-radius: 1.7em 1.7em 0 0; box-shadow: 0 -1.2em 3em -1.6em rgba(42, 42, 39, .35); transform: translateY(104%); }
   .fd-sheet-handle { display: block; width: 3.4em; height: .42em; margin: .8em auto 0; border-radius: 999px; background: #d6d3c8; }
-  .fd-thread { inset: 2.6em 1.6em 8.6em; display: grid; align-content: end; }
+  /* The latest message sits whole above the composer; it used to slide underneath it. */
+  .fd-thread { inset: 2.3em 1.6em 11.9em; display: grid; align-content: end; }
   .fd-thread > * { grid-area: 1 / 1; align-self: end; }
   .fd-msg:not(.is-latest) { opacity: 0; transform: translateY(-.6em); }
   .fd-user { justify-self: end; }
-  .fd-composer { left: 19.5em; top: 32em; width: 35em; margin-left: -17.5em; }
-  .fd.is-docked .fd-composer { transform: translate(0, 21.87em) scale(1.028); }
+  .fd-composer { left: 19.5em; top: 33.5em; width: 35em; margin-left: -17.5em; }
+  .fd.is-docked .fd-composer { transform: translate(0, 22.07em) scale(1.028); }
 }
 
 /* ───────────── Sections ───────────── */
@@ -359,13 +442,18 @@
 .lb-prompt { display: inline-flex; align-items: center; gap: 9px; max-width: 100%; padding: 11px 16px; border: 1px solid #e3dfd2; border-radius: 999px; background: var(--l-surface); box-shadow: var(--l-lift); font-size: 14px; }
 .lb-thread { display: grid; gap: 4px; margin: 8px 0 8px 26px; }
 .lb-thread i { width: 3px; height: 3px; border-radius: 50%; background: #a9a596; }
-.lb-drafts { display: grid; gap: 8px; width: 100%; }
-.lb-draft { display: flex; align-items: center; gap: 12px; padding: 9px 12px 9px 9px; border: 1px solid #e3dfd2; border-radius: 14px; background: var(--l-surface); transition: transform 320ms var(--l-ease-out), box-shadow 320ms ease; }
-.lb-draft > span:last-child { display: grid; min-width: 0; }
-.lb-thumb { width: 27px; height: 48px; border-radius: 6px; flex: 0 0 auto; }
-.lb-thumb-a { background: linear-gradient(160deg, #f7d458, #ece5d0); }
-.lb-thumb-b { background: linear-gradient(200deg, #ebe4d0, #b6d0da); }
-.lb-thumb-c { background: linear-gradient(150deg, #cddfe6, #f3dc94); }
+.lb-drafts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; max-width: 474px; }
+.lb-draft { display: grid; gap: 9px; min-width: 0; }
+/* The same presenter-and-caption card as the demo above, at thumbnail size. */
+.lb-reel { position: relative; isolation: isolate; display: block; aspect-ratio: 9 / 16; border-radius: 14px; overflow: hidden; font-size: clamp(8.5px, 1.05vw + 4px, 11.5px); box-shadow: 0 1px 2px rgba(42, 42, 39, .06), 0 14px 26px -16px rgba(42, 42, 39, .4); transition: transform 420ms var(--l-ease-out); }
+.lb-reel .fd-presenter { position: absolute; z-index: 1; left: .6em; top: .6em; font-size: .86em; font-weight: 600; }
+.lb-reel .fd-meter i { animation: none; }
+.lb-reel .fd-caption { inset: auto .5em .8em; }
+.lb-reel .fd-caption-line { font-size: 1em; font-weight: 650; line-height: 1.52; }
+.lb-reel .fd-caption-line i.is-spoken { color: #ffd65a; }
+.lb-draft-meta { display: grid; min-width: 0; padding-inline: 2px; }
+.lb-draft-meta strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.lb-draft-meta small { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-diff-art { gap: 14px; padding: 26px; background: linear-gradient(200deg, rgba(136, 180, 197, .24), rgba(221, 203, 159, .16) 70%), #f6f5f0; }
 .lb-bubble { justify-self: end; padding: 9px 14px; border-radius: 16px 16px 5px 16px; background: var(--l-ink); color: #fff; font-size: 13.5px; box-shadow: var(--l-lift); }
 .lb-diff { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--l-border); border-radius: 16px; background: var(--l-surface); box-shadow: var(--l-lift); }
@@ -424,9 +512,7 @@
 .landing-terminal-hint { padding: 0 18px 16px; font-size: 13px; color: var(--l-cream-2); }
 .landing-terminal-hint q { color: var(--l-cream); quotes: "“" "”"; }
 .landing-agent-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.landing-agent-list li { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border: 1px solid rgba(244, 241, 232, .14); border-radius: 999px; font-size: 13px; color: var(--l-cream); transition: border-color 200ms ease, transform 260ms var(--l-ease-out); }
-.landing-agent-tile { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--l-cream); }
-.landing-agent-tile img { width: 15px; height: 15px; }
+.landing-agent-list li { display: inline-flex; align-items: center; gap: 9px; padding: 5px 13px 5px 5px; border: 1px solid rgba(244, 241, 232, .14); border-radius: 11px; font-size: 13px; color: var(--l-cream); transition: border-color 200ms ease, transform 260ms var(--l-ease-out); }
 .landing-agents-note { font-size: 12.5px; line-height: 1.5; color: var(--l-cream-2); }
 
 /* ───────────── FAQ ───────────── */
@@ -506,6 +592,9 @@
   .landing-tile h3 { font-size: 21px; }
   .lb-prompt-art, .lb-diff-art, .lb-approve-art, .lb-credits-art { padding: 16px; }
   .lb-art { min-height: 0; }
+  .lb-drafts { gap: 8px; }
+  .lb-draft-meta strong { font-size: 12.5px; }
+  .lb-draft-meta small { font-size: 11px; }
   .landing-tile-status dl { grid-template-columns: 1fr; gap: 16px; }
   .landing-agents-inner { padding: 34px 22px; border-radius: 26px; gap: 30px; }
   .landing-agents-copy > p { font-size: 16px; }
@@ -538,9 +627,9 @@
   .landing-agent-list li:hover { border-color: rgba(244, 241, 232, .34); transform: translateY(-1px); }
   .landing-footer nav a:hover { color: var(--l-ink); }
   .landing-faq summary:hover svg { transform: rotate(90deg); }
-  .landing-tile-prompt:hover .lb-draft:nth-child(1) { transform: translateX(6px); }
-  .landing-tile-prompt:hover .lb-draft:nth-child(2) { transform: translateX(12px); }
-  .landing-tile-prompt:hover .lb-draft:nth-child(3) { transform: translateX(18px); }
+  .landing-tile-prompt:hover .lb-draft:nth-child(1) .lb-reel { transform: translateY(-4px) rotate(-1.2deg); }
+  .landing-tile-prompt:hover .lb-draft:nth-child(2) .lb-reel { transform: translateY(-7px); transition-delay: 40ms; }
+  .landing-tile-prompt:hover .lb-draft:nth-child(3) .lb-reel { transform: translateY(-4px) rotate(1.2deg); transition-delay: 80ms; }
   .landing-tile-direct:hover .lb-apply { opacity: 0; transform: scale(.94); }
   .landing-tile-direct:hover .lb-saved { opacity: 1; transform: none; }
   .landing-tile-approve:hover .lb-tag-wait { background: var(--l-positive-bg); color: var(--l-positive); }

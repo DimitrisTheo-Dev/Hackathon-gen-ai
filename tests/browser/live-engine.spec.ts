@@ -175,7 +175,7 @@ test('running out of credits is explained and links to billing, which reports th
   await me.api('/__e2e/credits', { balance: 0 });
   await page.goto(`/studio/?view=canvas&campaign=${sample.id}&item=${sample.items[0].id}`);
   await page.getByRole('button', { name: 'Details', exact: true }).click();
-  await page.getByRole('button', { name: 'Regenerate', exact: true }).click();
+  await page.getByRole('button', { name: 'Render video', exact: true }).click();
   const alert = page.locator('.feedback .notice.error');
   await expect(alert).toContainText('no render credits left');
   expect((await me.api('/__e2e/render-jobs')).json.count).toBe(0);
