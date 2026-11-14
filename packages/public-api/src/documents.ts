@@ -102,7 +102,7 @@ This CLI only reads and validates. To have an agent create and edit real project
     slug: "mcp",
     path: "/docs/mcp/",
     title: "Use Faceful with your AI agent",
-    summary: "The remote MCP endpoint: how to check it is available, authorize an agent, the 13 tools, limits and what has actually been tried.",
+    summary: "The remote MCP endpoint: how to check it is available, authorize an agent, the 21 tools, limits and what has actually been tried.",
     markdown: `# Use Faceful with your AI agent
 
 Faceful has a remote MCP server. An agent you already use can work in your Faceful workspace: list projects, write and revise drafts, request renders, propose posting times and read plan status. It calls the same domain engine as the studio, so what the agent creates appears in the studio, and what you edit there is what the agent reads next.
@@ -172,6 +172,14 @@ A workspace token carries any subset of campaign:read, content:edit, render:writ
 - approve_schedule: for an agent, always returns approval_required with a review link. A signed-in member approves in the studio.
 - get_billing_status: plan status, render-credit balance, and whether Stripe sandbox billing is configured.
 - create_checkout_link: after the person explicitly confirms, a Stripe-hosted sandbox Checkout URL. Works only where Stripe sandbox is configured. Never handles card data.
+- list_draft_files: a project's draft files (script, facts, voice takes, clips, music, SFX, images, transcripts, renders) with version, size and a short-lived download link. Read-only.
+- save_text_draft: saves a text component (script, facts with sources, word transcript, captions, cut list) as a new draft file version.
+- request_file_upload: registers a media draft file and returns a one-time upload URL with the exact headers to send. Storage refuses any bytes whose SHA-256 differs from the one declared.
+- complete_file_upload: confirms a media upload after the PUT and marks the draft file ready.
+- get_video_timeline: an item's reel timeline: video clips on two layers, audio by role, cards, captions, word-level transcript and labels, with links for the files it uses. Read-only.
+- save_video_timeline: replaces the timeline against the revision you read. Clips may only use ready draft files of the same project. Never changes the script, the avatar render or approvals.
+- queue_video_render: queues an MP4 render of the saved timeline. A Remotion render worker claims it and saves the MP4 as a render draft file.
+- get_video_renders: an item's recent timeline renders with state, progress, errors and the output file. Read-only.
 
 Tools that change something accept an idempotencyKey. Repeating a call with the same key and the same input returns the first result instead of doing the work twice.
 

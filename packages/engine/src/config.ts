@@ -83,6 +83,10 @@ export interface EngineConfig {
    */
   trustProxyHeaders: boolean;
   rateLimit: RateLimitConfig;
+  /** Cloudflare R2 bucket for draft files (voice takes, clips, music, transcripts, renders). Null when not configured. */
+  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string } | null;
+  /** Credential the Remotion render workers (VPS, boxd or containers) present to claim reel renders. */
+  reelWorkerToken: string | null;
 }
 
 const avatarsSchema = z.array(
@@ -92,6 +96,18 @@ const avatarsSchema = z.array(
 function integer(value: string | undefined, fallback: number, min: number, max: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+
+function r2From(env: Record<string, string | undefined>): EngineConfig["r2"] {
+  const accountId = env.FACEFUL_R2_ACCOUNT_ID?.trim();
+  const accessKeyId = env.FACEFUL_R2_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = env.FACEFUL_R2_SECRET_ACCESS_KEY?.trim();
+  if (!accountId || !accessKeyId || !secretAccessKey) return null;
+  if (!/^[a-f0-9]{32}$/.test(accountId)) {
+    console.error(JSON.stringify({ level: "error", event: "config_invalid", key: "FACEFUL_R2_ACCOUNT_ID" }));
+    return null;
+  }
+  return { accountId, accessKeyId, secretAccessKey, bucket: env.FACEFUL_R2_BUCKET?.trim() || "faceful-media" };
 }
 
 function stripeFrom(env: Record<string, string | undefined>): { stripe: StripeConfig | null; problem: string | null } {
@@ -214,5 +230,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     mediaUrlTtlSeconds: 3600,
     trustProxyHeaders,
     rateLimit: rateLimitFrom(env, trustProxyHeaders),
+    r2: r2From(env),
+    reelWorkerToken: env.REEL_WORKER_TOKEN && env.REEL_WORKER_TOKEN.trim().length >= 32 ? env.REEL_WORKER_TOKEN.trim() : null,
   };
 }

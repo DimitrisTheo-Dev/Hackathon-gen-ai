@@ -25,6 +25,7 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   credit_ledger: [{ columns: ["org_id", "ref"] }],
   castroom_director_access: [{ columns: ["user_id", "workspace_id", "campaign_id"] }],
   video_compositions: [{ columns: ["org_id", "item_id"] }],
+  project_files: [{ columns: ["org_id", "project_id", "item_id", "name", "version"] }],
 };
 
 function matches(row: Row, filter: Filter): boolean {

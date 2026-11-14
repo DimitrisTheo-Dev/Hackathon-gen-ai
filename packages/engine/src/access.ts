@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { EngineError, StoreConflict } from "./errors.js";
 import type { EngineConfig } from "./config.js";
+import type { FileStore } from "./r2.js";
 import { selectOne, type Row, type Store } from "./store.js";
 
 export type Role = "owner" | "admin" | "editor" | "reviewer";
@@ -50,6 +51,8 @@ export interface EngineDeps {
   /** Verifies a Supabase-issued access token (signature, issuer, audience, expiry). */
   verifyAccessToken: (token: string) => Promise<{ sub: string; email: string | null; clientId: string | null }>;
   fetch: typeof fetch;
+  /** Draft-file storage (R2). Absent means not configured; routes then say so instead of failing silently. */
+  files?: FileStore;
 }
 
 export function requireScope(ctx: Ctx, scope: Scope) {

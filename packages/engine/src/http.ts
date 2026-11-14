@@ -6,6 +6,8 @@ import { readBoundedText } from "./body.js";
 import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.js";
 import { getComposition, saveComposition } from "./composition.js";
 import { directorTurn } from "./director.js";
+import { archiveFile, completeUpload, listFiles, requestUpload, saveTextFile } from "./files.js";
+import { authenticateReelWorker, cancelRender, listRenders, queueRender, reelWorker } from "./reel-render.js";
 import { EngineError } from "./errors.js";
 import type { Planner } from "./llm.js";
 import { authenticateWithLimits, principalSubject, refuseCredential, RequestLimits } from "./ratelimit.js";
@@ -97,6 +99,12 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   connect_channel: connectChannel,
   disconnect_channel: disconnectChannel,
   save_composition: saveComposition,
+  request_file_upload: requestUpload,
+  complete_file_upload: completeUpload,
+  save_text_file: saveTextFile,
+  archive_file: archiveFile,
+  queue_reel_render: queueRender,
+  cancel_reel_render: cancelRender,
   create_run_grant: async () => {
     throw new EngineError("unsupported", "Unattended publishing grants are not available in this build. Approve each schedule in the studio.");
   },
@@ -127,6 +135,8 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
   }
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/items\/([^/]+)\/composition$/))) return json(await getComposition(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/items\/([^/]+)\/renders$/))) return json(await listRenders(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/campaigns\/([^/]+)\/files$/))) return json(await listFiles(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
   if (read && path === "/billing") return json(await getBillingStatus(deps, ctx));
@@ -175,6 +185,17 @@ async function worker(deps: HttpDeps, request: Request, path: string, limits: Re
   throw new EngineError("not_found", "Unknown worker route.");
 }
 
+async function reelWorkerRoute(deps: HttpDeps, request: Request, path: string, limits: RequestLimits): Promise<Response> {
+  // Like the avatar render worker: a trusted service credential that is not throttled; refused credentials are.
+  try {
+    authenticateReelWorker(deps, request.headers.get("authorization"));
+  } catch (error) {
+    if (error instanceof EngineError) await refuseCredential(limits, deps.config.rateLimit, error);
+    throw error;
+  }
+  return json(await reelWorker(deps, request, path, () => body(request)));
+}
+
 /** Which integrations are configured. Booleans and safe sentences only — never a key, a URL with credentials or an ID. */
 export function health(deps: HttpDeps) {
   const { config } = deps;
@@ -183,6 +204,8 @@ export function health(deps: HttpDeps) {
     database: Boolean(config.supabaseUrl),
     director: config.llm ? "ai" : "basic",
     rendering: { connected: Boolean(config.renderWorkerToken), provider: "humanlike", humanlikeKey: Boolean(config.humanlikeApiKey) },
+    files: { connected: Boolean(config.r2) },
+    reelRendering: { connected: Boolean(config.reelWorkerToken) },
     billing: { mode: config.stripe ? "sandbox" : "not_configured", problem: config.stripeProblem },
     publishing: { adapters: config.youtube ? ["youtube"] : ([] as string[]), problem: config.youtube ? null : config.youtubeProblem },
     scheduler: Boolean(config.cronSecret),
@@ -211,6 +234,7 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
       }
       response = json({ swept: await sweepRenderJobs(deps), publishing: await processDuePublishJobs(deps) });
     } else if (pathname.startsWith("/v1/studio/")) response = await studio(deps, request, pathname.slice("/v1/studio".length), correlationId, limits);
+    else if (pathname.startsWith("/v1/worker/reel/")) response = await reelWorkerRoute(deps, request, pathname.slice("/v1/worker/reel".length), limits);
     else if (pathname.startsWith("/v1/worker/")) response = await worker(deps, request, pathname.slice("/v1/worker".length), limits);
     else throw new EngineError("not_found", "Unknown API route.");
   } catch (error) {

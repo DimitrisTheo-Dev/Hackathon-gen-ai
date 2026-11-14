@@ -337,7 +337,7 @@ test("public discovery does not fabricate quota counters, throttling or a live M
 test("the agent guide documents exactly the MCP tools, protocol and SDK the engine ships", async () => {
   const source = await readFile("packages/engine/src/mcp.ts", "utf8");
   const registered = [...source.matchAll(/server\.registerTool\(\s*"([a-z_]+)"/g)].map((match) => match[1]);
-  assert.equal(registered.length, 13);
+  assert.equal(registered.length, 21);
   const guide = publicDocuments.find((document) => document.slug === "mcp")!;
   const html = await readFile("apps/web/public/docs/mcp/index.html", "utf8");
   const documented = [...guide.markdown.matchAll(/^- ([a-z_]+): /gm)].map((match) => match[1]).filter((name) => name.includes("_"));
