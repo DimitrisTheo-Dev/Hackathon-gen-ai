@@ -67,3 +67,30 @@ test("only the licensed local art and attribution pass through the public file a
   for(const path of ['/art/grainient-sunlit.webp','/art/ATTRIBUTION.txt']) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1');
   assert.equal(proxy(new Request('https://castroom.test/art/missing.webp')).status,404);
 });
+
+test("the MCP server card is public, versioned with the server, and served only where the engine runs", async () => {
+  const { handlePublicRequest, MCP_SERVER_CARD_PATH, MCP_PROTOCOL_VERSION, MCP_SERVER_VERSION } = await import("../packages/public-api/src/index");
+  const { LATEST_PROTOCOL_VERSION } = await import("@modelcontextprotocol/sdk/types.js");
+  const { readFile } = await import("node:fs/promises");
+  assert.equal(MCP_PROTOCOL_VERSION, LATEST_PROTOCOL_VERSION, "card advertises the protocol the SDK negotiates");
+  assert.match(await readFile("packages/engine/src/mcp.ts", "utf8"), new RegExp(`SERVER_VERSION = "${MCP_SERVER_VERSION.replace(/\./g, "\\.")}"`));
+
+  const configured = { SUPABASE_URL: "https://example.supabase.co", SUPABASE_SECRET_KEY: "configured" };
+  const response = handlePublicRequest(new Request(`https://faceful.vercel.app${MCP_SERVER_CARD_PATH}`), configured)!;
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type")!, /application\/json/);
+  assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  const card = await response.json();
+  assert.equal(card.remotes[0].type, "streamable-http");
+  assert.match(card.remotes[0].url, /\/mcp$/);
+  assert.equal(card.transport.url, card.remotes[0].url);
+  assert.deepEqual(card.supportedProtocolVersions, [LATEST_PROTOCOL_VERSION]);
+  assert.match(card.authentication.resourceMetadata, /\/\.well-known\/oauth-protected-resource\/mcp$/);
+  assert.equal(card.tools, undefined, "tools are discovered with tools/list, not listed in the card");
+  assert.doesNotMatch(JSON.stringify(card), /configured|supabase\.co|sk_|whsec_/, "no configuration values leak into the card");
+
+  const unconfigured = handlePublicRequest(new Request(`https://faceful.vercel.app${MCP_SERVER_CARD_PATH}`), {})!;
+  assert.equal(unconfigured.status, 404);
+  const post = handlePublicRequest(new Request(`https://faceful.vercel.app${MCP_SERVER_CARD_PATH}`, { method: "POST" }), configured)!;
+  assert.equal(post.status, 405);
+});

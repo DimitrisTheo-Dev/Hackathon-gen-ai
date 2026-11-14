@@ -1,14 +1,23 @@
 # Faceful demo runbook
 
-Updated 14 November 2026. Read `DEMO_READINESS.md` first: it says which steps below are live, which are blocked and why. Never narrate a blocked step as if it worked; each blocked step has an honest on-screen state you can show instead.
+Updated 15 November 2026. Read `DEMO_READINESS.md` first: it says which steps below are live, which are blocked and why. Never narrate a blocked step as if it worked; each blocked step has an honest on-screen state you can show instead.
+
+Origin: <https://faceful.vercel.app>. Pitch surface: <https://faceful.vercel.app/pitch> (not linked from the product, `noindex`; script in `docs/demo/pitch-script.md`, cut list in `docs/demo/demo-video-cut-list.md`).
 
 ## Before the demo (once)
 
 1. **Deploy with server environment variables** (Vercel → Project → Settings → Environment Variables; names in `.env.example`). Minimum for the live studio: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_BASE_URL`, `CRON_SECRET`. For AI drafting add `ANTHROPIC_API_KEY`. For billing add the three `STRIPE_*` values (`STRIPE_SANDBOX_SETUP.md`). For rendering add `RENDER_WORKER_TOKEN` and start the recorder worker (`INTEGRATION_CONTRACTS.md` §7).
 2. **Check what is live**: open `<origin>/v1/health`. It reports `director` (`ai`/`basic`), `rendering.connected`, `billing.mode` and `scheduler` for that deployment. Say only what this endpoint confirms.
-3. **Sign in once** with the demo account (email code, or Google) so its personal workspace exists. Use a fresh account when you want to show first-run.
-4. **Optional seeded content**: on the home screen choose "Try the BeWell sample". It is labelled as a sample everywhere and contains drafts only — no video.
-5. **Agent connection** (for Journey B): in the studio open "Connect your agent", create a workspace token, and export it as `FACEFUL_TOKEN` in the terminal you will demo from. The token is shown once.
+3. **Prepare the demo workspace** with the seed script. It goes through the same engine operations the studio uses and touches only that person's personal workspace:
+   ```bash
+   # Your own account (sign in once first so the workspace exists):
+   node --env-file=.env.local --import tsx scripts/demo-seed.ts --email you@example.com --workspace-name "Quintessential"
+   # The password-only recording account (DEMO_USER_EMAIL / DEMO_USER_PASSWORD in .env.local):
+   node --env-file=.env.local --import tsx scripts/demo-seed.ts --demo-account
+   ```
+   It saves the BeWell brand kit, adds the labelled BeWell sample project with its source, and sets draft posting times for next Monday, Wednesday and Friday at 09:00 Europe/Athens (drafts, never scheduled). Add `--reset` to delete that workspace's projects and agent tokens first. The production recording account is seeded today: workspace "Quintessential", BeWell brand kit, the sample project and one agent-written Greek project.
+4. **Agent connection** (for Journeys B and C): in the studio open "Connect your agent", create a workspace token, and export it as `FACEFUL_TOKEN` in the terminal you will demo from. The token is shown once.
+5. **Use a fresh email** instead when you want to show first-run sign-in and onboarding.
 
 Test accounts used for automated checks (not for the demo): `engine-smoke@faceful.dtheo.dev`, `engine-smoke-b@faceful.dtheo.dev`. Their passwords live only in the maintainer's local `.env.local`.
 
@@ -42,13 +51,22 @@ codex mcp add faceful --url "<origin>/mcp" --bearer-token-env-var FACEFUL_TOKEN
 
 Say: "Same projects, same rules, same answers — the agent cannot approve, publish or manage billing."
 
-Recorded trials of this journey (local engine process, real database, token authorization): `docs/demo/evidence/engine/mcp-client-trials.md`.
+Recorded trials of this journey: `docs/demo/evidence/production/mcp-and-oauth.md` (Claude Code against production) and `docs/demo/evidence/engine/mcp-client-trials.md` (Codex and Claude Code against a local engine on the real database).
+
+## Journey C — "use your own Claude" hand-off (30–45 seconds)
+
+While AI writing is not connected on the server, the composer offers **"Your own Claude Code can write this"** with a ready-to-paste prompt.
+
+1. Type the BeWell request in the composer and send it. The card appears with the prompt and a Copy button.
+2. Paste it into Claude Code (connected as in Journey B). It creates the project and writes 1–3 short presenter scripts through Faceful's tools; it is told not to render, schedule or publish.
+3. Switch back: the project and drafts appear in the studio within five seconds, marked as written by the agent connection.
+
+Say: "Your subscription, your agent, our studio. Faceful never holds your Claude credentials." Verified on production: `docs/demo/evidence/production/mcp-and-oauth.md` § Hand-off prompt.
 
 ## Reset
 
-- Delete demo projects from the database (`delete from projects where org_id = …`; items, versions and jobs cascade), or simply sign in with a fresh email for a clean first-run.
-- Revoke demo agent tokens in "Connect your agent".
-- Stripe: cancel the test subscription in the Customer Portal or the sandbox Dashboard.
+- `node --env-file=.env.local --import tsx scripts/demo-seed.ts --email you@example.com --reset` (or `--demo-account --reset`) deletes that workspace's projects (items, versions, jobs and media rows cascade) and revokes its agent tokens, then re-seeds. Or sign in with a fresh email for a clean first-run.
+- Stripe: cancel the test subscription in the Customer Portal or the sandbox Dashboard. Billing then shows "Ends <date>" instead of "Renews <date>", once Stripe's signed webhook arrives.
 
 ## If something goes wrong
 
@@ -59,5 +77,6 @@ Recorded trials of this journey (local engine process, real database, token auth
 | Render stays queued | No worker is claiming jobs | It fails by itself after the queue timeout and returns the credit; say so |
 | Checkout succeeded but the plan did not change | The webhook has not arrived | Wait a few seconds; check Stripe Workbench → Webhooks. The redirect alone never changes the plan |
 | Agent gets 401 | Token expired or revoked | Create a new token |
+| `429 quota_exceeded` | A rate limit (`INTEGRATION_CONTRACTS.md` §4); the response says how many seconds to wait | Wait `Retry-After` seconds. Director turns are limited to 10 a minute per person |
 
 Every API response carries `X-Correlation-Id`; the same ID is in the function logs and the project's Activity list.

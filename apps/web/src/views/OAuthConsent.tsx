@@ -10,6 +10,17 @@ function host(url: string) {
 }
 
 /**
+ * Defence in depth around the redirect Supabase returns: agents use http(s) loopback callbacks or their own
+ * app schemes (for example `cursor://`), so those pass, but a script-bearing scheme is never navigated to.
+ */
+const BLOCKED_SCHEMES = new Set(["javascript:", "data:", "vbscript:", "blob:", "file:"]);
+function safeRedirect(url: string): string {
+  const parsed = new URL(url);
+  if (BLOCKED_SCHEMES.has(parsed.protocol)) throw new Error("Refused redirect scheme");
+  return parsed.href;
+}
+
+/**
  * Consent screen for an external agent connecting through OAuth. Supabase Auth is the
  * authorization server; this page only shows who is asking and records the person's answer.
  */
@@ -26,7 +37,14 @@ export function OAuthConsent({ authorizationId, email, onSignOut }: { authorizat
         if (!active) return;
         if (failure || !data) { setError("This connection request has expired or is no longer valid. Start the connection again from your agent."); return; }
         // Already approved earlier: Supabase returns only the redirect, so continue without asking twice.
-        if ("redirect_url" in data) { setBusy("redirect"); location.assign(data.redirect_url); return; }
+        if ("redirect_url" in data) {
+          try { const target = safeRedirect(data.redirect_url); setBusy("redirect"); location.assign(target); }
+          catch { setError("This connection request points somewhere unsafe, so it was stopped. Start the connection again from your agent."); }
+          return;
+        }
+        // Checked before the person is asked, so Allow is never offered for a callback we would refuse to follow.
+        try { safeRedirect(data.redirect_uri); }
+        catch { setError("This connection request points somewhere unsafe, so it was stopped. Start the connection again from your agent."); return; }
         setDetails({ clientName: data.client.name || "An application", redirectHost: host(data.redirect_uri), scope: data.scope });
       })
       .catch(() => { if (active) setError("We couldn’t load this connection request. Check your connection and try again."); });
@@ -39,7 +57,7 @@ export function OAuthConsent({ authorizationId, email, onSignOut }: { authorizat
       const call = allow ? supabase.auth.oauth.approveAuthorization : supabase.auth.oauth.denyAuthorization;
       const { data, error: failure } = await call.call(supabase.auth.oauth, authorizationId, { skipBrowserRedirect: true });
       if (failure || !data?.redirect_url) throw failure ?? new Error("No redirect returned");
-      location.assign(data.redirect_url);
+      location.assign(safeRedirect(data.redirect_url));
     } catch {
       setBusy(null);
       setError(allow ? "Access could not be granted. Nothing was shared. Try again, or restart the connection from your agent." : "The request could not be declined here. You can close this page; no access was granted.");
