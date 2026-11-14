@@ -82,12 +82,17 @@ export function Studio({
   const [showActivity, setShowActivity] = useState(false);
   const [creating, setCreating] = useState(false);
   const busyRef = useRef(false);
+  const campaignRequest = useRef(0);
+  const initialLocation = useRef(new URLSearchParams(location.search));
   const itemButton = useRef<HTMLButtonElement | null>(null);
   const fetchCampaign = useCallback(
     async (id: string) => {
+      const request = ++campaignRequest.current;
       const next = await client.getCampaign(id);
-      setCampaign(next);
-      setCampaigns((list) => list.map((c) => (c.id === next.id ? next : c)));
+      if (request === campaignRequest.current) {
+        setCampaign(next);
+        setCampaigns((list) => list.map((c) => (c.id === next.id ? next : c)));
+      }
       return next;
     },
     [client],
@@ -103,14 +108,20 @@ export function Studio({
         if (!active) return;
         setContext(ctx);
         setCampaigns(list);
-        setCampaign(list[0] ?? null);
-        if (list[0])
+        const requestedCampaign = initialLocation.current.get("campaign");
+        const requestedItem = initialLocation.current.get("item");
+        const currentCampaign =
+          list.find((c) => c.id === requestedCampaign) ??
+          list.find((c) => c.items.some((i) => i.id === requestedItem)) ??
+          list[0];
+        setCampaign(currentCampaign ?? null);
+        if (currentCampaign)
           setSelected((current) =>
-            current && list[0].items.some((i) => i.id === current)
+            current && currentCampaign.items.some((i) => i.id === current)
               ? current
               : matchMedia("(max-width: 760px)").matches
                 ? null
-                : (list[0].items[0]?.id ?? null),
+                : (currentCampaign.items[0]?.id ?? null),
           );
         else setView("connect");
       })
@@ -118,6 +129,7 @@ export function Studio({
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
+      campaignRequest.current++;
     };
   }, [client]);
   useEffect(() => {
@@ -131,28 +143,33 @@ export function Studio({
     return () => clearInterval(timer);
   }, [campaign?.id, context?.capabilities.mode, fetchCampaign]);
   useEffect(() => {
+    if (loading) return;
     const url = new URL(location.href);
     url.searchParams.set("view", view);
+    if (campaign) url.searchParams.set("campaign", campaign.id);
+    else url.searchParams.delete("campaign");
     if (selected) url.searchParams.set("item", selected);
     else url.searchParams.delete("item");
     history.replaceState(null, "", url);
     document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : (campaign?.title ?? "Studio")} · Castroom`;
-  }, [view, selected, campaign?.title]);
+  }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
       if (
-        campaign?.items.some(
-          (i) =>
-            drafts[i.id] &&
-            Object.keys(contentPatch(i, drafts[i.id].value)).length,
-        )
+        campaigns
+          .flatMap((c) => c.items)
+          .some(
+            (i) =>
+              drafts[i.id] &&
+              Object.keys(contentPatch(i, drafts[i.id].value)).length,
+          )
       ) {
         e.preventDefault();
       }
     };
     window.addEventListener("beforeunload", listener);
     return () => window.removeEventListener("beforeunload", listener);
-  }, [campaign, drafts]);
+  }, [campaigns, drafts]);
   const item = campaign?.items.find((i) => i.id === selected) ?? null;
   const draft = item
     ? (drafts[item.id] ?? {
@@ -1013,6 +1030,7 @@ export function Studio({
           client={client}
           onClose={() => setCreating(false)}
           onCreated={(next) => {
+            campaignRequest.current++;
             setCampaigns((all) => [
               next,
               ...all.filter((c) => c.id !== next.id),
