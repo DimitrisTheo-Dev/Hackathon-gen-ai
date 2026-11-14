@@ -16,6 +16,10 @@ import {
   templateInputSchema,
   templateSchema,
   versionSchema,
+  addSourceInputSchema,
+  brandSchema,
+  removeSourceInputSchema,
+  updateBrandInputSchema,
 } from "@castroom/contracts";
 import {
   ApiError,
@@ -300,5 +304,34 @@ export function createLiveClient(
         validate(disconnectChannelInputSchema, input),
         { timeoutMs: 30_000 },
       ),
+    // Async, so a request that fails validation is a rejected promise like any other failure.
+    updateBrand: async (input) =>
+      request(
+        "/operations/update_brand",
+        brandSchema.strict(),
+        validate(updateBrandInputSchema, input),
+      ),
+    addSource: async (input) => {
+      const body = validate(addSourceInputSchema, input);
+      return request(
+        "/operations/add_source",
+        campaignSchema.refine((value) => value.mode === "live" && value.id === body.campaignId),
+        body,
+      );
+    },
+    removeSource: async (input) => {
+      const body = validate(removeSourceInputSchema, input);
+      return request(
+        "/operations/remove_source",
+        campaignSchema.refine(
+          (value) =>
+            value.mode === "live" &&
+            value.id === body.campaignId &&
+            value.sources.every((source) => source.id !== body.sourceId) &&
+            value.items.every((item) => !item.sourceIds.includes(body.sourceId)),
+        ),
+        body,
+      );
+    },
   };
 }

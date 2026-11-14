@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { CalendarCheck, AlertTriangle, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Check, CircleAlert, Clock, Lock } from "lucide-react";
 import type {
   Campaign,
   ScheduleManifest,
@@ -15,7 +15,27 @@ import {
   dateLabel,
   platformNames,
 } from "../components/ui";
+import { approvalBlock, blockerScope, reviewState, reviewSteps, type ReviewStep } from "./editor/review";
+import "../editor.css";
 
+const stepTitle: Record<ReviewStep["id"], string> = {
+  videos: "Videos rendered",
+  channels: "Posting times and channels",
+  other: "Other checks",
+};
+const headline = {
+  stale: "This review is out of date",
+  expired: "This review has expired",
+  blocked: "Not ready to schedule",
+  ready: "Ready for your approval",
+  approved: "Approved · ready to submit",
+} as const;
+
+/**
+ * The schedule review as a short checklist: what still holds the schedule back, how many drafts each
+ * step covers, and the one thing that fixes it. The exact entries and the approve action appear only
+ * once the server reports nothing blocking. Approval stays bound to the manifest hash the server sent.
+ */
 export function Review({
   campaign,
   manifest: initial,
@@ -35,39 +55,30 @@ export function Review({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const stale =
-    manifest.campaignRevision !== campaign.revision ||
-    manifest.approval === "stale" ||
-    manifest.entries.some((entry) => {
-      const item = campaign.items.find((item) => item.id === entry.itemId);
-      return (
-        !item ||
-        item.revision !== entry.revision ||
-        item.renderRevision === null ||
-        item.media?.id !== entry.assetId ||
-        item.media?.sha256 !== entry.assetHash
-      );
-    });
-  const groupedBlockers = new Map<string, Set<string>>();
-  for (const blocker of manifest.blockers) {
-    const ids = groupedBlockers.get(blocker.message) ?? new Set<string>();
-    ids.add(blocker.itemId); groupedBlockers.set(blocker.message, ids);
-  }
-  const blocked =
-    stale ||
-    manifest.blockers.length > 0 ||
-    !manifest.entries.length ||
-    context.capabilities.mode === "fixture" ||
-    new Date(manifest.expiresAt) <= new Date();
+  const [submitted, setSubmitted] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+  // Re-check when the review expires, so the page never offers an approval the server would refuse.
+  useEffect(() => {
+    const left = Date.parse(manifest.expiresAt) - Date.now();
+    if (left <= 0 || left > 2 ** 31 - 1) return;
+    const timer = setTimeout(() => setTick((value) => value + 1), left + 50);
+    return () => clearTimeout(timer);
+  }, [manifest.expiresAt]);
+  const state = reviewState(manifest, campaign);
+  const steps = reviewSteps(manifest, campaign);
+  const approveReason = approvalBlock(state, context);
+  const approved = state === "approved";
+  const fixture = context.capabilities.mode === "fixture";
+  const left = steps.filter((step) => step.done < step.total).length + (approved ? 0 : 1);
+  const brand = campaign.companyContext?.name ?? context.brand.name;
+  const canSubmit = approved && !fixture && !busy && !submitted;
+
   async function act(action: "approve" | "commit") {
-    if (
-      blocked ||
-      busy ||
-      submitted ||
-      Date.parse(manifest.expiresAt) <= Date.now()
-    )
-      return;
+    if (busy || submitted) return;
+    // Re-derived at the moment of the click: stale, expired, blocked and non-owner approvals never leave the page.
+    const now = reviewState(manifest, campaign);
+    if (action === "approve" && approvalBlock(now, context)) return;
+    if (action === "commit" && (now !== "approved" || fixture)) return;
     setBusy(true);
     setError("");
     try {
@@ -98,9 +109,9 @@ export function Review({
         );
       } else {
         const result = await client.commitSchedule(input);
-        setSubmitted(true);
+        setSubmitted(result.state);
         setMessage(
-          `Request ${result.state}. ${result.jobIds.length} jobs returned. Provider acceptance and publication are tracked separately.`,
+          `Request ${result.state}. ${result.jobIds.length} ${result.jobIds.length === 1 ? "job" : "jobs"} returned. Platform acceptance and publication are tracked separately.`,
         );
         await onRefresh();
       }
@@ -112,114 +123,166 @@ export function Review({
       setBusy(false);
     }
   }
+
+  const fix = (step: ReviewStep) => {
+    if (step.id === "videos")
+      return context.capabilities.canRender ? (
+        <button type="button" className="review-fix" onClick={onClose}>
+          Render from your drafts <ArrowRight size={13} aria-hidden="true" />
+        </button>
+      ) : (
+        <span className="review-why"><Lock size={12} aria-hidden="true" />{context.capabilities.renderBlocker ?? "Rendering isn’t connected yet"}</span>
+      );
+    if (step.id === "channels")
+      return fixture ? (
+        <span className="review-why"><Lock size={12} aria-hidden="true" />Publishing isn’t connected here</span>
+      ) : (
+        <button type="button" className="review-fix" onClick={onClose}>
+          Set times and channels <ArrowRight size={13} aria-hidden="true" />
+        </button>
+      );
+    return null;
+  };
+
   return (
-    <Modal title="Review the exact schedule" wide onClose={onClose}>
-      <div className="review-intro">
-        <CalendarCheck size={22} />
-        <div>
-          <strong>{campaign.title}</strong>
-          <p>
-            {manifest.entries.length} destinations · {campaign.timezone}
-          </p>
-        </div>
-        <span className="status-chip">
-          {manifest.approval.replaceAll("_", " ")}
-        </span>
+    <Modal title="Review schedule" wide onClose={onClose}>
+      <div className="review-sheet">
+        <header className="review-status" data-state={submitted ? "submitted" : state}>
+          <span className="review-status-mark" aria-hidden="true">
+            {approved || submitted ? <Check size={18} strokeWidth={2.25} /> : state === "expired" ? <Clock size={18} /> : <CircleAlert size={18} />}
+          </span>
+          <div>
+            <h3>{submitted ? (submitted === "blocked" ? "Not accepted for scheduling" : "Sent for scheduling") : headline[state]}</h3>
+            <p>
+              {campaign.title}
+              {state === "blocked" && ` · ${left} ${left === 1 ? "step" : "steps"} left`}
+              {(state === "ready" || approved) && ` · ${manifest.entries.length} ${manifest.entries.length === 1 ? "post" : "posts"} · ${campaign.timezone}`}
+            </p>
+          </div>
+        </header>
+
+        {(state === "stale" || state === "expired") && !submitted ? (
+          <div className="review-restart">
+            <p id="approve-reason">
+              {state === "stale"
+                ? "The campaign changed after this review was prepared, so it can’t be approved."
+                : "Reviews are valid for a short time so approval always matches the latest campaign."}
+            </p>
+            <button type="button" className="button secondary" onClick={onClose}>
+              Close and prepare a new review
+            </button>
+          </div>
+        ) : (
+          <ol className="review-steps">
+            {steps.map((step) => {
+              const met = step.done === step.total && !step.blockers.length;
+              return (
+                <li className="review-step" data-done={met} key={step.id}>
+                  <span className="review-mark" aria-hidden="true">{met && <Check size={12} strokeWidth={2.75} />}</span>
+                  <div className="review-step-body">
+                    <div className="review-step-head">
+                      <strong>{stepTitle[step.id]}</strong>
+                      {step.id !== "other" && (
+                        <span className="review-count">
+                          {step.done} of {step.total}
+                          <span className="sr-only">{met ? ", done" : ", not done"}</span>
+                        </span>
+                      )}
+                    </div>
+                    {!met && (
+                      <>
+                        <ul className="review-blockers">
+                          {step.blockers.map((blocker) => (
+                            <li key={blocker.message}>
+                              <span>{blocker.message}</span>
+                              <small className="blocker-scope">{blockerScope(blocker.itemIds, campaign)}</small>
+                            </li>
+                          ))}
+                        </ul>
+                        {fix(step)}
+                      </>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+            <li className="review-step" data-done={approved}>
+              <span className="review-mark" aria-hidden="true">{approved && <Check size={12} strokeWidth={2.75} />}</span>
+              <div className="review-step-body">
+                <div className="review-step-head">
+                  <strong>Your approval</strong>
+                  <span className="review-count">
+                    {approved ? "Approved" : "Owner only"}
+                    <span className="sr-only">{approved ? ", done" : ", not done"}</span>
+                  </span>
+                </div>
+                {!approved && approveReason && <p className="review-step-note" id="approve-reason">{approveReason}</p>}
+              </div>
+            </li>
+          </ol>
+        )}
+
+        {(state === "ready" || approved) && (
+          <section className="review-entries" aria-label="Exactly what will be scheduled">
+            {manifest.entries.map((entry, index) => {
+              const item = campaign.items.find((candidate) => candidate.id === entry.itemId);
+              return (
+                <article className="review-entry-row" key={`${entry.itemId}-${entry.platform}-${index}`}>
+                  <div className="review-entry-thumb">
+                    {item && <Preview item={item} index={campaign.items.indexOf(item)} brandName={brand} compact passive />}
+                  </div>
+                  <div className="review-entry-main">
+                    <strong>{item?.title ?? entry.title}</strong>
+                    <span className="review-entry-channel">
+                      <PlatformIcon platform={entry.platform} />
+                      {platformNames[entry.platform]} · {context.channels.find((channel) => channel.id === entry.accountId)?.displayName ?? entry.accountId}
+                    </span>
+                    <details>
+                      <summary>Caption and checks</summary>
+                      {entry.title && <p className="review-entry-title">{entry.title}</p>}
+                      <p className="review-copy">{entry.caption}</p>
+                      <small>
+                        {entry.visibility} · AI disclosure {entry.aiDisclosure ? "on" : "off"} · Version {entry.revision}
+                      </small>
+                      <code>{entry.assetId}<br />{entry.assetHash}</code>
+                    </details>
+                  </div>
+                  <time dateTime={entry.scheduledAt}>
+                    {dateLabel(entry.scheduledAt, entry.timezone)}
+                    {entry.timezone !== campaign.timezone && <small>{entry.timezone}</small>}
+                  </time>
+                </article>
+              );
+            })}
+          </section>
+        )}
+
+        {error && <Notice error>{error}</Notice>}
+        {message && <p className="review-message" role="status">{message}</p>}
+        <p className="review-footnote">
+          Approval covers exactly these videos, captions, accounts and times; any change needs a new review. Platforms may post a little after the set time.
+        </p>
       </div>
-      {stale && (
-        <Notice error>
-          The campaign changed after this review was prepared. Close this review
-          and prepare a new schedule.
-        </Notice>
-      )}
-      {manifest.blockers.length > 0 && (
-        <div className="review-blockers">
-          <h3>Before this can be scheduled</h3>
-          <ul>
-            {Array.from(groupedBlockers, ([message, itemIds]) => (
-              <li key={message}>
-                <AlertTriangle size={14} />
-                <div>{message}<small className="blocker-scope">{itemIds.size === campaign.items.length ? `Applies to all ${itemIds.size} content ${itemIds.size === 1 ? "item" : "items"}.` : `Applies to: ${Array.from(itemIds, id => campaign.items.find(item => item.id === id)?.title ?? id).join(", ")}`}</small></div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {manifest.entries.map((entry, i) => {
-        const item = campaign.items.find((x) => x.id === entry.itemId);
-        return (
-          <article
-            className="review-entry"
-            key={`${entry.itemId}-${entry.platform}-${i}`}
-          >
-            <div className="review-thumbnail">
-              {item && (
-                <Preview
-                  item={item}
-                  index={campaign.items.indexOf(item)}
-                  brandName={
-                    campaign.companyContext?.name ?? context.brand.name
-                  }
-                  compact
-                />
-              )}
-            </div>
-            <div>
-              <h3>
-                <PlatformIcon platform={entry.platform} />
-                {platformNames[entry.platform]}
-              </h3>
-              <p>
-                {context.channels.find((c) => c.id === entry.accountId)
-                  ?.displayName ?? entry.accountId}
-              </p>
-              <time dateTime={entry.scheduledAt}>
-                {dateLabel(entry.scheduledAt, entry.timezone, true)} ·{" "}
-                {entry.timezone}
-              </time>
-              <h4>{entry.title}</h4>
-              <p className="review-copy">{entry.caption}</p>
-              <small>
-                {entry.visibility} · AI disclosure{" "}
-                {entry.aiDisclosure ? "on" : "off"} · Content v{entry.revision}
-              </small>
-              <details>
-                <summary>Asset verification</summary>
-                <code>
-                  {entry.assetId}
-                  <br />
-                  {entry.assetHash}
-                </code>
-              </details>
-            </div>
-          </article>
-        );
-      })}
-      <p className="small muted">
-        Approval is bound to these assets, copy, accounts, and times. Any change
-        requires a new review. Provider processing can delay actual publication.
-      </p>
-      {error && <Notice error>{error}</Notice>}
-      {message && <Notice>{message}</Notice>}
-      <footer className="modal-actions">
+      <footer className="modal-actions review-actions">
         <button className="button secondary" onClick={onClose}>
           Keep editing
         </button>
-        {manifest.approval === "approved" ? (
+        {approved ? (
           <button
             className="button primary"
-            disabled={blocked || busy || submitted}
+            disabled={!canSubmit}
             onClick={() => void act("commit")}
           >
-            Submit schedule
+            {busy ? "Submitting…" : "Submit schedule"}
           </button>
         ) : (
           <button
             className="button primary"
-            disabled={blocked || busy || context.workspace.role !== "owner"}
+            disabled={Boolean(approveReason) || busy}
+            aria-describedby={approveReason ? "approve-reason" : undefined}
             onClick={() => void act("approve")}
           >
-            <Check size={15} />
+            <Check size={15} aria-hidden="true" />
             {busy ? "Confirming…" : "Approve exact schedule"}
           </button>
         )}

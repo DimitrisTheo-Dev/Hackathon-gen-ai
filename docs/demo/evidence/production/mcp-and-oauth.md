@@ -29,3 +29,11 @@ Environment: https://faceful.vercel.app (production), real Supabase project, the
 - Consent is served on the Site URL origin (`faceful.dtheo.dev`); the member must be signed in on that origin.
 - Access tokens are audience-bound to the Supabase project (`aud: authenticated`), not to `/mcp` specifically.
 - Token revocation from the studio for OAuth clients is not built (workspace tokens can be revoked; OAuth grants are managed in Supabase).
+
+## Hand-off prompt: your own Claude Code writes the drafts (14 November 2026, late evening)
+
+The studio's new "Your own Claude Code can write this" card produces a ready-to-paste prompt when AI writing is not connected on the server. That exact prompt shape ("Using the Faceful tools, create a project for this request: Create a 15-second Instagram Reel for BeWell with a friendly Greek-speaking presenter. Make the opening energetic. Write 1–3 short presenter scripts … Don’t render, schedule or publish anything.") was run in Claude Code against the **production** MCP endpoint with a fresh two-hour workspace token.
+
+Result: `is_error: false`, 6 turns. The server holds a new project "BeWell – Instagram Reel 15'' (Ελληνικά)" (`origin: agent`) with three Greek drafts of about 33 words each, status `draft`, created by the agent connection (two are at revision 2 because `create_project` sets the language with a follow-up revision). Nothing was rendered, scheduled or published. In the studio these drafts appear like any others (live mode polls every five seconds).
+
+This is the legitimate way to use a Claude subscription with Faceful: the person's own Claude Code does the writing and saves through Faceful's tools. The Faceful server itself never uses a subscription.

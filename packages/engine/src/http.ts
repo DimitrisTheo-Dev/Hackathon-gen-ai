@@ -8,7 +8,7 @@ import { EngineError } from "./errors.js";
 import type { Planner } from "./llm.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
-import { addDraft, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign } from "./studio.js";
+import { addDraft, addSource, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, removeSource, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign, updateBrand } from "./studio.js";
 import { createFromTemplate, createSampleProject, listTemplates } from "./templates.js";
 
 export interface HttpDeps extends EngineDeps {
@@ -73,6 +73,9 @@ const operations: Record<string, (deps: HttpDeps, ctx: Ctx, raw: unknown) => Pro
   revise_content: (deps, ctx, raw) => reviseContent(deps, ctx, raw),
   restore_version: restoreVersion,
   add_draft: addDraft,
+  update_brand: updateBrand,
+  add_source: addSource,
+  remove_source: removeSource,
   render_content: renderContent,
   cancel_jobs: cancelJobs,
   prepare_schedule: prepareSchedule,

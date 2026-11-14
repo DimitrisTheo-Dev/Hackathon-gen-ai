@@ -416,13 +416,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .timezone-label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
+
   .workspace-main {
     flex: 1;
     min-block-size: 0;
@@ -769,6 +763,13 @@
     overflow: hidden;
     overscroll-behavior: contain;
   }
+  .modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 0 0 auto;
+    margin-inline-end: -6px;
+  }
   .modal-header {
     display: flex;
     align-items: center;
@@ -881,13 +882,6 @@
   }
 }
 @layer views {
-  .campaign-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 28px 28px 24px;
-  }
   .campaign-meta {
     display: flex;
     align-items: center;
@@ -896,48 +890,13 @@
     color: var(--muted);
     margin-block-end: 9px;
   }
-  .campaign-meta > span:not(.campaign-dot) {
-    color: var(--text-muted);
-  }
-  .campaign-dot {
-    inline-size: 6px;
-    block-size: 6px;
-    background: var(--text-muted);
-    border-radius: 50%;
-  }
-  .campaign-heading h1 {
-    font-size: 25px;
-    letter-spacing: -0.9px;
-    font-weight: 550;
-    line-height: 1.25;
-  }
-  .campaign-heading p {
-    font-size: 12px;
-    color: var(--muted);
-    margin-block-start: 9px;
-  }
-  .campaign-actions {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    flex-shrink: 0;
-  }
+
   .draft-reminder {
     font-size: 12px;
     margin: -9px 28px 15px;
     color: var(--warning-ink);
   }
-  .view-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 0 28px 18px;
-    border-block-end: 1px solid var(--line);
-  }
-  .item-count {
-    font-size: 12px;
-    color: var(--muted);
-  }
+
   .activity-toggle {
     margin-inline-start: auto;
     color: var(--muted);
@@ -949,15 +908,7 @@
     flex: 1;
     min-block-size: 450px;
   }
-  .board-caption {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-block-end: 17px;
-    gap: 12px;
-  }
+
   .content-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -995,34 +946,6 @@
     border-radius: 7px;
     overflow: clip;
   }
-  .card-heading {
-    display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: 5px;
-    padding: 13px 7px 0;
-  }
-  .card-heading h2 {
-    font-size: 12px;
-    font-weight: 550;
-    line-height: 1.5;
-    letter-spacing: -0.15px;
-  }
-  .card-selection {
-    flex-shrink: 0;
-    inline-size: 14px;
-    block-size: 14px;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    margin-block-start: 2px;
-  }
-  .selected .card-selection {
-    color: white;
-    background: var(--accent);
-    border-color: var(--accent);
-  }
   .card-state {
     display: flex;
     align-items: center;
@@ -1036,28 +959,7 @@
     margin-inline-start: auto;
     font-size: 12px;
   }
-  .state-dot {
-    inline-size: 5px;
-    block-size: 5px;
-    background: var(--warning-ink);
-    border-radius: 50%;
-  }
-  .state-dot.ready {
-    background: var(--green);
-  }
-  .state-dot.failed {
-    background: var(--danger);
-  }
-  .card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 4px;
-    padding: 9px 7px 5px;
-    border-block-start: 1px solid var(--background);
-    font-size: 12px;
-    color: var(--muted);
-  }
+
   .platforms {
     display: flex;
     gap: 5px;
@@ -1085,61 +987,7 @@
     gap: 5px;
     font-size: 12px;
   }
-  .canvas-context {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    margin-block-start: 28px;
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .canvas-context .text-button {
-    font-size: 12px;
-  }
-  .run-summary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 18px;
-    padding: 17px 24px;
-    font-size: 12px;
-    color: var(--muted);
-    border-block-start: 1px solid var(--line);
-    background: var(--surface);
-  }
-  .run-summary > span {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .run-summary strong {
-    font-weight: 600;
-    color: var(--ink-secondary);
-  }
-  .workspace-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 12px 26px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    border-block-start: 1px solid var(--line);
-    background: var(--background);
-  }
-  .quiet-status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .quiet-status > span {
-    inline-size: 5px;
-    block-size: 5px;
-    background: var(--text-muted);
-    border-radius: 50%;
-  }
+
   .editor-preview {
     inline-size: 145px;
     margin-inline: auto;
@@ -1458,41 +1306,7 @@
     flex-direction: column;
     gap: 20px;
   }
-  .agenda-item {
-    display: flex;
-    gap: 20px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 11px;
-    padding: 20px;
-  }
-  .agenda-date {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-inline-size: 35px;
-    color: var(--text-secondary);
-  }
-  .agenda-date strong {
-    font-size: 25px;
-    font-weight: 500;
-    line-height: 1.2;
-  }
-  .agenda-date span {
-    font-size: 12px;
-    margin-block-start: 5px;
-  }
-  .agenda-content {
-    flex: 1;
-    min-inline-size: 0;
-  }
-  .agenda-title {
-    font-size: 13px;
-    font-weight: 550;
-    color: var(--ink);
-    padding-block: 0;
-    margin-block-end: 9px;
-  }
+
   .destination {
     display: flex;
     align-items: center;
@@ -1525,34 +1339,7 @@
   .schedule-view > .text-button {
     margin-block-start: 20px;
   }
-  .calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-  .calendar-grid .agenda-item {
-    flex-direction: column;
-    padding: 16px;
-    gap: 12px;
-  }
-  .calendar-grid .agenda-date {
-    flex-direction: row;
-    gap: 8px;
-    justify-content: start;
-  }
-  .calendar-grid .destination {
-    align-items: start;
-    flex-wrap: wrap;
-  }
-  .calendar-grid .destination .status-chip {
-    margin-inline-start: 24px;
-  }
-  .calendar-grid .agenda-title {
-    font-size: 12px;
-  }
-  .calendar-grid .destination > div {
-    flex-basis: 70%;
-  }
+
   .brand-view {
     padding: 40px;
     max-inline-size: 760px;
@@ -1762,54 +1549,7 @@
     margin-block: 20px;
     color: var(--ink-secondary);
   }
-  .activity-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-  .activity-list article {
-    display: flex;
-    gap: 12px;
-    padding-block: 16px;
-    border-block-end: 1px solid var(--line);
-  }
-  .activity-dot {
-    inline-size: 6px;
-    block-size: 6px;
-    background: var(--text-muted);
-    border-radius: 50%;
-    margin-block-start: 6px;
-    flex-shrink: 0;
-  }
-  .activity-list strong {
-    font-size: 12px;
-    font-weight: 550;
-  }
-  .activity-list p {
-    font-size: 12px;
-    margin-block: 6px;
-    color: var(--muted);
-  }
-  .activity-list small {
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .job-row {
-    padding-block: 15px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    font-size: 12px;
-    border-block-end: 1px solid var(--line);
-  }
-  .job-row > div {
-    flex: 1;
-  }
-  .job-row p {
-    font-size: 12px;
-    color: var(--muted);
-    margin-block-start: 5px;
-  }
+
   .empty-state {
     display: flex;
     flex-direction: column;
@@ -2014,14 +1754,7 @@
     .editor-preview {
       inline-size: 170px;
     }
-    .campaign-heading {
-      padding: 34px;
-    }
-    .card-heading h2 {
-      font-size: 13px;
-    }
-    .card-state,
-    .card-footer {
+    .card-state {
       font-size: 12px;
     }
     .poster-bottom {
@@ -2094,28 +1827,14 @@
     .topbar {
       padding-inline: 23px;
     }
-    .campaign-heading {
-      padding-inline: 24px;
-    }
-    .campaign-heading h1 {
-      font-size: 24px;
-    }
-    .campaign-actions .refresh-label {
-      display: none;
-    }
+
     .canvas {
       padding: 24px;
     }
     .content-grid {
       gap: 12px;
     }
-    .card-footer {
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .view-toolbar {
-      padding-inline: 24px;
-    }
+
     .editor-scroll {
       padding: 18px;
     }
@@ -2127,36 +1846,12 @@
     .has-editor .content-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .campaign-heading {
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-    .campaign-actions {
-      inline-size: 100%;
-    }
-    .campaign-actions .primary {
-      margin-inline-start: auto;
-    }
-    .timezone-label {
-      display: none;
-    }
-    .canvas-context {
-      flex-wrap: wrap;
-      line-height: 1.5;
-    }
-    .calendar-grid {
-      grid-template-columns: 1fr;
-    }
+
     .schedule-header {
       align-items: start;
       flex-direction: column;
     }
-    .run-summary {
-      gap: 12px;
-    }
-    .workspace-footer {
-      flex-wrap: wrap;
-    }
+
     .editor-preview {
       inline-size: 120px;
     }
@@ -2257,37 +1952,7 @@
     .breadcrumbs > span {
       display: none;
     }
-    .timezone-label {
-      display: none;
-    }
-    .campaign-heading {
-      padding: 25px 20px 21px;
-      flex-direction: column;
-      align-items: start;
-      gap: 21px;
-    }
-    .campaign-heading h1 {
-      font-size: 28px;
-    }
-    .campaign-heading p {
-      font-size: 12px;
-    }
-    .campaign-actions {
-      inline-size: 100%;
-    }
-    .campaign-actions > .primary {
-      margin-inline-start: auto;
-    }
-    .campaign-actions .button {
-      min-block-size: 39px;
-    }
-    .view-toolbar {
-      padding-inline: 20px;
-      gap: 10px;
-    }
-    .item-count {
-      font-size: 12px;
-    }
+
     .activity-toggle {
       font-size: 0;
       gap: 0;
@@ -2304,17 +1969,6 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 15px;
     }
-    .board-caption {
-      font-size: 12px;
-    }
-    .card-heading h2 {
-      font-size: 12px;
-    }
-    .card-footer {
-      flex-wrap: wrap;
-      gap: 6px;
-      font-size: 12px;
-    }
     .card-state {
       font-size: 12px;
     }
@@ -2324,26 +1978,7 @@
     .poster-bottom {
       font-size: 12px;
     }
-    .canvas-context {
-      flex-wrap: wrap;
-      gap: 6px;
-      font-size: 12px;
-      line-height: 1.6;
-    }
-    .canvas-context .text-button {
-      font-size: 12px;
-    }
-    .workspace-footer {
-      font-size: 12px;
-      flex-wrap: wrap;
-      padding-inline: 20px;
-    }
-    .run-summary {
-      justify-content: start;
-      gap: 12px;
-      font-size: 12px;
-      padding-inline: 20px;
-    }
+
     .connect-view {
       inline-size: calc(100% - 36px);
       margin-block: 35px;
@@ -2402,10 +2037,7 @@
     .schedule-header p {
       font-size: 12px;
     }
-    .agenda-item {
-      padding: 17px;
-      gap: 14px;
-    }
+
     .destination {
       gap: 7px;
       flex-wrap: wrap;
@@ -2416,12 +2048,7 @@
     .destination > div {
       flex-basis: 75%;
     }
-    .calendar-grid {
-      grid-template-columns: 1fr;
-    }
-    .calendar-grid .agenda-item {
-      flex-direction: row;
-    }
+
     .brand-view {
       padding: 30px 22px;
     }
@@ -2491,12 +2118,7 @@
       grid-template-columns: 1fr;
       max-inline-size: 250px;
     }
-    .campaign-heading h1 {
-      font-size: 25px;
-    }
-    .item-count {
-      display: none;
-    }
+
     .host-choices button {
       inline-size: 130px;
     }
@@ -2629,13 +2251,7 @@
   .editor .source-detail p {
     line-height: 1.65;
   }
-  .campaign-heading > div:first-child {
-    min-inline-size: 0;
-  }
-  .campaign-heading p {
-    max-inline-size: 60ch;
-    line-height: 1.6;
-  }
+
   .poster-title,
   .poster-brand {
     overflow-wrap: anywhere;
@@ -2643,20 +2259,9 @@
   .card-preview video {
     pointer-events: none;
   }
-  .new-campaign-button {
-    white-space: nowrap;
-  }
 }
 @layer responsive {
   @media (min-width: 1001px) {
-    .campaign-heading {
-      align-items: flex-start;
-      flex-wrap: wrap;
-      padding-block: 22px 19px;
-    }
-    .campaign-actions {
-      margin-inline-start: auto;
-    }
     .content-grid {
       max-inline-size: 640px;
     }
@@ -2673,12 +2278,7 @@
     .brief-summary dd {
       margin-block-end: 7px;
     }
-    .campaign-actions {
-      flex-wrap: wrap;
-    }
-    .campaign-actions .refresh-label {
-      display: none;
-    }
+
     .create-form .modal-actions {
       bottom: -20px;
     }
@@ -2762,14 +2362,12 @@
   .command-help, .command-empty { color: var(--text-secondary); font-size: 12px; line-height: 1.6; padding: 12px; }
 }
 @layer views {
-  .campaign-heading h1 { font-size: 28px; line-height: 1.15; font-weight: 500; letter-spacing: -.03em; overflow-wrap: anywhere; }
-  .campaign-heading p { font-size: 13px; }
   .canvas { background-image: radial-gradient(rgba(42,42,39,.13) .65px, transparent .65px); background-size: 20px 20px; }
   .canvas-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
   .canvas-tools label { display: flex; align-items: center; gap: 7px; min-width: 120px; flex: 1; padding: 0 10px; background: var(--background); border: 1px solid var(--border); border-radius: 8px; }
   .canvas-tools label input { padding-inline: 0; width: 100%; border: 0; background: transparent; min-width: 0; }
   .canvas-tools select { padding: 8px; font-size: 12px; max-width: 100%; }
-  .card-heading h2 { font-size: 13px; font-weight: 550; }
+
   .editor-tabs button { font-size: 13px; min-height: 40px; }
   .editor-tabs, .segmented { background: var(--subtle); }
   .editor-tabs button.active, .segmented button.active { color: var(--ink); background: var(--surface); }
@@ -2815,24 +2413,23 @@
   @media (max-width: 600px) {
     .content-grid { grid-template-columns: 1fr; max-width: 290px; gap: 24px; }
     .content-card { padding: 8px; border-radius: 16px; }
-    .card-heading h2 { font-size: 15px; }
+
     .poster-title { font-size: clamp(26px,10cqi,38px); }
     .poster-bottom { font-size: 12px; }
     .canvas { padding: 20px 16px 32px; }
     .canvas-tools select { flex: 1; min-width: 0; }
     .canvas-tools label { flex-basis: 100%; }
     .canvas-tools input, .canvas-tools select { min-height: 44px; font-size: 16px; }
-    .campaign-heading { padding: 24px 16px 20px; }
-    .campaign-heading h1 { font-size: 28px; }
-    .campaign-actions .button, .icon-button, .text-button { min-height: 44px; }
+
+    .icon-button, .text-button { min-height: 44px; }
     .icon-button { min-width: 44px; }
-    .view-toolbar { padding-inline: 16px; flex-wrap: wrap; }
+
     .editor-scroll { padding: 20px 16px; }
     .editor-footer { padding-inline: 16px; }
     .button { min-height: 44px; }
-    .workspace-footer { padding-bottom: max(16px,env(safe-area-inset-bottom)); }
+
     .schedule-view { padding: 20px 16px; }
-    .agenda-item { gap: 12px; padding: 16px 12px; }
+
     .destination { flex-wrap: wrap; }
     .brand-view { padding: 28px 20px; }
   }
@@ -2842,11 +2439,6 @@
 }
 @layer responsive {
   @media (max-width: 600px) {
-    .campaign-heading { gap: 16px; padding-block: 20px 16px; }
-    .campaign-actions { gap: 6px; }
-    .campaign-actions .button { padding-inline: 12px; font-size: 12px; }
-    .campaign-actions > .primary { margin-inline-start: 0; }
-    .campaign-actions .refresh-label { display: none; }
     .poster-title { margin-block: auto; }
     .poster-bottom { margin-block-start: 0; }
     .canvas-tools { margin-bottom: 16px; }
@@ -2855,7 +2447,6 @@
 @layer responsive { @media (max-width: 1220px) { .nav-open .sidebar .project-list { display: flex; } } }
 @layer views {
   .canvas { flex: 1 0 auto; }
-  .workspace-main > .campaign-heading, .workspace-main > .view-toolbar, .workspace-main > .run-summary, .workspace-main > .workspace-footer { flex-shrink: 0; }
 }
 @layer responsive { @media (max-width: 600px) { .editor-preview { width: min(160px, calc(28dvh * 9 / 16)); } } }
 

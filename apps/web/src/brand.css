@@ -1,0 +1,277 @@
+/*
+ * Brand kit (views/Brand.tsx). Tokens come from /design.css; the shared .button, .text-button, .icon-button,
+ * .field, .modal and .notice styles are reused. Loaded with the Brand chunk, in the studio's polish layer.
+ *
+ * Motion: press 120ms (scale .97), state colour 160ms, small reveals 200ms with the strong ease-out; exits
+ * are faster than entrances. Transform/opacity only; hover only on fine pointers; reduced motion keeps the
+ * fades and drops the movement. Typing, saving and keyboard actions never animate layout.
+ */
+@layer polish {
+  .bk { box-sizing: border-box; inline-size: 100%; max-inline-size: 840px; padding: 26px 24px 56px; }
+  :where(.bk) :is(h1, h2, h3, p) { margin: 0; }
+
+  /* ── intro ── */
+  .bk-intro h1 { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; }
+  .bk-intro > p { margin-block-start: 6px; max-inline-size: 62ch; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .bk-intro .bk-readonly { display: inline-flex; align-items: center; gap: 6px; margin-block-start: 12px; padding: 5px 10px; border-radius: 999px; background: var(--subtle); font-size: 12.5px; color: var(--ink-secondary); }
+
+  /* ── identity ── */
+  .bk-identity { margin-block-start: 22px; padding: 20px; border: 1px solid transparent; border-radius: 20px; background: var(--surface); box-shadow: var(--elev-1); }
+  /* Top-aligned: an editor that wraps to an extra line grows downward instead of nudging everything up. */
+  .bk-identity-main { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 18px; }
+  .bk-mark { position: relative; display: grid; place-items: center; inline-size: 64px; block-size: 64px; padding: 0; border: 0; border-radius: 18px; background-color: var(--brand); color: var(--brand-ink); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 1px 2px rgba(42,42,39,.08); font-size: 28px; font-weight: 600; line-height: 1; letter-spacing: -.02em; transition: background-color var(--dur-base) ease, color var(--dur-base) ease, transform var(--dur-press) var(--ease-out); }
+  button.bk-mark { cursor: pointer; }
+  .bk-mark-badge { position: absolute; inset-block-end: -5px; inset-inline-end: -5px; display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 50%; background: var(--surface); color: var(--ink-secondary); box-shadow: var(--elev-2); }
+  .bk-mark[aria-expanded="true"] .bk-mark-badge { background: var(--ink); color: var(--surface); }
+  .bk-identity-text { display: grid; gap: 4px; min-inline-size: 0; padding-block-start: 4px; }
+  .bk-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-inline-size: 0; }
+  .bk-name { font-size: 22px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; color: var(--ink); }
+  .bk-desc { font-size: 14px; line-height: 1.5; color: var(--text-secondary); }
+
+  /* ── click-to-edit text: the button and the field share one box, so switching never moves a line ── */
+  .bk-inline-wrap { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 0 1 auto; min-inline-size: 0; max-inline-size: 100%; --line: 21px; }
+  .bk-name-wrap { --line: 27.5px; }
+  .bk-rule-text-wrap { --line: 21.7px; }
+  .bk-inline-wrap:has(textarea) { flex: 1 1 100%; align-items: stretch; }
+  .bk-inline, .bk-inline-input { box-sizing: border-box; margin: -3px -8px; padding: 2px 7px; border: 1px solid transparent; border-radius: 9px; font-family: inherit; text-align: start; overflow-wrap: anywhere; }
+  .bk-inline { display: inline-flex; align-items: baseline; gap: 8px; max-inline-size: calc(100% + 16px); background: transparent; cursor: text; transition: background-color var(--dur-fast) ease; }
+  .bk-inline.is-static { display: inline; margin: 0; padding: 0; border: 0; cursor: auto; }
+  .bk-inline[data-empty] .bk-inline-text, .bk-inline.is-static[data-empty] { color: var(--text-muted); font-weight: 400; }
+  .bk-inline-text { min-inline-size: 0; text-wrap: pretty; }
+  .bk-inline-pen { flex: 0 0 auto; align-self: flex-start; margin-block-start: calc((1lh - 14px) / 2); color: var(--text-muted); opacity: 0; transition: opacity var(--dur-fast) ease; }
+  .bk-inline:focus-visible .bk-inline-pen { opacity: 1; }
+  .bk-inline-input { display: block; inline-size: calc(100% + 16px); min-block-size: 0; max-inline-size: none; resize: none; border-color: var(--border); background: var(--surface); box-shadow: 0 1px 2px rgba(42,42,39,.04); }
+  .bk-inline-input.bk-name, .bk-inline-input.bk-desc, .bk-inline-input.bk-rule-text { font-size: inherit; }
+  .bk-line .bk-inline-input.bk-name { font-size: 22px; }
+  .bk-line .bk-inline-input.bk-desc { font-size: 14px; color: var(--ink); }
+  /* The keyboard hint sits inside the field's first line, so opening an editor never pushes the page down. */
+  .bk-hint { position: absolute; inset-block-start: -3px; inset-inline-end: -8px; display: flex; align-items: center; gap: 4px; block-size: calc(var(--line) + 6px); padding-inline: 10px; font-size: 11.5px; line-height: 1; color: var(--text-secondary); white-space: nowrap; pointer-events: none; }
+  .bk-hint kbd { padding: 0; border: 0; background: none; box-shadow: none; font: inherit; font-weight: 550; color: var(--ink-secondary); }
+  .bk-error { display: block; margin-block-start: 6px; font-size: 12.5px; line-height: 1.5; color: var(--danger); text-wrap: pretty; }
+  .bk-inline-wrap .bk-error { margin: 0; }
+
+  /* The confirmation: a quiet tick that comes in quickly and leaves faster. */
+  .bk-saved { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 550; letter-spacing: 0; line-height: 1; color: var(--positive-ink); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 150ms ease-out, transform 150ms var(--ease-out); }
+  .bk-saved[data-on] { opacity: 1; transition-duration: 200ms; }
+  /* One tick for the whole identity card, under the tile, so it never reflows the text it confirms. */
+  .bk-mark-cell { position: relative; }
+  .bk-mark-cell > .bk-saved { position: absolute; inset-block-start: calc(100% + 9px); inset-inline: -14px; justify-content: center; }
+
+  /* ── colour ── */
+  .bk-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; margin-block-start: 18px; padding-block-start: 16px; border-block-start: 1px solid var(--border); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+  .bk-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+  .bk-swatch { display: grid; place-items: center; inline-size: 30px; block-size: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--swatch); color: var(--swatch-ink); box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); cursor: pointer; transition: box-shadow var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+  .bk-swatch svg { opacity: 0; transition: opacity var(--dur-fast) ease; }
+  .bk-swatch[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(0,0,0,.1), 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+  .bk-swatch[aria-pressed="true"] svg { opacity: 1; }
+  .bk-hex { display: flex; align-items: center; gap: 10px; }
+  .bk-hex label { font-size: 12.5px; font-weight: 550; color: var(--ink-secondary); }
+  .bk-hex-field { display: inline-flex; align-items: center; gap: 2px; padding-inline-start: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text-secondary); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .bk-hex-field:focus-within { border-color: var(--focus); outline: 1px solid var(--focus); outline-offset: -2px; }
+  .bk-hex-field input { inline-size: 8ch; min-block-size: 34px; padding: 0 10px 0 0; border: 0; background: transparent; color: var(--ink); font-size: 13px; letter-spacing: .02em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+  .bk-hex-field:has([aria-invalid="true"]) { border-color: var(--danger); }
+  .bk-colors > .bk-error { flex-basis: 100%; margin: 0; }
+
+  /* ── sections ── */
+  .bk-section { margin-block-start: 40px; }
+  .bk-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px 16px; margin-block-end: 12px; }
+  .bk-section-head > div { display: grid; gap: 4px; min-inline-size: 0; }
+  .bk-section-head h2 { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; }
+  .bk-section-head p { max-inline-size: 64ch; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .bk-count { flex: 0 0 auto; font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+  /* ── voice: one grouped surface, a hairline between rows ── */
+  .bk-group { border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); }
+  .bk-row { display: grid; grid-template-columns: 116px minmax(0, 1fr); align-items: start; gap: 8px 16px; padding: 16px 18px; }
+  .bk-row + .bk-row { border-block-start: 1px solid var(--border); }
+  .bk-row-label { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-block-start: 8px; font-size: 13px; font-weight: 550; color: var(--ink); }
+  .bk-row > .bk-error, .bk-row-empty { grid-column: 2; }
+  .bk-row > .bk-error { margin: 0; }
+  .bk-row-empty { padding-block-start: 8px; font-size: 13px; color: var(--text-muted); }
+  .bk-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .bk-chip { display: inline-flex; align-items: center; gap: 6px; min-block-size: 34px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink-secondary); font-size: 13.5px; font-weight: 500; line-height: 1.2; cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+  .bk-chip[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+  .bk-chip.is-add { border-style: dashed; color: var(--text-secondary); padding-inline-start: 11px; }
+  .bk-chip.is-static { border-color: transparent; background: var(--subtle); color: var(--ink); cursor: auto; }
+  .bk-chip-input { inline-size: 190px; min-block-size: 34px; padding: 0 14px; border-radius: 999px; font-size: 13.5px; }
+
+  /* ── guardrails: a tidy grouped list ── */
+  .bk-rules { margin: 0; padding: 0; list-style: none; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); }
+  .bk-rules > li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 11px 10px 11px 16px; transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+  .bk-rules > li + li { border-block-start: 1px solid var(--border); }
+  .bk-rule-mark { display: grid; place-items: center; inline-size: 22px; block-size: 22px; margin-block-start: 2px; border-radius: 50%; background: var(--subtle); color: var(--ink); }
+  .bk-rule-mark.is-new { background: transparent; box-shadow: inset 0 0 0 1px var(--border); color: var(--text-secondary); }
+  .bk-rule-text { font-size: 14px; line-height: 1.55; color: var(--ink); }
+  .bk-rules .bk-inline-wrap { padding-block-start: 1px; }
+  .bk-rules .bk-inline:not(.is-static) { margin-block: -2px; }
+  .bk-rules .bk-inline.is-static { padding-block-start: 1px; }
+  .bk-rules .bk-inline-input { margin-block: -2px; }
+  .bk-rules > li.bk-rule-new { grid-template-columns: 22px minmax(0, 1fr); }
+  .app-frame .bk-rule-remove { inline-size: 30px; block-size: 30px; min-inline-size: 30px; min-block-size: 30px; margin-block: -2px 0; padding: 0; color: var(--text-muted); }
+  .bk-rules > li:is(.bk-rule-add, .bk-rule-full) { display: block; padding: 0; }
+  .bk-rule-add button { display: flex; align-items: center; gap: 12px; inline-size: 100%; min-block-size: 46px; padding: 0 16px 0 19px; border: 0; border-radius: 0 0 15px 15px; background: transparent; color: var(--text-secondary); font-size: 13.5px; font-weight: 500; text-align: start; cursor: pointer; transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; }
+  .bk-rule-add:only-child button { border-radius: 15px; }
+  .bk-rules > li.bk-rule-full { padding: 12px 16px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+  .bk-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-block-start: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+  .bk-undo span { min-inline-size: 0; overflow-wrap: anywhere; }
+  .app-frame .bk-undo .text-button { min-block-size: 28px; padding: 0; font-size: 12.5px; font-weight: 550; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border); }
+
+  /* ── empty states ── */
+  .bk-empty { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; padding: 18px; border: 1px dashed var(--border); border-radius: 16px; }
+  .bk-empty-mark { display: grid; place-items: center; inline-size: 36px; block-size: 36px; border-radius: 11px; background: var(--art-wash); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+  .bk-empty strong { display: block; font-size: 14px; font-weight: 550; line-height: 1.35; }
+  .bk-empty p { margin-block-start: 2px; max-inline-size: 58ch; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .bk-empty .button { white-space: nowrap; }
+
+  /* ── sources ── */
+  .bk-project { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+  .bk-project strong { font-weight: 550; color: var(--ink-secondary); overflow-wrap: anywhere; }
+  .bk-project-pick { position: relative; display: inline-flex; align-items: center; max-inline-size: 100%; }
+  .bk-project-pick select { appearance: none; max-inline-size: 280px; min-block-size: 30px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 550; text-overflow: ellipsis; cursor: pointer; }
+  .bk-project-pick svg { position: absolute; inset-inline-end: 8px; color: var(--text-secondary); pointer-events: none; }
+  .bk-tip { margin-block-start: 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+  .app-frame .bk-add { flex: 0 0 auto; gap: 6px; padding-inline: 12px 14px; }
+  .bk-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; gap: 12px; }
+  .bk-source { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; padding: 16px 16px 12px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+  .bk-source-mark { display: grid; place-items: center; inline-size: 40px; block-size: 40px; border-radius: 11px; background: var(--subtle); box-shadow: inset 0 0 0 1px rgba(42,42,39,.05); color: var(--ink-secondary); font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .bk-source-body { display: grid; justify-items: start; gap: 3px; min-inline-size: 0; }
+  .bk-source h3 { font-size: 14.5px; font-weight: 550; line-height: 1.35; letter-spacing: -.01em; overflow-wrap: anywhere; text-wrap: pretty; }
+  .bk-source-meta { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); overflow-wrap: anywhere; }
+  .bk-source-host { color: var(--ink-secondary); }
+  .bk-source-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin-block-start: 6px; font-size: 13.5px; line-height: 1.55; color: var(--ink-secondary); white-space: pre-line; overflow-wrap: anywhere; }
+  .bk-source-excerpt[data-expanded] { display: block; -webkit-line-clamp: none; line-clamp: none; }
+  .bk-more { display: inline-flex; align-items: center; gap: 4px; min-block-size: 28px; padding: 0; border: 0; background: none; color: var(--ink); font-size: 12.5px; font-weight: 550; cursor: pointer; }
+  .bk-more svg { transition: transform var(--dur-base) var(--ease-out); }
+  .bk-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .bk-source-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-block-start: 12px; padding-block-start: 10px; border-block-start: 1px solid var(--border); }
+  .bk-source-uses { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .bk-source-actions { display: flex; align-items: center; gap: 6px; margin-inline-start: auto; }
+  .app-frame .bk-small { min-block-size: 32px; padding: 0 12px; gap: 5px; font-size: 13px; }
+  .app-frame .bk-quiet { border-color: transparent; background: transparent; color: var(--text-secondary); }
+  .bk-source-foot > .bk-error { flex-basis: 100%; margin: 0; }
+  .bk-confirm { display: grid; gap: 10px; inline-size: 100%; padding: 12px; border: 1px solid var(--danger-border); border-radius: 12px; background: var(--danger-surface); }
+  .bk-confirm p { font-size: 12.5px; line-height: 1.55; color: var(--ink-secondary); text-wrap: pretty; }
+  .bk-confirm > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .app-frame .bk-confirm .button { min-block-size: 34px; }
+  .app-frame .bk-danger { background: var(--danger); color: var(--surface); }
+  .bk-limit { margin-block-start: 10px; font-size: 12.5px; color: var(--text-secondary); }
+  .bk-brief { margin-block-start: 14px; font-size: 13px; line-height: 1.6; color: var(--ink-secondary); }
+  .bk-brief summary { display: inline-flex; align-items: center; gap: 4px; min-block-size: 32px; color: var(--text-secondary); font-weight: 500; list-style: none; cursor: pointer; }
+  .bk-brief summary::-webkit-details-marker { display: none; }
+  .bk-brief summary svg { transition: transform var(--dur-base) var(--ease-out); }
+  .bk-brief[open] summary svg { transform: rotate(180deg); }
+  .bk-brief p { max-inline-size: 70ch; margin-block-start: 4px; text-wrap: pretty; }
+  .bk-brief strong { font-weight: 550; color: var(--ink); }
+
+  /* ── add-source sheet ── */
+  .bk-sheet .field:first-of-type { margin-block-start: 14px; }
+  .bk-sheet-lead { font-size: 13px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
+  .bk-sheet-lead strong { font-weight: 550; color: var(--ink); }
+  .bk-sheet .field > label { font-size: 12.5px; }
+  .bk-sheet .field input { min-block-size: 40px; font-size: 14px; }
+  .bk-sheet .field input[aria-invalid="true"], .bk-sheet .field textarea[aria-invalid="true"] { border-color: var(--danger); }
+  .bk-sheet .field .bk-error { margin: 0; }
+  .bk-sheet-text { min-block-size: 168px; font-size: 14px; line-height: 1.6; resize: vertical; }
+  .bk-counter { font-weight: 400; font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .bk-sheet-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--subtle); font-size: 12.5px; line-height: 1.5; color: var(--ink-secondary); text-wrap: pretty; }
+  .bk-sheet-note svg { flex: 0 0 auto; margin-block-start: 2px; color: var(--text-secondary); }
+  .bk-sheet .notice { margin-block-start: 12px; }
+
+  .bk-footnote { margin-block-start: 40px; padding-block-start: 14px; border-block-start: 1px solid var(--border); max-inline-size: 76ch; font-size: 12px; line-height: 1.6; color: var(--text-secondary); text-wrap: pretty; }
+
+  /* ── interaction ── */
+  :is(.bk-mark, .bk-swatch, .bk-chip, .bk-rule-add button):not(:disabled):active { transform: scale(.97); }
+  .bk-chip.is-static:active { transform: none; }
+  @media (hover: hover) and (pointer: fine) {
+    .bk-inline:hover { background: var(--subtle); }
+    .bk-inline:hover .bk-inline-pen { opacity: 1; }
+    .bk-chip:not(.is-static):not([aria-pressed="true"]):hover { border-color: var(--text-muted); background: var(--subtle); color: var(--ink); }
+    .bk-chip[aria-pressed="true"]:hover { background: var(--accent-dark); }
+    .bk-rule-add button:hover { background: var(--background); color: var(--ink); }
+    .bk-rule-remove:hover { color: var(--ink); }
+    .bk-more:hover, .bk-brief summary:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .app-frame .bk-quiet:hover:not(:disabled) { background: var(--subtle); color: var(--ink); }
+    .app-frame .bk-danger:hover:not(:disabled) { filter: brightness(.94); }
+    .bk-project-pick select:hover { border-color: var(--text-muted); }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .bk-inline-wrap:has(.bk-hint) .bk-inline-input { padding-inline-end: 184px; }
+  }
+  @media (hover: none) {
+    /* No hover to discover editing, so the pencil stays faintly visible. Rows are tapped as a whole. */
+    .bk-inline-pen { opacity: .5; }
+    .bk-rules .bk-inline-pen { display: none; }
+    .bk-hint { display: none; }
+  }
+  @media (pointer: coarse) {
+    .bk-line .bk-inline-input.bk-desc, .bk-desc, .bk-rule-text, .bk-chip-input { font-size: 16px; }
+    .bk-line .bk-inline-input.bk-desc { font-size: 16px; }
+    .bk-chip, .bk-chip-input, .bk-rule-add button, .bk-more, .bk-brief summary, .bk-project-pick select, .app-frame .bk-undo .text-button { min-block-size: 44px; }
+    .bk-hex-field input { min-block-size: 44px; font-size: 16px; }
+    .bk-swatches { display: grid; grid-template-columns: repeat(4, 44px); gap: 12px 16px; }
+    .bk-swatch { inline-size: 44px; block-size: 44px; }
+    .app-frame .bk-rule-remove { inline-size: 44px; block-size: 44px; min-inline-size: 44px; min-block-size: 44px; margin-block: -9px -9px; margin-inline-end: -6px; }
+    /* A taller hit area without a taller box, so the field that replaces it still lines up exactly. */
+    .bk-inline:not(.is-static) { position: relative; }
+    .bk-inline:not(.is-static)::after { content: ""; position: absolute; inset: -8px 0; }
+    .app-frame :is(.bk-small, .bk-confirm .button, .bk-add) { min-block-size: 44px; }
+  }
+
+  /* Small reveals: the colour tray, a just-added guardrail or source. Entry only; removal is instant. */
+  @media (prefers-reduced-motion: no-preference) {
+    @starting-style {
+      .bk-colors { opacity: 0; transform: translateY(-4px); }
+      .bk-rules > li[data-new], .bk-source[data-new] { opacity: 0; transform: translateY(6px); }
+    }
+    .bk-saved { transform: translateY(2px); }
+    .bk-saved[data-on] { transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    @starting-style {
+      .bk-colors, .bk-rules > li[data-new], .bk-source[data-new] { opacity: 0; }
+    }
+    :is(.bk-mark, .bk-swatch, .bk-chip, .bk-rule-add button):active { transform: none; }
+    .bk-more svg, .bk-brief summary svg { transition: none; }
+  }
+
+  @media (max-width: 760px) {
+    .bk { padding: 20px 16px 40px; }
+    .bk-intro h1 { font-size: 23px; }
+    .bk-identity { padding: 16px; border-radius: 18px; }
+    .bk-identity-main { align-items: start; gap: 14px; }
+    .bk-mark { inline-size: 56px; block-size: 56px; border-radius: 16px; font-size: 24px; }
+    .bk-name, .bk-line .bk-inline-input.bk-name { font-size: 20px; }
+    .bk-colors { gap: 14px; }
+    .bk-section { margin-block-start: 32px; }
+    .bk-row { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px; }
+    .bk-row-label { flex-direction: row; align-items: center; justify-content: space-between; padding: 0; }
+    .bk-row > .bk-error, .bk-row-empty { grid-column: 1; padding: 0; }
+    .bk-chip-input { inline-size: 100%; }
+    .bk-rules > li { gap: 10px; padding-inline-start: 14px; }
+    .bk-empty { grid-template-columns: auto minmax(0, 1fr); align-items: start; padding: 16px; }
+    .bk-empty .button { grid-column: 1 / -1; justify-self: stretch; margin-block-start: 10px; }
+    .bk-section-head { flex-wrap: wrap; }
+    .bk-project-pick select { max-inline-size: calc(100vw - 80px); }
+    .bk-source { padding: 14px 14px 10px; }
+    .bk-source-mark { inline-size: 36px; block-size: 36px; border-radius: 10px; font-size: 15px; }
+    .bk-source-excerpt { -webkit-line-clamp: 3; line-clamp: 3; }
+    .bk-confirm > div { justify-content: stretch; }
+    .bk-confirm .button { flex: 1 1 0; }
+  }
+  @media (prefers-contrast: more) {
+    :is(.bk-identity, .bk-group, .bk-rules, .bk-source) { box-shadow: 0 0 0 1px var(--ink); }
+    .bk-chip, .bk-empty { border-color: var(--ink); }
+  }
+  @media (forced-colors: active) {
+    .bk-swatch[aria-pressed="true"] { outline: 2px solid CanvasText; outline-offset: 3px; }
+    .bk-chip[aria-pressed="true"] { border-width: 3px; }
+  }
+}
+
+/* Unlayered, like the shared focus rules in design.css they refine (layered rules cannot override those). */
+.bk :is(.bk-inline, .bk-chip, .bk-swatch, .bk-mark):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.bk .bk-inline:focus-visible { outline-offset: 0; }
+.bk .bk-swatch:focus-visible { outline-offset: 5px; }
+.bk .bk-rule-add button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+/* The wrapper draws the hex field's edge, so the input inside it draws none of its own. */
+.bk .bk-hex-field input:is(:focus, :focus-visible) { outline: none; border-color: transparent; }

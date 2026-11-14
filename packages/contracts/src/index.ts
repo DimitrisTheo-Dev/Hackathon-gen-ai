@@ -2,8 +2,13 @@ import { z } from "zod";
 
 /** Proposed boundary v0.1. Minas agreement pending; see docs/product/contract-handoff.md. */
 export const httpUrlSchema = z.url({ protocol: /^https?$/ }).refine((value) => {
-  const url = new URL(value);
-  return !url.username && !url.password;
+  // Zod still runs this check after the URL format check has failed; an unparseable value is simply invalid.
+  try {
+    const url = new URL(value);
+    return !url.username && !url.password;
+  } catch {
+    return false;
+  }
 }, "URLs must not contain credentials");
 export const timezoneSchema = z.string().refine((value) => {
   try {
@@ -179,6 +184,21 @@ export const connectionSchema = z.object({
   lastSeenAt: instantSchema.nullable(),
   revokedAt: instantSchema.nullable(),
 });
+/**
+ * The workspace brand kit. Every draft starts from it, for people and connected agents alike.
+ * It is data the model reads, never instructions it follows. `tone` and `audience` default to ""
+ * so responses from engines that predate them still parse.
+ */
+export const brandSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  rules: z.array(z.string()),
+  color: z.string(),
+  tone: z.string().default(""),
+  audience: z.string().default(""),
+});
+export const BRAND_LIMITS = { name: 120, description: 500, tone: 500, audience: 500, rules: 12, rule: 200 } as const;
+export const brandColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "Use a colour in #RRGGBB form");
 export const contextSchema = z.object({
   workspace: z.object({
     id: idSchema,
@@ -192,12 +212,7 @@ export const contextSchema = z.object({
     kind: z.enum(["human", "agent"]),
     scopes: z.array(z.string()),
   }),
-  brand: z.object({
-    name: z.string(),
-    description: z.string(),
-    rules: z.array(z.string()),
-    color: z.string(),
-  }),
+  brand: brandSchema,
   avatars: z.array(
     z.object({
       id: idSchema,
@@ -369,6 +384,45 @@ export const grantInputSchema = z
     acknowledgesFuturePublication: z.literal(true),
   })
   .strict();
+/** Edits the workspace brand kit. Only the fields sent change; text stays data for the model, never instructions. */
+export const updateBrandInputSchema = z
+  .object({
+    name: z.string().trim().min(1, "Give the brand a name").max(BRAND_LIMITS.name).optional(),
+    description: z.string().trim().max(BRAND_LIMITS.description).optional(),
+    tone: z.string().trim().max(BRAND_LIMITS.tone).optional(),
+    audience: z.string().trim().max(BRAND_LIMITS.audience).optional(),
+    color: brandColorSchema.optional(),
+    rules: z
+      .array(z.string().trim().min(1, "A guardrail cannot be empty").max(BRAND_LIMITS.rule))
+      .max(BRAND_LIMITS.rules)
+      .refine((rules) => new Set(rules.map((rule) => rule.toLowerCase())).size === rules.length, "Each guardrail must be different")
+      .optional(),
+    operationKey: z.uuid(),
+  })
+  .strict()
+  .refine((input) => Object.entries(input).some(([key, value]) => key !== "operationKey" && value !== undefined), "The edit contains no changes.");
+export const SOURCE_LIMITS = { title: 160, url: 2048, excerpt: 5000, perProject: 20 } as const;
+/**
+ * Adds a source to one project. The link is a reference only: Faceful never fetches it. The excerpt is
+ * the exact text drafts may use, stored as data.
+ */
+export const addSourceInputSchema = z
+  .object({
+    campaignId: idSchema,
+    title: z.string().trim().min(1, "Give the source a title").max(SOURCE_LIMITS.title),
+    url: z.string().trim().max(SOURCE_LIMITS.url).pipe(httpUrlSchema).nullable().optional(),
+    excerpt: z.string().trim().min(1, "Paste the text Faceful may use").max(SOURCE_LIMITS.excerpt),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export const removeSourceInputSchema = z
+  .object({ campaignId: idSchema, sourceId: idSchema, operationKey: z.uuid() })
+  .strict();
+export type Brand = z.infer<typeof brandSchema>;
+export type Source = z.infer<typeof sourceSchema>;
+export type UpdateBrandInput = z.input<typeof updateBrandInputSchema>;
+export type AddSourceInput = z.input<typeof addSourceInputSchema>;
+export type RemoveSourceInput = z.infer<typeof removeSourceInputSchema>;
 export type StudioContext = z.infer<typeof contextSchema>;
 export type Campaign = z.infer<typeof campaignSchema>;
 export type ContentItem = z.infer<typeof contentSchema>;

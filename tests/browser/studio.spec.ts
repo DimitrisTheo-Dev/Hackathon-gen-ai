@@ -46,6 +46,26 @@ test('manual campaign saves supplied context and approval never implies publicat
   await page.getByRole('button',{name:'Close dialog'}).click();await page.reload();await expect(page.getByRole('heading',{name:'A useful first week',exact:true})).toBeVisible();
 });
 
+test('schedule without times offers one empty state; activity reads as a collapsed timeline',async({page})=>{
+  await page.goto('/dev/studio/?view=schedule');await expect(page.locator('.day-card')).toHaveCount(3);
+  await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);const c=state.campaigns[0];c.items.forEach((i:{targets:unknown[]})=>{i.targets=[];});
+    const at=(m:number)=>new Date(Date.now()-m*60000).toISOString();const ev=(m:number)=>({id:crypto.randomUUID(),actor:'You · development fixture',action:'Prepared a schedule for review',objectId:c.id,revision:1,at:at(m),outcome:'0 ready · 6 blockers'});
+    c.activity=[...c.activity,ev(40),ev(5)];localStorage.setItem(key,JSON.stringify(state));});
+  await page.reload();
+  // One empty state instead of a "No date" card and a line per draft; reviewing steps back while there is nothing to review.
+  await expect(page.getByRole('heading',{name:'No posting times yet'})).toBeVisible();await expect(page.locator('.day-card')).toHaveCount(0);await expect(page.getByText('No time requested yet.')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Review schedule',exact:true})).toHaveClass(/secondary/);
+  await page.getByRole('button',{name:'Suggest times'}).click();
+  await expect(page.getByLabel('Direction for your content')).toHaveValue('Plan posting times for next week in Europe/Athens');await expect(page.getByLabel('Direction for your content')).toBeFocused();
+  await page.getByRole('button',{name:'Schedule',exact:true}).first().click();await page.getByRole('button',{name:'Set a time',exact:true}).click();
+  await expect(page.locator('#detail-schedule-trigger')).toHaveAttribute('aria-expanded','true');
+  // Two identical consecutive entries collapse; the zero count is dropped from the outcome.
+  await page.getByRole('button',{name:'Campaign activity'}).first().click();const dialog=page.getByRole('dialog',{name:'Campaign activity'});
+  await expect(dialog.locator('.timeline-entry').first()).toContainText('Prepared a schedule for review');await expect(dialog.locator('.timeline-count').first()).toHaveText('2×');
+  await expect(dialog.locator('.timeline-entry').first()).toContainText('6 blockers');await expect(dialog.locator('.timeline-entry').first()).not.toContainText('0 ready');
+  await expect(dialog.getByRole('heading',{name:'Background jobs'})).toHaveCount(0);
+});
+
 test('offline, corrupt storage and unauthenticated paths do not claim success or fall back',async({page,context})=>{
   await page.goto('/dev/studio/?view=canvas');await page.getByRole('button',{name:'Details',exact:true}).click();await page.locator('#script').fill('Retain this unsaved edit.');await context.setOffline(true);await expect(page.locator('.editor-offline')).toBeVisible();await expect(page.locator('#script')).toHaveValue('Retain this unsaved edit.');await context.setOffline(false);
   await page.evaluate(()=>localStorage.setItem('castroom-development-v1','broken'));await page.reload();await expect(page.getByRole('heading',{name:'We couldn’t open your workspace.'})).toBeVisible();

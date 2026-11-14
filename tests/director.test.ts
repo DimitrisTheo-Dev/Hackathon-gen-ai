@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {createFixtureClient} from '../apps/web/src/data/fixture';
 import {localDirectorPlan,validateDirectorPlan,restorePatch,directorPlanSchema,directorOperationKey,mergeDirectorEntry,changedFields} from '../apps/web/src/director/model';
 import {renderBlockReason,saveHint,countLabel} from '../apps/web/src/views/editor/model';
+import {withPreferences,writingDeclined,handoffPrompt,agentSeenRecently,requestsNewContent} from '../apps/web/src/director/model';
+import {blockerStep,reviewSteps,reviewState,approvalBlock,blockerScope} from '../apps/web/src/views/editor/review';
 const setup=async()=>{const map=new Map<string,string>();const client=createFixtureClient({getItem:k=>map.get(k)??null,setItem:(k,v)=>{map.set(k,v)}} as Storage);return {client,context:await client.getContext(),campaign:(await client.listCampaigns())[0]};};
 test('director literal script plan saves same shared revision; undo restores as a new version',async()=>{
  const {client,context,campaign}=await setup();const item=campaign.items[0];
@@ -77,4 +79,70 @@ test('the render action always knows why it is unavailable, and the save hint sa
  assert.equal(saveHint({...edit,hasVideo:false}),'Saving creates v3.');
  assert.equal(saveHint({...edit,dirty:false}),'');
  assert.equal(countLabel(1,'source'),'1 source');assert.equal(countLabel(3,'draft'),'3 drafts');
+});
+
+test('home preferences are written into the request as plain words, and never change an exact instruction',()=>{
+ assert.equal(withPreferences('A video about our lunch box',{format:'reel',length:'15',language:'el'}),'A video about our lunch box — an Instagram Reel, 15 seconds, in Greek');
+ assert.equal(withPreferences('  A launch video ',{}),'A launch video');
+ assert.equal(withPreferences('A launch video',{presenter:'minas'},'Minas'),'A launch video — presented by Minas');
+ assert.equal(withPreferences('A launch video',{presenter:'gone'}),'A launch video');
+ for(const exact of ['Set title: A new title','Set script: Hello.','Set Instagram caption: Hi','Use avatar: Minas','Hide burned-in captions','Review schedule','Show my content','Play latest version','Regenerate'])
+  assert.equal(withPreferences(exact,{format:'reel',length:'15',language:'el'}),exact,exact);
+});
+
+test('a declined writing request offers the person\'s own agent with a ready prompt; the prompt never claims Faceful wrote anything',()=>{
+ const base={plan:null,assets:undefined,mode:undefined};
+ assert.equal(writingDeclined({...base,summary:'AI direction is not connected yet. You can apply exact script, title or caption edits here, or continue with your connected agent.'}),true);
+ assert.equal(writingDeclined({...base,mode:'basic',summary:'AI writing isn’t connected to this deployment yet, so I can’t draft or rewrite from a description.'}),true);
+ assert.equal(writingDeclined({...base,mode:'basic',summary:'This workspace has 3 render credits; plan status: free.'}),false);
+ assert.equal(writingDeclined({...base,mode:'ai',summary:'AI writing isn’t connected'}),false);
+ assert.equal(writingDeclined({...base,plan:{summary:'x',actions:[{kind:'review_schedule',campaignId:'c',expectedRevision:1}]},summary:'AI writing isn’t connected'}),false);
+ const fresh=handoffPrompt('Create a 15-second video about our spring festival');
+ assert.match(fresh,/^Using the Faceful tools, create a project for this request: Create a 15-second video about our spring festival\./);
+ assert.match(fresh,/create_project and create_draft/);assert.match(fresh,/Don’t render, schedule or publish anything/);
+ const revise=handoffPrompt('Rewrite the opening so it feels warmer',{campaignTitle:'A week of BeWell',itemTitle:'Find your next moment'});
+ assert.match(revise,/In my Faceful project “A week of BeWell”, use the Faceful tools to revise the draft “Find your next moment”: Rewrite the opening so it feels warmer\./);
+ assert.match(revise,/revise_draft/);
+ // Something new is a new project even when a draft is open; a change to the open draft is a revision.
+ for(const text of ['Create a 15-second video','Plan three videos for next week','Make three videos for launch week','A launch video for our lunch box — an Instagram Reel'])assert.equal(requestsNewContent(text),true,text);
+ for(const text of ['Rewrite the opening','Make the opening warmer','Write a new opening','Shorten it'])assert.equal(requestsNewContent(text),false,text);
+ assert.match(handoffPrompt('Make three videos for launch week',{campaignTitle:'A',itemTitle:'B'}),/^Using the Faceful tools, create a project/);
+ const now=Date.parse('2026-11-14T12:00:00Z');const day=86400000;
+ const connection=(over:object)=>({id:'c',displayName:'Claude Code',scopes:[],expiresAt:new Date(now+30*day).toISOString(),lastSeenAt:new Date(now-day).toISOString(),revokedAt:null,...over});
+ assert.equal(agentSeenRecently([connection({})],now),true);
+ assert.equal(agentSeenRecently([connection({lastSeenAt:null})],now),false);
+ assert.equal(agentSeenRecently([connection({lastSeenAt:new Date(now-9*day).toISOString()})],now),false);
+ assert.equal(agentSeenRecently([connection({revokedAt:new Date(now-day).toISOString()})],now),false);
+ assert.equal(agentSeenRecently([connection({expiresAt:new Date(now-1).toISOString()})],now),false);
+ assert.equal(agentSeenRecently([],now),false);
+});
+
+test('schedule review reads as a checklist; every server blocker is kept and approval stays guarded',async()=>{
+ const {client,context,campaign}=await setup();
+ const manifest=await client.prepareSchedule({campaignId:campaign.id,expectedRevision:campaign.revision,operationKey:crypto.randomUUID()});
+ const steps=reviewSteps(manifest,campaign);
+ assert.deepEqual(steps.map(s=>[s.id,s.done,s.total]),[['videos',0,3],['channels',0,3]]);
+ assert.equal(steps.flatMap(s=>s.blockers).length,new Set(manifest.blockers.map(b=>b.message)).size);
+ assert.ok(steps[1].blockers[0].message.includes('cannot be approved or published'));
+ assert.equal(blockerScope(steps[0].blockers[0].itemIds,campaign),'All 3 drafts');
+ assert.equal(reviewState(manifest,campaign),'blocked');assert.equal(approvalBlock('blocked',context),'Finish the steps above first.');
+ // Every engine wording lands in a step; unknown wording is kept in its own step rather than dropped.
+ for(const [message,step] of [['No finished video yet. Render this item before scheduling it.','videos'],['The video is out of date for this script. Render the current version first.','videos'],['No destination or time has been chosen.','channels'],['Connect a YouTube channel and choose it for this item before scheduling there.','channels'],['Reconnect TikTok: “Brand” no longer has access.','channels'],['Add youtube copy before scheduling there.','channels'],['The instagram time is in the past. Choose a future time.','channels'],['Instagram and TikTok publishing need each platform’s app review; not available yet.','channels'],['Something new the server checks.','other']] as const)
+  assert.equal(blockerStep(message),step,message);
+ const odd=reviewSteps({...manifest,blockers:[...manifest.blockers,{itemId:campaign.items[0].id,message:'Something new the server checks.'}]},campaign);
+ assert.equal(odd.at(-1)!.id,'other');
+ // Stale, expired, local and non-owner approvals are refused before any request is made.
+ assert.equal(reviewState({...manifest,campaignRevision:manifest.campaignRevision+1},campaign),'stale');
+ assert.equal(reviewState({...manifest,approval:'stale'},campaign),'stale');
+ assert.equal(reviewState({...manifest,expiresAt:new Date(Date.now()-1000).toISOString()},campaign),'expired');
+ const ready={...manifest,blockers:[],entries:[{itemId:campaign.items[0].id,revision:1,assetId:'a',assetHash:'h',platform:'youtube' as const,accountId:'acc',scheduledAt:new Date(Date.now()+86400000).toISOString(),timezone:'Europe/Athens',caption:'c',title:'t',visibility:'public' as const,aiDisclosure:true}]};
+ const rendered={...campaign,items:campaign.items.map((item,i)=>i===0?{...item,renderRevision:1,media:{id:'a',url:'https://example.com/a.mp4',expiresAt:null,sha256:'h',revision:1,durationSeconds:15,hasAudio:true}}:item)};
+ assert.equal(reviewState(ready,rendered as typeof campaign),'ready');
+ assert.equal(reviewState({...ready,entries:[{...ready.entries[0],assetHash:'changed'}]},rendered as typeof campaign),'stale');
+ assert.equal(approvalBlock('ready',context),'Local workspaces can’t approve a schedule.');
+ const live={...context,capabilities:{...context.capabilities,mode:'live' as const}};
+ assert.equal(approvalBlock('ready',live),'');
+ assert.equal(approvalBlock('ready',{...live,workspace:{...live.workspace,role:'editor' as const}}),'Only the workspace owner can approve.');
+ assert.equal(approvalBlock('ready',{...live,principal:{...live.principal,kind:'agent' as const}}),'Approval needs a person; an agent can’t approve.');
+ assert.equal(approvalBlock('approved',live),'');
 });

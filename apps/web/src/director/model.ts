@@ -122,3 +122,64 @@ export function mergeDirectorEntry(old:DirectorEntry|undefined,next:DirectorEntr
   for(const [key,result] of Object.entries(next.results))if(!results[key]||priority[result.state]>=priority[results[key].state])results[key]=result;
   return {...old,...next,plan:next.plan??old.plan,results};
 }
+
+/* ───────────── Home composer preferences ───────────── */
+export type PromptPreferences = { format?: string; length?: string; language?: string; presenter?: string };
+export const FORMAT_OPTIONS = [
+  { value: 'reel', label: 'Reel', words: 'an Instagram Reel' },
+  { value: 'short', label: 'Short', words: 'a YouTube Short' },
+  { value: 'tiktok', label: 'TikTok', words: 'a TikTok' },
+] as const;
+export const LENGTH_OPTIONS = [
+  { value: '15', label: '15s', words: '15 seconds' },
+  { value: '30', label: '30s', words: '30 seconds' },
+  { value: '60', label: '60s', words: '60 seconds' },
+] as const;
+export const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English', words: 'in English' },
+  { value: 'el', label: 'Greek', words: 'in Greek' },
+] as const;
+/** Exact instructions are planned word for word, so preferences never change their meaning. */
+const EXACT=/^(set\s+(script|title|instagram caption|tiktok caption|youtube caption)\s*:|use avatar\s*:|(enable|disable|show|hide)( burned-in)? captions$|regenerate\b|review schedule$|show (my )?(content|videos)$|list assets$|show (the )?previous version$|play (the )?(latest|selected))/i;
+/**
+ * What is actually sent: the person's words, followed by the preferences they picked as plain words
+ * ("— an Instagram Reel, 15 seconds, in Greek"). The conversation shows exactly this text.
+ */
+export function withPreferences(text: string, prefs: PromptPreferences, presenterName = ''): string {
+  const trimmed=text.trim();
+  if(!trimmed||EXACT.test(trimmed))return trimmed;
+  const parts=[
+    FORMAT_OPTIONS.find(option=>option.value===prefs.format)?.words,
+    LENGTH_OPTIONS.find(option=>option.value===prefs.length)?.words,
+    LANGUAGE_OPTIONS.find(option=>option.value===prefs.language)?.words,
+    prefs.presenter&&presenterName?`presented by ${presenterName}`:undefined,
+  ].filter(Boolean);
+  return parts.length?`${trimmed} — ${parts.join(', ')}`.slice(0,5000):trimmed;
+}
+
+/* ───────────── Hand-off to the person's own agent ───────────── */
+/** True for a turn the director declined because no model writes here (basic mode or the local studio). */
+export function writingDeclined(entry: Pick<DirectorEntry,'summary'|'plan'|'assets'|'mode'>): boolean {
+  if(entry.plan||entry.assets?.length||entry.mode==='ai'||entry.mode==='local')return false;
+  return /\b(isn[’']t|is not|not) connected\b/i.test(entry.summary)&&/\b(writ\w*|draft\w*|direction|rewrit\w*)\b/i.test(entry.summary);
+}
+/** True when a request asks for new videos rather than a change to the draft in view. */
+export function requestsNewContent(text: string): boolean {
+  const ask=text.trim();
+  return /^(create|plan|generate|produce|start)\b/i.test(ask)
+    ||/^(make|write|draft)\s+(a|an|one|two|three|\d+)\b[^.]*\b(videos?|reels?|shorts?|tiktoks?|campaign|scripts?)\b/i.test(ask)
+    ||/^(a|an|one|two|three|\d+)\b[^.]*\b(videos?|reels?|shorts?|tiktoks?|campaign)\b/i.test(ask);
+}
+/** The request as a prompt the person can paste into their own agent, which works through Faceful's MCP tools. */
+export function handoffPrompt(request: string, scope: { campaignTitle?: string; itemTitle?: string } = {}): string {
+  const said=request.trim().replace(/\s+/g,' ');
+  const ask=/[.!?…]$/.test(said)?said:`${said}.`;
+  // A request for something new gets a new project; anything else is a revision of the draft in view.
+  if(scope.campaignTitle&&scope.itemTitle&&!requestsNewContent(ask))
+    return `In my Faceful project “${scope.campaignTitle}”, use the Faceful tools to revise the draft “${scope.itemTitle}”: ${ask}\nKeep it short enough for a 15-second presenter video and save it as a new version with revise_draft. Don’t render, schedule or publish anything. Tell me what changed.`;
+  return `Using the Faceful tools, create a project for this request: ${ask}\nWrite 1–3 short presenter scripts (about 15 seconds each) and save them as drafts with create_project and create_draft. Don’t render, schedule or publish anything. Tell me what you created.`;
+}
+/** An agent connection that is live and has called Faceful within the last week. */
+export function agentSeenRecently(connections: StudioContext['connections'], now = Date.now()): boolean {
+  return connections.some(connection=>!connection.revokedAt&&Date.parse(connection.expiresAt)>now&&connection.lastSeenAt!==null&&now-Date.parse(connection.lastSeenAt)<7*24*3600*1000);
+}
