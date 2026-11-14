@@ -12,6 +12,10 @@ import {
   manifestSchema,
   reviseInputSchema,
   type Brand,
+  compositionDocumentSchema,
+  compositionSchema,
+  draftComposition,
+  saveCompositionInputSchema,
   type Campaign,
   type ContentItem,
   type Platform,
@@ -194,6 +198,13 @@ const stateSchema = z.object({
     z.string(),
     z.object({ hash: z.string(), result: z.unknown() }),
   ),
+  // Added after v1 shipped; older saved fixture state simply has none yet.
+  compositions: z
+    .record(
+      z.string(),
+      z.object({ revision: z.number().int().positive(), updatedAt: z.string(), composition: compositionSchema }),
+    )
+    .default({}),
 });
 type State = z.infer<typeof stateSchema>;
 
@@ -232,6 +243,7 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     version: 1,
     campaigns: [initialCampaign()],
     operations: {},
+    compositions: {},
   };
   function read(): State {
     if (!selectedStorage) return structuredClone(memory);
@@ -325,6 +337,38 @@ export function createFixtureClient(storage?: Storage): StudioClient {
       revision: campaign.revision,
       at: now,
       outcome: "Saved in this browser only",
+    });
+  }
+  function itemFrom(state: State, id: string): ContentItem {
+    const item = state.campaigns.flatMap((entry) => entry.items).find((entry) => entry.id === id);
+    if (!item)
+      throw new ApiError(
+        "not_found",
+        "This development content item was not found.",
+      );
+    return item;
+  }
+  function compositionDocument(state: State, id: string) {
+    const item = itemFrom(state, id);
+    const saved = state.compositions[id];
+    return compositionDocumentSchema.parse({
+      itemId: item.id,
+      campaignId: item.campaignId,
+      itemRevision: item.revision,
+      revision: saved?.revision ?? 0,
+      updatedAt: saved?.updatedAt ?? null,
+      composition:
+        saved?.composition ??
+        draftComposition({
+          title: item.title,
+          script: item.script,
+          brandColor: item.style.brandColor,
+          captionPosition: item.style.captionPosition,
+          mediaDurationSeconds: item.media?.durationSeconds ?? null,
+        }),
+      presenterMedia: item.media
+        ? { url: item.media.url, expiresAt: item.media.expiresAt, durationSeconds: item.media.durationSeconds }
+        : null,
     });
   }
   async function unavailable(): Promise<never> {
@@ -600,6 +644,31 @@ export function createFixtureClient(storage?: Storage): StudioClient {
           item.sourceIds = item.sourceIds.filter((id) => id !== input.sourceId);
         touch(campaign, new Date().toISOString(), "Removed a source", input.sourceId);
         return campaign;
+      });
+    },
+    getComposition: async (id) => compositionDocument(read(), id),
+    saveComposition: async (raw) => {
+      const input = validate(saveCompositionInputSchema, raw);
+      return mutate("save_composition", input, compositionDocumentSchema, (state) => {
+        const item = itemFrom(state, input.contentId);
+        if ((state.compositions[item.id]?.revision ?? 0) !== input.expectedRevision)
+          throw new ApiError(
+            "revision_conflict",
+            "This video edit changed after you opened it. Reload the latest version before saving.",
+          );
+        const now = new Date().toISOString();
+        state.compositions[item.id] = { revision: input.expectedRevision + 1, updatedAt: now, composition: input.composition };
+        const campaign = campaignFrom(state, item.campaignId);
+        campaign.activity.push({
+          id: crypto.randomUUID(),
+          actor: "You · development fixture",
+          action: "Saved the video edit",
+          objectId: item.id,
+          revision: input.expectedRevision + 1,
+          at: now,
+          outcome: "Saved in this browser only",
+        });
+        return compositionDocument(state, item.id);
       });
     },
   };

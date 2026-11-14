@@ -20,6 +20,8 @@ import {
   brandSchema,
   removeSourceInputSchema,
   updateBrandInputSchema,
+  compositionDocumentSchema,
+  saveCompositionInputSchema,
 } from "@castroom/contracts";
 import {
   ApiError,
@@ -333,5 +335,16 @@ export function createLiveClient(
         body,
       );
     },
+    getComposition: (contentId) =>
+      request(
+        `/items/${encodeURIComponent(validate(idSchema, contentId))}/composition`,
+        compositionDocumentSchema,
+      ),
+    saveComposition: (input) =>
+      request(
+        "/operations/save_composition",
+        compositionDocumentSchema,
+        validate(saveCompositionInputSchema, input),
+      ),
   };
 }

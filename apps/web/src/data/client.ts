@@ -22,6 +22,8 @@ import {
   type Brand,
   type RemoveSourceInput,
   type UpdateBrandInput,
+  type CompositionDocument,
+  type SaveCompositionInput,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -202,6 +204,10 @@ export interface StudioClient {
   addSource(input: AddSourceInput): Promise<Campaign>;
   /** Removes a source from a project and from every draft that cited it. */
   removeSource(input: RemoveSourceInput): Promise<Campaign>;
+  /** The item's video composition, or a first draft from its script when none is saved (revision 0). */
+  getComposition(contentId: string): Promise<CompositionDocument>;
+  /** Saves the composition with compare-and-swap on its revision. Preview only: nothing is rendered. */
+  saveComposition(input: SaveCompositionInput): Promise<CompositionDocument>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {

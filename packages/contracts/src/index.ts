@@ -507,3 +507,6 @@ export const templateInputSchema = z
   .object({ templateId: idSchema, language: z.string().min(2).max(12), inputs: z.record(z.string(), z.string().max(400)), operationKey: z.uuid() })
   .strict();
 export type TemplateInput = z.infer<typeof templateInputSchema>;
+
+/* Video compositions previewed with Remotion. */
+export * from "./composition.js";

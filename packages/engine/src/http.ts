@@ -4,6 +4,7 @@ import { audit, constantTimeEqual, hashToken, newAgentToken, requireHuman, requi
 import { createCheckout, createPortal, getBillingStatus, handleStripeWebhook } from "./billing.js";
 import { readBoundedText } from "./body.js";
 import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.js";
+import { getComposition, saveComposition } from "./composition.js";
 import { directorTurn } from "./director.js";
 import { EngineError } from "./errors.js";
 import type { Planner } from "./llm.js";
@@ -95,6 +96,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   create_portal: createPortal,
   connect_channel: connectChannel,
   disconnect_channel: disconnectChannel,
+  save_composition: saveComposition,
   create_run_grant: async () => {
     throw new EngineError("unsupported", "Unattended publishing grants are not available in this build. Approve each schedule in the studio.");
   },
@@ -124,6 +126,7 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     return json(await getCampaign(deps, ctx, campaignId));
   }
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/items\/([^/]+)\/composition$/))) return json(await getComposition(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
   if (read && path === "/billing") return json(await getBillingStatus(deps, ctx));

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { StoreConflict } from "./errors.js";
 import type { Condition, Filter, MediaStorage, RateLimitHit, Row, SelectOptions, Store } from "./store.js";
 
-/** Mirrors the unique constraints in supabase/migrations/20261114190000_engine_core.sql. */
+/** Mirrors the unique constraints in supabase/migrations (engine core and video compositions). */
 const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => boolean }>> = {
   organizations: [{ columns: ["id"] }, { columns: ["personal_owner_id"], where: (r) => r.personal_owner_id != null }],
   memberships: [{ columns: ["org_id", "user_id"] }],
@@ -24,6 +24,7 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   stripe_events: [{ columns: ["event_id"] }],
   credit_ledger: [{ columns: ["org_id", "ref"] }],
   castroom_director_access: [{ columns: ["user_id", "workspace_id", "campaign_id"] }],
+  video_compositions: [{ columns: ["org_id", "item_id"] }],
 };
 
 function matches(row: Row, filter: Filter): boolean {
