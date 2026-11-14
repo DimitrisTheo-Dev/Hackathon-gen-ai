@@ -19,6 +19,14 @@
     {
       "source": "/dev/studio/:path*",
       "destination": "/studio/index.html"
+    },
+    {
+      "source": "/claude-login-test",
+      "destination": "/studio/index.html"
+    },
+    {
+      "source": "/claude-login-test/",
+      "destination": "/studio/index.html"
     }
   ],
   "headers": [
@@ -98,12 +106,38 @@
           "value": "noindex, nofollow"
         }
       ]
+    },
+    {
+      "source": "/claude-login-test",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/claude-login-test/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ],
   "proxy": {
     "entrypoint": "proxy.ts",
     "matcher": [
-      "/((?!assets|studio|dev|v1|api/v1).*)"
+      "/((?!assets|studio|dev|v1|api/v1|claude-login-test).*)"
     ]
   },
   "installCommand": "corepack pnpm install --frozen-lockfile"

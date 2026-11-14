@@ -53,7 +53,7 @@ export default function proxy(request: Request): Response {
   const api = handlePublicRequest(request);
   if (api) return api;
   const path = new URL(request.url).pathname;
-  if (/^\/(?:assets|studio|dev|v1|api\/v1)(?:\/|$)/.test(path)) return next();
+  if (/^\/(?:assets|studio|dev|v1|api\/v1|claude-login-test)(?:\/|$)/.test(path)) return next();
   if (/^\/(?:api|mcp|\.well-known)(?:\/|$)/.test(path)) return publicProblem(request, 404, "endpoint_unavailable", "This endpoint is not available on the public studio origin. Live MCP and OAuth are pending engine integration.", "Read /api/public/status and /docs/api/ for available read operations, or /docs/mcp/ for MCP status.");
   const normalized = path === "/" ? "/" : path.replace(/\/$/, "");
   const wantsMd = wantsMarkdown(request.headers.get("accept") ?? "");

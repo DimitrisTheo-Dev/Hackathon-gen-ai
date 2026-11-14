@@ -6,5 +6,7 @@ import "./mobile.css";
 import "./director/director.css";
 import "./landing/landing.css";
 const AuthApp = lazy(() => import("./AuthApp"));
+const ClaudeVpsPage = lazy(() => import("./claude/ClaudeVpsPage"));
+const claudeRoute = /^\/claude-login-test(\/|$)/.test(location.pathname);
 const privateRoute = /^\/(studio|dev)(\/|$)/.test(location.pathname);
-createRoot(document.getElementById("root")!).render(privateRoute ? <Suspense fallback={<div className="loading-page"><p>Opening your studio…</p></div>}><AuthApp /></Suspense> : <LandingPage />);
+createRoot(document.getElementById("root")!).render(claudeRoute ? <Suspense fallback={<div className="loading-page"><p>Opening Claude Code…</p></div>}><ClaudeVpsPage /></Suspense> : privateRoute ? <Suspense fallback={<div className="loading-page"><p>Opening your studio…</p></div>}><AuthApp /></Suspense> : <LandingPage />);

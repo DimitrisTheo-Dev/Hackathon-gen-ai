@@ -1,0 +1,6 @@
+{$RUNNER_DOMAIN} {
+	reverse_proxy runner:8787 {
+		# Stream Claude's output to the page as it arrives.
+		flush_interval -1
+	}
+}
