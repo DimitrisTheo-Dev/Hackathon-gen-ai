@@ -1,0 +1,24 @@
+{
+  "verifiedAt": "2026-11-14T14:25:03.095Z",
+  "browser": "159.0.8154.6",
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "title": "Castroom — Agent-native content production studio",
+      "overflow": false,
+      "cache": "public, max-age=0, must-revalidate"
+    },
+    {
+      "path": "/studio/",
+      "status": 200,
+      "title": "Castroom studio",
+      "overflow": false,
+      "cache": "private, no-store",
+      "robots": "noindex, nofollow"
+    }
+  ],
+  "errors": [],
+  "artBytes": 11796,
+  "artMatchesLocal": true
+}

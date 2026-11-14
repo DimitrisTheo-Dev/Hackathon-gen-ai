@@ -1,0 +1,23 @@
+{
+  "verifiedAt": "2026-11-14T14:25:20.311Z",
+  "production": {
+    "id": "dpl_2m33qCyFMVzox16tFb3QJE3oeMq6",
+    "url": "https://hackathon-gen-ai-nine.vercel.app",
+    "state": "READY",
+    "sha": "99e8678e6b83ff015e4d0ab1f97b664241ea6aba"
+  },
+  "preview": {
+    "id": "dpl_ERxsbE7fvzBxS7rU2ev3vVoGfTii",
+    "url": "https://hackathon-gen-8ddcv4szk-my-team-29ecd279.vercel.app/dev/studio/",
+    "state": "READY",
+    "sha": "994c2fbcb06ef28985bc3da52f8096c3e71d5ba6",
+    "requires": "Vercel team access"
+  },
+  "pullRequest": "https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai/pull/2",
+  "checks": {
+    "unit": 40,
+    "browser": 21,
+    "productionEndpoints": 67,
+    "physicalDevices": "not tested"
+  }
+}
