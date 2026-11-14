@@ -1,0 +1,97 @@
+
+Running 11 tests using 2 workers
+
+(node:24508) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24509) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 tests/browser/director.spec.ts:3:1 › director plan → saved canvas revision → history → undo, with honest unavailable AI (2.4s)
+  ✓   2 tests/browser/mobile-native.spec.ts:11:42 › chromium phone: native navigation, draft preservation, rollback, history and review (3.3s)
+  ✘   3 tests/browser/director.spec.ts:19:1 › director failed edit rolls canvas back; retry preserves intent; new revisions make old plans stale (1.2s)
+(node:24704) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   5 tests/browser/director.spec.ts:28:1 › phone director exact-script plan preserves Details and safe focus styles (1.2s)
+  ✓   6 tests/browser/director.spec.ts:36:1 › OTP screens verify code, cooldown and failure without sending a real email (652ms)
+  ✘   4 tests/browser/mobile-native.spec.ts:11:42 › webkit phone: native navigation, draft preservation, rollback, history and review (3.9s)
+(node:24843) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   7 tests/browser/director.spec.ts:49:1 › hero rotates client marks without shifting the headline and can pause (4.5s)
+  ✓   9 tests/browser/director.spec.ts:58:1 › OTP verification opens a server-confirmed session without inventing workspace access (1.4s)
+  ✓   8 tests/browser/mobile-native.spec.ts:89:1 › Chromium synthesized touch: sheet tracks, reverses, dismisses, restores focus; content scroll stays native (5.2s)
+  ✘  10 tests/browser/mobile-native.spec.ts:126:1 › phone loading, empty, failed workspace and expired media are explicit and usable (5.1s)
+(node:25246) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  11 tests/browser/mobile-native.spec.ts:151:1 › mobile project selection rolls back when the refreshed project is unavailable (1.9s)
+
+
+  1) tests/browser/director.spec.ts:19:1 › director failed edit rolls canvas back; retry preserves intent; new revisions make old plans stale
+
+    Error: browserContext.close: ENOENT: no such file or directory, open '/Users/dimitristheodoropoulos/orca/workspaces/Hackathon-gen-ai/abalone/test-results/.playwright-artifacts-0/traces/3b5274b0dcb2e66d7963-6e1463738da2b2d8c7ad-recording2.trace'
+
+    Error Context: test-results/director-director-failed-e-500e6-isions-make-old-plans-stale/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/director-director-failed-e-500e6-isions-make-old-plans-stale/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/director-director-failed-e-500e6-isions-make-old-plans-stale/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/browser/mobile-native.spec.ts:11:42 › webkit phone: native navigation, draft preservation, rollback, history and review
+
+    Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, copyfile '/Users/dimitristheodoropoulos/orca/workspaces/Hackathon-gen-ai/abalone/test-results/.playwright-artifacts-1/traces/45694b082ad70017c958-5e05f950400d0b83fb36-recording3.network' -> '/Users/dimitristheodoropoulos/orca/workspaces/Hackathon-gen-ai/abalone/test-results/.playwright-artifacts-1/traces/45694b082ad70017c958-5e05f950400d0b83fb36-recording3-pwnetcopy-1.network'
+
+      84 |     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+      85 |     expect(errors).toEqual([]);
+    > 86 |   } finally { await context.close(); await browser.close(); }
+         |                             ^
+      87 | });
+      88 |
+      89 | test('Chromium synthesized touch: sheet tracks, reverses, dismisses, restores focus; content scroll stays native', async ({browser}) => {
+        at /Users/dimitristheodoropoulos/orca/workspaces/Hackathon-gen-ai/abalone/tests/browser/mobile-native.spec.ts:86:29
+
+    Error: browserContext._wrapApiCall: ENOENT: no such file or directory, open '/Users/dimitristheodoropoulos/orca/workspaces/Hackathon-gen-ai/abalone/test-results/.playwright-artifacts-1/traces/45694b082ad70017c958-5e05f950400d0b83fb36-recording2.network'
+
+    Error: ENOENT: no such file or directory, open '/Users/dimitristheodoropoulos/orca/workspaces/Hackathon-gen-ai/abalone/test-results/.playwright-artifacts-1/06314d6a56aa596529b0abe1cc39ea5d.zip'
+
+  3) tests/browser/mobile-native.spec.ts:126:1 › phone loading, empty, failed workspace and expired media are explicit and usable
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('.content-card')
+    Expected: 3
+    Received: 0
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveCount" locator('.content-card') with timeout 5000ms
+      - waiting for locator('.content-card')
+        14 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      132 |   await expect(page.getByText('Opening your studio…')).toBeVisible();
+      133 |   await page.screenshot({path:`${evidence}/loading-375.png`});
+    > 134 |   release();await expect(page.locator('.content-card')).toHaveCount(3);
+          |                                                         ^
+      135 |   await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);state.campaigns[0].items[0].media={id:'expired-media',url:'https://example.com/expired.mp4',expiresAt:'2020-01-01T00:00:00.000Z',sha256:'example',revision:1,durationSeconds:20,hasAudio:true};localStorage.setItem(key,JSON.stringify(state));});
+      136 |   await page.reload();await page.locator('.content-select').first().click();
+      137 |   await expect(page.getByRole('dialog',{name:'Content editor'})).toContainText('Preview expired');
+        at /Users/dimitristheodoropoulos/orca/workspaces/Hackathon-gen-ai/abalone/tests/browser/mobile-native.spec.ts:134:57
+
+    Error Context: test-results/mobile-native-phone-loadin-3c4c6-dia-are-explicit-and-usable/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/mobile-native-phone-loadin-3c4c6-dia-are-explicit-and-usable/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/mobile-native-phone-loadin-3c4c6-dia-are-explicit-and-usable/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/browser/director.spec.ts:19:1 › director failed edit rolls canvas back; retry preserves intent; new revisions make old plans stale
+    tests/browser/mobile-native.spec.ts:11:42 › webkit phone: native navigation, draft preservation, rollback, history and review
+    tests/browser/mobile-native.spec.ts:126:1 › phone loading, empty, failed workspace and expired media are explicit and usable
+  8 passed (20.5s)

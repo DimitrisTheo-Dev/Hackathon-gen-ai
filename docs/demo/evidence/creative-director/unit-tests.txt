@@ -1,0 +1,82 @@
+$ tsx --test tests/*.test.ts
+(node:55502) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ CLI reads real public route schemas with JSON stdout and no credentials (13.308291ms)
+✔ CLI supports a validated HTTPS origin without leaking credential-like invalid input (0.763416ms)
+✔ CLI rejects unsupported commands, ambiguous options and path injection without a request (0.6805ms)
+✔ CLI validates a bounded plan locally using the shared schema, never sending or echoing content (6.930584ms)
+✔ CLI rejects invalid, oversized and unreadable plans without private values in errors (1.440333ms)
+✔ CLI refuses redirects and gives bounded recoverable errors for failed public reads (1.84875ms)
+(node:55503) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ director literal script plan saves same shared revision; undo restores as a new version (12.997458ms)
+✔ director rejects cross-item, stale revision, missing scope, protected targets and unavailable renders before execution (1.420833ms)
+✔ director does not invent rewrites, unauthorized avatars or approval tools (1.132834ms)
+✔ explicit project scope creates three separately revisioned actions; caption changes preserve other copy (1.551333ms)
+✔ Director action identity survives sessions and history cannot regress confirmed outcomes (1.266208ms)
+(node:55504) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ Athens input round-trips exact UTC and rejects both daylight-saving ambiguities (6.879ms)
+✔ editor patches exclude workflow evidence and distinguish caption from video changes (3.808125ms)
+(node:55505) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ email OTP requests normalize email, enable sign-up, and do not carry workspace authority (0.854209ms)
+✔ verification uses email OTP type and only returns the server-confirmed session (0.211166ms)
+✔ invalid emails and codes never call Supabase (0.635209ms)
+✔ request response errors and rejected promises are handled without exposing raw server content (0.183084ms)
+✔ verification errors cannot become an authenticated session (0.241625ms)
+✔ actionable auth failures distinguish rate limits, delivery setup, invalid input and connectivity (0.082917ms)
+(node:55506) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ Supabase OTP email uses one real token, no magic link, external assets or invented expiry (1.75725ms)
+(node:55507) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ public root negotiates Markdown without affecting HTML or private routes (10.765875ms)
+✔ unknown public paths return actual recoverable 404s in negotiated format (0.309542ms)
+✔ documentation negotiation, HEAD and invalid Accept qualities stay deterministic (1.10675ms)
+✔ front-end API and unavailable authentication endpoints return truthful JSON errors (0.602125ms)
+✔ only the licensed local art and attribution pass through the public file allowlist (0.105ms)
+(node:55508) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ public discovery routes return valid typed JSON without authentication or private state (11.346417ms)
+✔ permission definitions distinguish proposed scopes from a live grant or OAuth metadata (0.382083ms)
+✔ HEAD returns the GET status and headers with an empty body on every public route (1.19975ms)
+✔ unsupported methods are 405 RFC 9457 problems and cannot mutate public resources (2.2885ms)
+✔ unknown public routes return actionable 404 problems without query reflection (0.238542ms)
+✔ public router never handles private domain, authentication or MCP paths (0.090458ms)
+✔ OpenAPI is valid 3.1.1 and its schemas are generated from runtime validators (38.366375ms)
+✔ public docs have raw text, canonical URLs, semantic code and consistent navigation (3.465542ms)
+✔ agent index and sitemap discover public actions without exposing private paths (0.283125ms)
+✔ public API version pinning is enforced with explicit cache variation and recoverable errors (0.322083ms)
+✔ RFC 8631 discovery links advertise canonical implemented resources on public API responses (1.253958ms)
+✔ public presentation links discovery for HTML, Markdown and missing pages without altering private routing (26.285958ms)
+✔ public discovery does not fabricate quota counters, throttling or a live MCP transport (0.22475ms)
+(node:55509) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ sheet spring settles without overshoot and can reverse from its current velocity (1.923958ms)
+✔ dismissal projects release momentum, supports reversal, and rejects taps (0.215417ms)
+(node:55510) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ three fixture drafts disclose unavailable providers and exact Athens schedules (4.583959ms)
+✔ edits survive refresh and repeated operation returns the same revision (8.469333ms)
+✔ stale revision and same key with a changed payload conflict without overwriting (7.521542ms)
+✔ two concurrent edits cannot both consume the same revision in one browser (2.725958ms)
+✔ copy edit retains render identity; script edit marks retained preview stale (3.223166ms)
+✔ schedule writes accept only requested target fields, never accepted status (2.568875ms)
+✔ fixture review contains blockers and never allows publication or token creation (2.575375ms)
+✔ corrupt storage errors rather than silently replacing edited drafts (0.4795ms)
+✔ live client refuses unauthenticated access before any network call (0.671833ms)
+✔ live client validates responses and never falls back to fixtures (8.342958ms)
+✔ live client preserves actionable errors and sends bearer without cookies or actor body (0.394292ms)
+✔ an interrupted mutation is unknown outcome, not a successful or automatic retry (0.138334ms)
+✔ live client rejects insecure remote destinations and credential-bearing addresses (0.060083ms)
+✔ manual brief creates only supplied persistent drafts and deduplicates retries (4.854084ms)
+✔ invalid source URLs, forged writes and oversized manual batches fail before persistence (0.939584ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 462.012417

@@ -1,0 +1,136 @@
+@layer components {
+  .director-tabs { margin: 8px 20px 12px; flex-shrink: 0; }
+  .director-tabs button { flex: 1; min-height: 40px; font-size: 13px; }
+  .editor-details { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  .editor-details[hidden] { display: none; }
+  .director-selected { display: flex; align-items: center; gap: 12px; padding: 0 20px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .director-thumb { width: 38px; height: 52px; border-radius: 6px; overflow: hidden; flex-shrink: 0; background: var(--subtle); pointer-events: none; }
+  .director-thumb .poster { width: 100%; height: 100%; min-height: 0; padding: 0; border-radius: 0; }
+  .director-thumb .poster > * { display: none; }
+  .director-thumb video, .director-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .director-selected > div:nth-child(2) { min-width: 0; flex: 1; }
+  .director-selected strong { font-size: 13px; line-height: 1.5; font-weight: 550; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .director-selected small { display: block; font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+  .director-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+  .director-conversation { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 24px 20px; scroll-padding: 16px; }
+  .director-intro { padding: 8px 0 20px; }
+  .director-symbol { display: flex; width: 32px; height: 32px; align-items: center; color: var(--text-secondary); }
+  .director-intro h3 { font-size: 20px; line-height: 1.2; font-weight: 500; letter-spacing: -.03em; margin: 8px 0; }
+  .director-intro p { font-size: 13px; color: var(--text-secondary); line-height: 1.65; }
+  .director-context { font-size: 12px; color: var(--text-secondary); padding: 8px 0; border-block: 1px solid var(--border); }
+  .director-context summary { cursor: pointer; display: flex; align-items: center; gap: 8px; min-height: 32px; }
+  .director-context p { padding: 6px 0; line-height: 1.6; }
+  .director-availability { font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin-top: 14px; }
+  .director-turn { padding-top: 28px; overflow-wrap: anywhere; }
+  .director-user { margin-left: 24px; padding: 10px 12px; background: var(--subtle); border-radius: 12px 12px 3px 12px; font-size: 13px; line-height: 1.6; }
+  .director-user small { display: block; color: var(--text-secondary); font-size: 11px; margin-bottom: 3px; }
+  .director-user p { white-space: pre-wrap; max-height: 180px; overflow: auto; }
+  .director-response { margin-top: 16px; font-size: 13px; line-height: 1.65; }
+  .director-response-label { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 11px; margin-bottom: 8px; }
+  .director-plan { padding: 12px; border: 1px solid var(--border); border-radius: 12px; margin-top: 12px; background: var(--surface); }
+  .director-plan strong { display: block; font-weight: 500; font-size: 13px; }
+  .director-plan details { margin-block: 8px; }
+  .director-plan summary { cursor: pointer; color: var(--text-secondary); min-height: 32px; align-content: center; font-size: 12px; }
+  .director-plan .button { margin-top: 8px; font-size: 12px; min-height: 36px; }
+  .director-plan small { display: block; font-size: 11px; color: var(--text-secondary); line-height: 1.6; }
+  .director-diff { margin: 8px 0; }
+  .director-diff del, .director-diff ins { display: block; padding: 8px; white-space: pre-wrap; overflow: auto; max-height: 160px; font-size: 12px; line-height: 1.6; }
+  .director-diff del { color: var(--text-secondary); background: var(--subtle); }
+  .director-diff ins { text-decoration: none; background: var(--positive-surface); color: var(--ink); margin-top: 4px; }
+  .director-result { color: var(--positive-ink); padding-top: 8px; font-size: 12px; }
+  .director-result.is-error { color: var(--danger); }
+  .director-working, .director-job { font-size: 12px; color: var(--text-secondary); padding-top: 12px; display: flex; align-items: center; gap: 6px; }
+  .director-compose-area { flex-shrink: 0; padding: 12px 16px max(12px,env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--background); max-height: 55%; overflow: auto; overscroll-behavior: contain; }
+  .director-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .director-suggestions button { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; background: var(--surface); font-size: 12px; color: var(--ink-secondary); min-height: 32px; text-align: left; }
+  .director-quick-actions { display: flex; gap: 16px; margin-bottom: 8px; }
+  .director-quick-actions .text-button { font-size: 12px; min-height: 32px; }
+  .director-composer { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 4px; }
+  .director-composer:focus-within { border-color: var(--focus); }
+  .director-composer textarea { width: 100%; border: 0; border-radius: 10px; padding: 10px; min-height: 64px; max-height: 160px; resize: vertical; font-size: 14px; }
+  .director-composer-actions { display: flex; align-items: center; gap: 4px; }
+  .director-composer select { padding: 6px; border: 0; background: transparent; flex: 1; min-width: 0; font-size: 12px; }
+  .director-send { width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--ink); color: white; display: grid; place-items: center; flex-shrink: 0; }
+  .director-send:disabled { opacity: .4; cursor: default; }
+  .director-storage { display: block; text-align: center; font-size: 10px; color: var(--text-secondary); line-height: 1.4; margin-top: 8px; }
+  .director-sync { font-size: 12px; line-height: 1.5; padding-bottom: 8px; color: var(--text-secondary); }
+  .director-sync .text-button { display: inline; font-size: inherit; text-decoration: underline; }
+  .director-attachments { padding: 12px 0; font-size: 12px; line-height: 1.6; }
+  .director-attachments label { display: flex; gap: 8px; align-items: center; min-height: 44px; }
+  .director-attachments small { color: var(--text-secondary); }
+  .director-exact-edit label { display: block; font-size: 13px; margin-bottom: 8px; }
+  .director-exact-edit textarea { width: 100%; font-size: 14px; }
+  .director-exact-edit > div { display: flex; gap: 12px; justify-content: space-between; margin-top: 12px; }
+  .director-exact-edit .button { font-size: 12px; }
+  .auth-code-input { letter-spacing: .3em; font-variant-numeric: tabular-nums; font-size: 20px; }
+  .auth-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-block: 12px; }
+  .auth-actions > button { min-height: 44px; }
+  .auth-status { font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+  .auth-feedback { position: fixed; left: 50%; transform: translateX(-50%); top: max(16px,env(safe-area-inset-top)); padding: 12px 20px; border: 1px solid var(--danger-border); background: var(--danger-surface); z-index: 100; border-radius: 12px; max-width: calc(100% - 32px); }
+  .host-logo, .host-logo.claude-logo { background: var(--surface); color: var(--ink); }
+  @media (hover:hover) and (pointer:fine) { .director-suggestions button:hover { background: var(--subtle); } .director-send:not(:disabled):hover { background: var(--ink-secondary); } }
+}
+@layer views { .editor .director-intro h3 { font-size: 20px; line-height: 1.2; font-weight: 500; letter-spacing: -.03em; margin: 8px 0; } }
+@layer responsive {
+  @media (max-width:1000px) {
+    .director-tabs { margin-inline: max(16px,env(safe-area-inset-left)); margin-block: 4px 12px; }
+    .director-tabs button { min-height: 44px; }
+    .director-selected { padding-inline: max(20px,env(safe-area-inset-left)); padding-bottom: 12px; }
+    .director-conversation { padding: 16px max(20px,env(safe-area-inset-left)); }
+    .director-compose-area { padding-inline: max(16px,env(safe-area-inset-left)); }
+    .director-intro { padding-top: 0; }
+    .director-composer textarea, .director-composer select, .director-exact-edit textarea { font-size: 16px; }
+    .director-suggestions button, .director-plan .button, .director-quick-actions .text-button, .director-context summary, .director-plan summary { min-height: 44px; }
+    .director-send { width: 44px; height: 44px; }
+    .director-compose-area .icon-button { min-height: 44px; min-width: 44px; }
+  }
+  @media (max-height:600px) and (max-width:1000px) { .director-suggestions, .director-quick-actions { display: none; } .director-selected { padding-block: 4px; } .director-thumb { height: 32px; width: 24px; } .director-compose-area { max-height: 65%; } }
+  @media (prefers-reduced-motion:reduce) { .director-panel *, .director-panel *::before { transition: none; animation: none; } }
+}
+
+@layer responsive {
+  .studio-shell { position: relative; }
+  .studio-shell.is-home { grid-template-columns: 260px minmax(0,1fr); }
+  .is-home .workspace-main { background: var(--background); }
+  .editor-home.surface-dialog { position:absolute; inset:90px 24px 32px 284px; width:auto; max-width:740px; height:auto; max-height:none; margin:auto; border:0; border-radius:0; background:transparent; box-shadow:none; }
+  .editor-home .editor-heading,.editor-home .director-tabs,.editor-home .director-selected { display:none; }
+  .editor-home .director-conversation { flex:initial; overflow:auto; max-height:55%; padding:28px 24px 12px; }
+  .editor-home .director-intro { text-align:center; padding:36px 0 20px; }
+  .editor-home .director-intro h3 { font-size:clamp(28px,3.2vw,40px); line-height:1.1; font-weight:500; letter-spacing:-.035em; }
+  .editor-home .director-intro p { font-size:16px; margin-top:14px; }
+  .editor-home .director-symbol { display:none; }
+  .editor-home .director-context { margin-top:14px; }
+  .editor-home .director-compose-area { margin-top:16px; border:0; padding:0 24px 24px; background:transparent; }
+  .editor-home .director-composer { background:var(--surface); border-radius:18px; padding:16px; box-shadow:0 6px 24px rgba(42,42,39,.04); }
+  .editor-home .director-composer textarea { min-height:88px; font-size:16px; }
+  .editor-home .director-suggestions { justify-content:center; gap:8px; margin-bottom:18px; }
+  .editor-home .director-suggestions button { min-height:44px; padding:8px 12px; }
+  .editor-home .director-availability { margin-top:12px; text-align:center; }
+  .editor-home .director-storage { text-align:center; }
+  .director-preview-switch { display:none; }
+  .editor:not([open]) { display:none!important; }
+  .home-idea-form { width:min(100%,640px); padding:16px; border:1px solid var(--border); border-radius:18px; background:var(--surface); text-align:right; }
+  .home-idea-form textarea { display:block; width:100%; resize:vertical; padding:12px; border:1px solid transparent; font-size:16px; margin-bottom:12px; }
+  .studio-first p { max-width:560px; }
+  @media(min-width:1001px) and (max-width:1200px) {
+    .studio-shell.is-home { grid-template-columns:220px minmax(0,1fr); }
+    .editor-home.surface-dialog { left:244px; }
+  }
+  @media(max-width:1000px) {
+    .studio-shell.is-home { grid-template-columns:minmax(0,1fr); }
+    .editor-home.surface-dialog { position:absolute; inset:68px 0 84px; width:100%; height:auto; max-width:none; max-height:none; padding:0; transform:none!important; }
+    .editor-home .director-conversation { padding:16px 20px 6px; max-height:55%; }
+    .editor-home .director-intro { padding:28px 0 12px; }
+    .editor-home .director-compose-area { padding:0 16px 16px; }
+    .director-preview-switch { display:block; }
+    .editor-home .director-context { display:none; }
+    .editor-home .director-suggestions { display:grid; grid-template-columns:1fr 1fr; }
+    .editor-home .director-suggestions button { text-align:center; }
+  }
+  @media(max-width:360px) { .editor-home .director-intro h3 { font-size:28px; } .editor-home .director-availability { font-size:11px; } }
+  @media(prefers-reduced-motion:reduce) { .editor-home,.director-panel { animation:none; } }
+}
+
+/* The composer border provides its single focus indicator; public design.css is unlayered. */
+.director-composer textarea:focus,.director-composer textarea:focus-visible { outline:none; box-shadow:none; }
+.editor-home.surface-dialog:focus { outline:none; }

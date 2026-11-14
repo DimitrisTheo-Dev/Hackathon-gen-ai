@@ -11,11 +11,13 @@ import { operationKey } from "../lib/operation-key";
 
 export function CreateCampaign({
   context,
+  initialBrief="",
   client,
   onClose,
   onCreated,
 }: {
   context: StudioContext;
+  initialBrief?:string;
   client: StudioClient;
   onClose: () => void;
   onCreated: (campaign: Campaign) => void;
@@ -23,7 +25,7 @@ export function CreateCampaign({
   const [step, setStep] = useState(0);
   const [company, setCompany] = useState<StartCampaignInput["companyContext"]>({
     name: "",
-    description: "",
+    description: initialBrief,
     audience: "",
     tone: "",
     sourceText: "",

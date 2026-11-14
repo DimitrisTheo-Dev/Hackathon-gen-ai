@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   CalendarDays,
@@ -49,7 +49,9 @@ import { CreateCampaign } from "./CreateCampaign";
 import { operationKey } from "../lib/operation-key";
 import { CommandPalette } from "../components/CommandPalette";
 
-type View = "canvas" | "schedule" | "connect" | "brand";
+import { useDirectorHistory } from '../director/use-history';
+import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
+type View = "home" | "canvas" | "schedule" | "connect" | "brand";
 export function Studio({
   client,
   onSignOut,
@@ -61,12 +63,13 @@ export function Studio({
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [view, setView] = useState<View>(
-    ["canvas", "schedule", "connect", "brand"].includes(
+    ["home", "canvas", "schedule", "connect", "brand"].includes(
       new URLSearchParams(location.search).get("view") ?? "",
     )
       ? (new URLSearchParams(location.search).get("view") as View)
-      : "canvas",
+      : new URLSearchParams(location.search).has("campaign") || new URLSearchParams(location.search).has("item") ? "canvas" : "home",
   );
+  const [mobileChatOpen,setMobileChatOpen]=useState(false);
   const [selected, setSelected] = useState<string | null>(
     new URLSearchParams(location.search).get("item"),
   );
@@ -75,12 +78,15 @@ export function Studio({
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
+  const [directorDrafts,setDirectorDrafts]=useState<Record<string,string>>({});
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [manifest, setManifest] = useState<ScheduleManifest | null>(null);
   const [grant, setGrant] = useState(false);
   const [sidebar, setSidebar] = useState(false);
   const [scheduleView, setScheduleView] = useState("agenda");
   const [showActivity, setShowActivity] = useState(false);
+  const [homeIdea,setHomeIdea]=useState("");
+  const [homeReply,setHomeReply]=useState("");
   const [creating, setCreating] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -88,6 +94,17 @@ export function Studio({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [optimisticItems, setOptimisticItems] = useState<Record<string, ContentItem>>({});
+  const director = useDirectorHistory(context,campaign);
+  const previousEditorRect=useRef<{view:View;rect:DOMRect}|null>(null);
+  useLayoutEffect(()=>{
+    const el=document.querySelector<HTMLElement>('.editor');if(!el)return;
+    const rect=el.getBoundingClientRect(),previous=previousEditorRect.current;
+    previousEditorRect.current={view,rect};
+    if(previous?.view==='home'&&view==='canvas'&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&!matchMedia('(max-width: 1000px)').matches){
+      const dx=previous.rect.left-rect.left,dy=previous.rect.top-rect.top;
+      if(Number.isFinite(dx)&&Number.isFinite(dy))el.animate([{transform:`translate(${dx}px,${dy}px)`,opacity:.65},{transform:'translate(0,0)',opacity:1}],{duration:360,easing:'cubic-bezier(.22,.8,.26,1)'});
+    }
+  },[view,loading]);
   const busyRef = useRef(false);
   const campaignRequest = useRef(0);
   const initialLocation = useRef(new URLSearchParams(location.search));
@@ -142,17 +159,18 @@ export function Studio({
         const currentCampaign =
           list.find((c) => c.id === requestedCampaign) ??
           list.find((c) => c.items.some((i) => i.id === requestedItem)) ??
-          list[0];
+          list.find(c=>c.jobs.some(j=>j.state==="running"||j.state==="queued")) ?? list[0];
         setCampaign(currentCampaign ?? null);
+        if(!initialLocation.current.get('view')&&currentCampaign?.jobs.some(j=>j.state==='running'||j.state==='queued'))setView('canvas');
         if (currentCampaign)
           setSelected((current) =>
             current && currentCampaign.items.some((i) => i.id === current)
               ? current
-              : matchMedia("(max-width: 1000px)").matches
+              : view!=="home" && matchMedia("(max-width: 1000px)").matches
                 ? null
                 : (currentCampaign.items[0]?.id ?? null),
           );
-        else setView("connect");
+
       })
       .catch((e) => active && setError(e.message))
       .finally(() => active && setLoading(false));
@@ -180,7 +198,7 @@ export function Studio({
     if (selected) url.searchParams.set("item", selected);
     else url.searchParams.delete("item");
     history.replaceState(history.state, "", url);
-    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : (campaign?.title ?? "Studio")} · Castroom`;
+    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : (campaign?.title ?? "Studio")} · Faceful`;
   }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
@@ -213,6 +231,7 @@ export function Studio({
   );
   function go(next: View) {
     setView(next);
+    if(next==="home")setSelected(current=>current??campaign?.items[0]?.id??null);
     setSidebar(false);
     setError("");
     setNotice("");
@@ -227,6 +246,7 @@ export function Studio({
       history.pushState({ ...history.state, castroomEditor: true }, "", url);
     }
     setSelected(next.id);
+    setMobileChatOpen(true);
     setDrafts((prev) => ({
       ...prev,
       [next.id]: prev[next.id] ?? {
@@ -236,6 +256,7 @@ export function Studio({
     }));
   }
   function closeEditor() {
+    setMobileChatOpen(false);
     if (history.state?.castroomEditor) history.back();
     else setSelected(null);
     requestAnimationFrame(() => itemButton.current?.focus());
@@ -291,12 +312,43 @@ export function Studio({
       await fetchCampaign(campaign.id);
       setNotice(
         fixture
-          ? "Draft saved in this development browser."
+          ? "Draft saved on this device."
           : "Saved. Your agent can read this revision.",
       );
       setManifest(null);
     });
     setOptimisticItems(previous => { const next = { ...previous }; delete next[id]; return next; });
+  }
+  async function executeDirector(planAction:DirectorAction, intentKey:string, reconcile=false):Promise<DirectorEntry['results'][string]> {
+    if(!context||!campaign||busyRef.current||offline)throw new Error('Wait for the current action or reconnect before continuing.');
+    const target=planAction.kind==='review_schedule'?campaign.items[0]:campaign.items.find(i=>i.id===planAction.itemId);
+    if(!target)throw new Error('This storyboard is no longer available.');
+    validateDirectorPlan({summary:'Reviewed instruction',actions:[reconcile&&planAction.kind==='revise'?{...planAction,expectedRevision:target.revision}:planAction]},campaign,target,'project',context);
+    if(drafts[target.id]&&Object.keys(contentPatch(target,drafts[target.id].value)).length)throw new Error('This storyboard has unsaved edits. Save or undo them in Details first.');
+    busyRef.current=true;setBusy(true);setError('');
+    try {
+      const key=await directorOperationKey(`${context.workspace.id}:${campaign.id}:${intentKey}`);
+      if(planAction.kind==='revise'){
+        setOptimisticItems(previous=>({...previous,[target.id]:{...target,...planAction.patch,targets:target.targets}}));
+        const saved=await client.reviseContent({contentId:target.id,expectedRevision:planAction.expectedRevision,patch:planAction.patch,operationKey:key});
+        const update=(current:Campaign)=>current.id===campaign.id?{...current,items:current.items.map(i=>i.id===saved.id?saved:i)}:current;
+        setCampaign(current=>current?update(current):current);setCampaigns(all=>all.map(update));setManifest(null);
+        setDrafts(previous=>{const next={...previous};delete next[target.id];return next;});
+        try{await fetchCampaign(campaign.id);}catch{setNotice('Revision saved. Refresh to retrieve the latest campaign activity.');}
+        return {state:'saved',message:`Saved version ${saved.revision}${context.capabilities.mode==='fixture'?' on this device':''}.`,revision:saved.revision,before:reconcile?undefined:restorePatch(target,saved)};
+      }
+      if(planAction.kind==='render'){
+        const result=await client.renderContent({campaignId:campaign.id,itemIds:[target.id],expectedRevisions:{[target.id]:planAction.expectedRevision},operationKey:key});
+        try{await fetchCampaign(campaign.id);}catch{setNotice('Request accepted. Refresh to reconcile job status.');}
+        if(result.state==='blocked')throw new Error('The render was blocked. Check the current job and workspace capabilities.');
+        return {state:'queued',message:`Render request ${result.state}. ${result.jobIds.length} job(s); watch their actual progress in the canvas.`};
+      }
+      const manifest=await client.prepareSchedule({campaignId:campaign.id,expectedRevision:planAction.expectedRevision,operationKey:key});
+      setManifest(manifest);
+      return {state:'review',message:'Review prepared. No publication has been submitted.'};
+    } finally {
+      setOptimisticItems(previous=>{const next={...previous};delete next[target.id];return next;});busyRef.current=false;setBusy(false);
+    }
   }
   async function render() {
     if (!item || !campaign) return;
@@ -354,7 +406,7 @@ export function Studio({
       <div className="auth-page">
         <a className="wordmark" href="/">
           <Mark />
-          Castroom
+          Faceful
         </a>
         <main className="auth-card">
           <h1>We couldn’t open your workspace.</h1>
@@ -388,25 +440,17 @@ export function Studio({
     (c) => c.lastSeenAt && !c.revokedAt && new Date(c.expiresAt) > new Date(),
   );
   return (
-    <div className={`app-frame ${fixture ? "fixture-mode" : ""}`}>
+    <div className="app-frame">
       <a className="skip-link" href="#workspace-content">
         Skip to campaign
       </a>
-      {fixture && (
-        <div className="fixture-banner">
-          <span>Development preview</span><span className="fixture-detail">Sample drafts saved in this browser. Rendering, agent connections, and publishing are unavailable.</span>
-          <a href="/docs/capabilities/">
-            Integration status <ArrowUpRight size={12} />
-          </a>
-        </div>
-      )}
       <div
-        className={`studio-shell ${item && view === "canvas" ? "has-editor" : ""}`}
+        className={`studio-shell ${view==="home"?"is-home":""} ${item && view === "canvas" ? "has-editor" : ""}`}
       >
         <aside className="sidebar">
           <a className="wordmark" href="/">
             <Mark />
-            Castroom
+            Faceful
           </a>
           <div className="workspace-switch">
             <span className="workspace-avatar">
@@ -425,7 +469,7 @@ export function Studio({
           <button className="search-box" onClick={() => setCommandOpen(true)} aria-label="Search projects and content">
             <Search size={17} /><span>Search studio</span><kbd>⌘ K</kbd>
           </button>
-          <nav aria-label="Studio">
+          <nav aria-label="Studio"><button className={view==="home"?"active":""} onClick={()=>go("home")}><Plus size={17}/>Create</button>
             <button
               className={view === "canvas" ? "active" : ""}
               onClick={() => go("canvas")}
@@ -506,7 +550,7 @@ export function Studio({
                 {fixture ? "D" : context.workspace.name[0]}
               </span>
               <span>
-                {fixture ? "Development workspace" : context.workspace.name}
+                {fixture ? "Personal studio" : context.workspace.name}
                 <small>{context.workspace.role}</small>
               </span>
               {onSignOut && (
@@ -593,7 +637,7 @@ export function Studio({
                 )}
               </div>
             )}
-            {view === "connect" ? (
+            {view === "home" && !campaign ? (<div className="empty-state studio-first"><h1>What will we create today?</h1><p>Describe your idea. Shape it with Faceful.</p><form className="home-idea-form" onSubmit={e=>{e.preventDefault();setHomeReply('AI production is not connected yet. Your idea is kept here. Add your own script to create an editable storyboard.');}}><label className="sr-only" htmlFor="home-idea">What would you like to create?</label><textarea id="home-idea" value={homeIdea} onChange={e=>setHomeIdea(e.target.value)} rows={4} maxLength={1500} placeholder="A 20-second introduction to our new idea…"/><button className="button primary" disabled={!homeIdea.trim()||offline}>Start creating</button></form>{homeReply&&<p role="status">{homeReply}</p>}<button className="text-button" onClick={()=>setCreating(true)}>Create with my own script</button><button className="text-button" onClick={()=>go("connect")}>Connect your agent</button></div>) : view === "home" ? null : view === "connect" ? (
               <Connect
                 context={context}
                 client={client}
@@ -692,7 +736,7 @@ export function Studio({
                     <div className="campaign-meta">
                       <span className="campaign-dot" />
                       Campaign <span>/</span>{" "}
-                      {fixture ? "Development fixture" : "Shared workspace"}
+                      {fixture ? "Local workspace" : "Shared workspace"}
                     </div>
                     <h1>{campaign.title}</h1>
                     <p>
@@ -1024,7 +1068,7 @@ export function Studio({
                 <footer className="workspace-footer">
                   <span className="quiet-status">
                     <span />
-                    {fixture ? "Local development transport" : "Live workspace"}
+                    {fixture ? "Saved on this device" : "Live workspace"}
                   </span>
                   <span>
                     {fixture
@@ -1039,12 +1083,22 @@ export function Studio({
             <button onClick={() => setSidebar(true)}><Folder size={20}/><span>Projects</span></button>
             <button aria-current={view === "canvas" ? "page" : undefined} onClick={() => go("canvas")}><Grid2X2 size={20}/><span>Canvas</span></button>
             <button aria-current={view === "schedule" ? "page" : undefined} onClick={() => go("schedule")}><CalendarDays size={20}/><span>Schedule</span></button>
-            <button onClick={() => setCreating(true)}><Plus size={21}/><span>Create</span></button>
+            <button onClick={() => {if(view==="home")setCreating(true);else {setSelected(current=>current??campaign?.items[0]?.id??null);setMobileChatOpen(true);}}}><Plus size={21}/><span>{view==="home"?"Create":"Chat"}</span></button>
           </nav>
         </div>
-        {item && draft && view === "canvas" && (
+        {item && draft && (view === "canvas" || view === "home") && (
           <Editor
+            home={view==="home"}
+            open={view==="home" || !matchMedia("(max-width: 1000px)").matches || mobileChatOpen}
+            onStart={()=>{setView("canvas");setMobileChatOpen(true);}}
+            onShowContent={()=>{setView("canvas");setMobileChatOpen(false);}}
+            onCreate={()=>setCreating(true)}
             key={item.id}
+            campaign={campaign!}
+            director={director}
+            directorInstruction={directorDrafts[item.id]??""}
+            onDirectorInstruction={value=>setDirectorDrafts(previous=>({...previous,[item.id]:value}))}
+            onDirectorAction={executeDirector}
             item={item}
             index={campaign!.items.indexOf(item)}
             context={context}
@@ -1090,10 +1144,11 @@ export function Studio({
           <a href="/docs/">Help & documentation<ArrowUpRight size={16}/></a>
           {onSignOut && <button onClick={onSignOut}><LogOut size={18}/>Sign out</button>}
         </nav>
-        {fixture && <p className="project-fixture-note">Development workspace. Sample drafts stay in this browser; no rendering, agent connections or publishing.</p>}
+        {fixture && <p className="project-fixture-note">Local workspace. Drafts stay on this device; rendering and publishing require connected services.</p>}
       </Modal>}
       {creating && (
         <CreateCampaign
+          initialBrief={homeIdea}
           context={context}
           client={client}
           onClose={() => setCreating(false)}

@@ -33,9 +33,21 @@ import {
   wordingConcerns,
 } from "./editor/model";
 
+import { DirectorPanel } from '../director/DirectorPanel';
+import type { DirectorAction, DirectorEntry } from '../director/model';
 export { contentPatch } from "./editor/model";
 export type Draft = { baseRevision: number; value: ContentItem };
 type Props = {
+  directorInstruction: string;
+  onDirectorInstruction: (value: string) => void;
+  home?: boolean;
+  open?: boolean;
+  onStart?: () => void;
+  onCreate?: () => void;
+  onShowContent?: () => void;
+  campaign: Campaign;
+  director: { entries: DirectorEntry[]; error: string; record: (entry:DirectorEntry)=>Promise<void>; retry:()=>Promise<void> };
+  onDirectorAction: (action:DirectorAction,key:string,reconcile?:boolean)=>Promise<DirectorEntry['results'][string]>;
   item: ContentItem;
   index: number;
   context: StudioContext;
@@ -54,6 +66,7 @@ type Props = {
 };
 
 export function Editor({
+  campaign, director, onDirectorAction, directorInstruction, onDirectorInstruction, home=false, open=true, onStart, onCreate, onShowContent,
   item,
   index,
   context,
@@ -70,6 +83,7 @@ export function Editor({
   error,
   offline = false,
 }: Props) {
+  const [mode, setMode] = useState<"chat"|"details">("chat");
   const [tab, setTab] = useState("script");
   const [platform, setPlatform] = useState<Platform>(
     item.variants[0]?.platform ?? "instagram",
@@ -240,16 +254,25 @@ export function Editor({
   const handoff = agentHandoff(item, context, jobs, handoffTask, dirty);
 
   return (
-    <SurfaceDialog title="Content editor" className="editor" editor onClose={onClose}>
+    <SurfaceDialog title="Content editor" className={`editor ${home?"editor-home":""}`} editor inline={home} open={open} onClose={onClose}>
       {({ close, grip }) => <>
-      {grip}
+      {!home&&grip}
       <header className="editor-heading">
         <button className="editor-back text-button" data-surface-focus onClick={close} aria-label="Return to campaign"><ArrowLeft size={18} /><span>Campaign</span></button>
         <div>
           <SlidersHorizontal size={15} />
-          <strong>Content details</strong>
+          <strong>Creative Director</strong>
         </div>
       </header>
+      <div className="director-tabs segmented" aria-label="Creative Director views"><button className="director-preview-switch" onClick={onShowContent}>Preview</button>
+        <button aria-pressed={mode==='chat'} onClick={()=>setMode('chat')}>AI Chat</button>
+        <button aria-pressed={mode==='details'} onClick={()=>{onStart?.();setMode('details');}}>Details</button>
+      </div>
+      {mode==='chat' && <>
+        <div className="director-selected"><div className="director-thumb"><Preview item={item} index={index} compact brandName={brandName}/></div><div><strong>{item.title}</strong><small>Version {item.revision} · {item.status.replaceAll('_',' ')}</small></div><button className="text-button" onClick={()=>{onStart?.();setMode('details');}}>View</button></div>
+        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');setTab('script');}} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
+      </>}
+      <div className="editor-details" hidden={mode!=='details'}>
       <div className="editor-scroll">
         <div className="editor-preview">
           <Preview item={item} index={index} compact brandName={brandName} />
@@ -1001,6 +1024,7 @@ export function Editor({
         )}
         {feedback && <small role="status">{feedback}</small>}
       </footer>
+      </div>
       </>}
     </SurfaceDialog>
   );

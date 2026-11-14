@@ -21,4 +21,4 @@ createServer(async (req,res) => {
     const extra = Object.fromEntries(result.headers);delete extra['x-middleware-next'];
     res.writeHead(200,{'Content-Type':types[extname(file)] ?? 'application/octet-stream',...extra});res.end(req.method==='HEAD'?undefined:body);
   } catch {res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found. See /docs/.');}
-}).listen(4173,'127.0.0.1',()=>console.log('Built Castroom verification server: http://127.0.0.1:4173'));
+}).listen(4173,'127.0.0.1',()=>console.log('Built Faceful verification server: http://127.0.0.1:4173'));

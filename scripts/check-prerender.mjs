@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 const html=await readFile('dist/index.html','utf8');
 const json=html.match(/<script type="application\/ld\+json">([^<]+)<\/script>/)?.[1];assert.ok(json);
-const identity=JSON.parse(json);assert.equal(identity['@type'],'SoftwareApplication');assert.equal(identity.name,'Castroom');
+const identity=JSON.parse(json);assert.equal(identity['@type'],'SoftwareApplication');assert.equal(identity.name,'Faceful');
 const config=JSON.parse(await readFile('vercel.json','utf8'));const policy=config.headers[0].headers.find(h=>h.key==='Content-Security-Policy').value;
 assert.ok(policy.includes(`'sha256-${createHash('sha256').update(json).digest('base64')}'`),'CSP must permit the exact emitted JSON-LD.');
 assert.equal((html.match(/<h1\b/g)??[]).length,1);assert.ok(!html.includes('<!--PUBLIC_APP-->'));

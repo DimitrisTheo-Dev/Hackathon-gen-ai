@@ -240,7 +240,7 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     } catch {
       throw new ApiError(
         "validation_error",
-        "Saved development drafts could not be read. Export or clear the Castroom development storage before restarting.",
+        "Saved development drafts could not be read. Export or clear the Faceful development storage before restarting.",
       );
     }
   }

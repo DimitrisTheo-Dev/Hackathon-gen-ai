@@ -215,6 +215,7 @@ export const contextSchema = z.object({
   capabilities: z.object({
     mode: z.enum(["live", "fixture"]),
     canCreateCampaign: z.boolean().default(false),
+    canPlanWithDirector: z.boolean().default(false),
     canRender: z.boolean(),
     canConnectChannels: z.boolean(),
     canRetry: z.boolean(),

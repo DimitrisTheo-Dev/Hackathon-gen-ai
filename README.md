@@ -1,4 +1,4 @@
-# Castroom
+# Faceful
 
 A shared content studio for people and their external AI agents. Frontend work lives on `work/dimitris-studio`; Minas implements the engine separately. The repository is private.
 
@@ -40,7 +40,7 @@ Manual creation saves supplied context and 1–3 scripts. It does not infer busi
 
 The Vercel project is linked to this private GitHub repository. Preview builds enable `CASTROOM_ENABLE_FIXTURES=true`; the production environment forcibly excludes the fixture module. Public docs have initial HTML. Private studio routes require authentication before requesting live data and are excluded from indexing; the backend must authorize every object and operation.
 
-- [Production](https://hackathon-gen-ai-nine.vercel.app)
+- [Production](https://faceful.dtheo.dev)
 - [Studio development preview](https://hackathon-gen-98b7cqknx-my-team-29ecd279.vercel.app/dev/studio/) (Vercel team access; sample drafts only)
 - [Private repository](https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai)
 - [Shared contract handoff](docs/product/contract-handoff.md)

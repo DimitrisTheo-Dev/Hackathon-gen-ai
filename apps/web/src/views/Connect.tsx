@@ -1,7 +1,7 @@
+import { AgentIcon } from '../components/AgentIcon';
 import { useRef, useState } from "react";
 import {
   ArrowRight,
-  Terminal,
   Plug,
   Check,
   KeyRound,
@@ -288,7 +288,7 @@ export function Connect({
           disabled={busy}
         >
           <span className="host-logo" aria-hidden="true">
-            <Terminal size={29} />
+            <AgentIcon host="codex" size={32} />
           </span>
           <strong>Codex</strong>
           <small>Terminal client</small>
@@ -301,7 +301,7 @@ export function Connect({
           disabled={busy}
         >
           <span className="host-logo claude-logo" aria-hidden="true">
-            ✳
+            <AgentIcon host="claude" size={32} />
           </span>
           <strong>Claude Code</strong>
           <small>Terminal client</small>
@@ -332,7 +332,7 @@ export function Connect({
           <Notice>
             {isLive
               ? "Agent setup is not available in this workspace yet."
-              : "This is a development preview. Live agent setup is not available yet."}{" "}
+              : "Agent setup is not connected to this workspace yet."}{" "}
             You can continue in the studio while agent setup is unavailable.
           </Notice>
         )}
@@ -413,7 +413,7 @@ export function Connect({
               <li>
                 <strong>
                   {showCommand
-                    ? "Add Castroom in your terminal"
+                    ? "Add Faceful in your terminal"
                     : host === "codex"
                       ? "Merge this into your Codex config.toml"
                       : "Merge this into your project’s .mcp.json"}
@@ -518,7 +518,7 @@ export function Connect({
             const expired = Date.parse(connection.expiresAt) <= now;
             const confirmed = isLive && !revoked && isVerified(connection, now);
             const state = !isLive
-              ? "Development example"
+              ? "Example request"
               : revoked
                 ? "Revoked"
                 : expired

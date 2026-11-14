@@ -1,0 +1,12 @@
+$ playwright test tests/browser/chat-home.spec.ts --output=/tmp/faceful-focus-test
+
+Running 4 tests using 1 worker
+
+(node:57186) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/browser/chat-home.spec.ts:3:1 › chat-first home docks the same conversation and exact edits update the canvas (2.2s)
+  ✓  2 tests/browser/chat-home.spec.ts:14:30 › mobile chat home 390: request, results and conversation resume (1.1s)
+  ✓  3 tests/browser/chat-home.spec.ts:14:30 › mobile chat home 320: request, results and conversation resume (1.0s)
+  ✓  4 tests/browser/chat-home.spec.ts:22:1 › unsent directions survive item and Details switches; prior playback stays honest (1.1s)
+
+  4 passed (6.0s)

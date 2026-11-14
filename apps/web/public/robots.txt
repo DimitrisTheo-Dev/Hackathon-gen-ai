@@ -3,4 +3,4 @@ Allow: /
 Disallow: /studio/
 Disallow: /dev/
 
-Sitemap: https://hackathon-gen-ai-nine.vercel.app/sitemap.xml
+Sitemap: https://faceful.dtheo.dev/sitemap.xml

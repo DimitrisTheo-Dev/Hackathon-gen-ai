@@ -16,7 +16,7 @@ class CliError extends Error {
   constructor(readonly code: string, message: string, readonly resolution: string) { super(message); }
 }
 const help = {
-  tool: "Castroom repository CLI", version: "1.0.0", distribution: "private_repository_checkout",
+  tool: "Faceful repository CLI", version: "1.0.0", distribution: "private_repository_checkout",
   commands: ["status", "scopes", "docs [slug]", "validate-plan <file.json>"],
   options: ["--origin <https://public-origin>"], limits,
   note: "Read public guidance or validate a bounded draft locally. No authentication, campaign writes, rendering or publishing.",
@@ -74,7 +74,7 @@ async function publicRead(path: string, origin: string, schema: z.ZodType, depen
     });
     if (response.status >= 300 && response.status < 400) throw new CliError("redirect_refused", "The public endpoint returned a redirect.", "Set --origin to the final verified HTTPS origin. Redirects are never followed.");
     if (!response.ok) throw new CliError(`http_${response.status}`, `The public endpoint returned HTTP ${response.status}.`, response.status === 404 ? "Use docs without a slug to list available documents." : "Check the public deployment status and retry later.");
-    if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get("Content-Type") ?? "")) throw new CliError("invalid_response", "The public endpoint did not return JSON.", "Use the documented Castroom public API origin.");
+    if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get("Content-Type") ?? "")) throw new CliError("invalid_response", "The public endpoint did not return JSON.", "Use the documented Faceful public API origin.");
     let parsed: unknown;
     try { parsed = JSON.parse(await readBoundedBody(response)); }
     catch (error) { if (error instanceof CliError) throw error; if (controller.signal.aborted) throw new CliError("request_timeout", "The public read exceeded its time limit.", "Check connectivity and retry the read operation."); throw new CliError("invalid_response", "The public endpoint returned invalid JSON.", "Use the official public API origin and retry later."); }

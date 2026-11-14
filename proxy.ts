@@ -1,16 +1,16 @@
 import { next } from "@vercel/functions";
-import { handlePublicRequest, publicDocuments, publicPages, publicProblem } from "./packages/public-api/src/index.js";
+import { handlePublicRequest, publicDocuments, publicPages, publicProblem, publicDiscoveryLinkHeader } from "./packages/public-api/src/index.js";
 
 // Public presentation/discovery only. Private studio and domain routes pass through.
 const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy"]);
-const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml"]);
-const markdown = `# Castroom — content production studio
+const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml"]);
+const markdown = `# Faceful — content production studio
 
 Create campaigns with your agent. Fine-tune them here.
 
-Castroom is a shared content production studio for agencies, companies and individuals. An external agent plans a campaign; a person edits the selected script, authorized avatar, captions and requested schedule in the studio. Manual creation accepts a supplied company brief and up to three explicit scripts.
+Faceful is a shared content production studio for agencies, companies and individuals. An external agent plans a campaign; a person edits the selected script, authorized avatar, captions and requested schedule in the studio. Manual creation accepts a supplied company brief and up to three explicit scripts.
 
-## When to use Castroom
+## When to use Faceful
 Use the public API to discover current capabilities, read setup guidance and understand proposed permissions. Use the repository CLI to validate a bounded draft plan locally. When the domain engine is connected, the intended workflow is three distinct avatar-video drafts, human refinement of one revision, and an explicitly authorized schedule with separate platform receipts.
 
 ## Development status
@@ -19,7 +19,7 @@ The visual studio and public documentation API are implemented. The shared engin
 ## Start here
 - [Read integration status](/api/public/status)
 - [OpenAPI 3.1.1](/openapi.json)
-- [Castroom API documentation](/docs/api/)
+- [Faceful API documentation](/docs/api/)
 - [Repository CLI](/docs/cli/)
 - [MCP status and setup](/docs/mcp/)
 - [Codex and Claude Code setup templates](/docs/setup/)
@@ -47,7 +47,7 @@ export function wantsMarkdown(accept: string) {
   return md > 0 && md >= html;
 }
 function markdownResponse(request: Request, body: string, status = 200) {
-  return new Response(request.method === "HEAD" ? null : body, { status, headers: { "Content-Type": "text/markdown; charset=utf-8", Vary: "Accept", "Cache-Control": status === 200 ? "public, max-age=0, must-revalidate" : "no-store", "X-Content-Type-Options": "nosniff" } });
+  return new Response(request.method === "HEAD" ? null : body, { status, headers: { "Content-Type": "text/markdown; charset=utf-8", Vary: "Accept", "Cache-Control": status === 200 ? "public, max-age=0, must-revalidate" : "no-store", "X-Content-Type-Options": "nosniff", Link: publicDiscoveryLinkHeader } });
 }
 export default function proxy(request: Request): Response {
   const api = handlePublicRequest(request);
@@ -64,9 +64,10 @@ export default function proxy(request: Request): Response {
     if (wantsMd && body) return markdownResponse(request, body);
     const response = next();
     if (body) response.headers.set("Vary", "Accept");
+    response.headers.set("Link", publicDiscoveryLinkHeader);
     return response;
   }
   if (files.has(path)) return next();
-  if (wantsMd) return markdownResponse(request, "# Page not found\n\nThis public page is not available. See [Castroom documentation](/docs/) or the [agent index](/llms.txt).\n",404);
-  return new Response(request.method === "HEAD" ? null : '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/design.css"><link rel="stylesheet" href="/docs/docs.css"><title>Page not found · Castroom</title></head><body><main><h1>Page not found</h1><p>This public page is not available. Start with our public documentation to find supported routes and current capabilities.</p><a href="/docs/">Castroom documentation</a> · <a href="/llms.txt">Agent index</a></main></body></html>', { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", Vary: "Accept", "Cache-Control": "no-store" } });
+  if (wantsMd) return markdownResponse(request, "# Page not found\n\nThis public page is not available. See [Faceful documentation](/docs/) or the [agent index](/llms.txt).\n",404);
+  return new Response(request.method === "HEAD" ? null : '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/design.css"><link rel="stylesheet" href="/docs/docs.css"><title>Page not found · Faceful</title></head><body><main><h1>Page not found</h1><p>This public page is not available. Start with our public documentation to find supported routes and current capabilities.</p><a href="/docs/">Faceful documentation</a> · <a href="/llms.txt">Agent index</a></main></body></html>', { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", Vary: "Accept", "Cache-Control": "no-store", Link: publicDiscoveryLinkHeader } });
 }
