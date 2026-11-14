@@ -5,7 +5,7 @@ test('landing is useful without JavaScript and exposes genuine discovery metadat
   await page.goto('/');await expect(page.getByRole('heading',{level:1})).toHaveAttribute('aria-label','What if your agent made your next video campaign?');
   expect((await page.locator('main').innerText()).length).toBeGreaterThan(500);
   expect(await page.locator('script[type="application/ld+json"]').textContent()).toContain('SoftwareApplication');
-  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href','https://faceful.dtheo.dev/');
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href','https://faceful.vercel.app/');
   const md=await request.get('/',{headers:{Accept:'text/markdown'}});expect(md.headers()['content-type']).toContain('text/markdown');expect(md.headers().vary).toBe('Accept');expect(await md.text()).toContain('When to use');
   const missing=await request.get('/this-is-not-a-page',{headers:{Accept:'text/markdown'}});expect(missing.status()).toBe(404);expect(missing.headers()['content-type']).toContain('text/markdown');expect(await missing.text()).toContain('/docs/');
   await context.close();

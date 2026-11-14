@@ -59,5 +59,5 @@ Mocked vs real: Stripe network calls are faked in unit tests (signature verifica
 
 **Working:** accounts and workspaces, the engine and its API, versioned drafting by template or by hand, the agent connection over MCP with tokens and OAuth, credits and Stripe sandbox billing, and the review/approval boundary.
 **Needs credentials or external approval:** AI drafting, presenter-video rendering, YouTube (one consent), Instagram/TikTok.
-**Known limitations:** five-second polling instead of push; no rate limiting; OAuth tokens are bound to the Supabase project rather than to `/mcp`; the canonical docs origin is `faceful.dtheo.dev` while Stripe and MCP use `faceful.vercel.app`.
+**Known limitations:** five-second polling instead of push; no rate limiting; OAuth tokens are bound to the Supabase project rather than to `/mcp`; faceful.dtheo.dev remains an alias of the same deployment; everything canonical (docs, OAuth consent, emails, Stripe, MCP) uses faceful.vercel.app.
 **Next best action:** add the model credential — it turns the first thing a judge types into a real result.
