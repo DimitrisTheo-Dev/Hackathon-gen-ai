@@ -1,0 +1,69 @@
+{
+  "target": "https://hackathon-gen-ai-nine.vercel.app",
+  "display_target": "hackathon-gen-ai-nine.vercel.app",
+  "report_url": "https://is-agentic.com/scan/hackathon-gen-ai-nine.vercel.app",
+  "score": 99,
+  "score_label": "Strong technical baseline",
+  "scanned_at": "2026-11-14T14:05:07.815Z",
+  "eligible_checks": 32,
+  "score_breakdown": {
+    "essential": {
+      "earned": 80,
+      "available": 80,
+      "passing": 10,
+      "total": 10
+    },
+    "recommended": {
+      "earned": 16.4,
+      "available": 20,
+      "passing": 17,
+      "total": 22
+    },
+    "bonus": {
+      "points": 2.6,
+      "positive_signals": 11
+    }
+  },
+  "issues": [
+    {
+      "details": "In a search for your API docs, none of the 10 results is your official docs",
+      "id": "agentic-search-specific",
+      "name": "Developer resource discoverability",
+      "recommendation": "Make sure a web search for your product's API docs returns your own docs page, and a search for your MCP server, SDK or CLI returns your own pages for those tools. Keep docs on your own domain or a subdomain, or link your docs site from your homepage or llms.txt, give each tool its own page (for example /mcp) with the tool name in the title, put your product name and \"API\" in the docs title and main heading, and link your GitHub org from your homepage.",
+      "result": "failed",
+      "tier": "recommended"
+    },
+    {
+      "details": "hackathon-gen-ai-nine.vercel.app was not in the top 10 for \"Castroom content production studio\" or \"Castroom campaign editing\"",
+      "id": "brand-search-accuracy",
+      "name": "Brand name discoverability",
+      "recommendation": "Make sure your own domain ranks in the top results when people search your brand together with your main product (for example \"Acme payments API\"). Ora first reads product terms from your homepage's JSON-LD keywords or knowsAbout, or its meta keywords tag. If none qualifies, it checks the main service's serviceType in JSON-LD, then a short product phrase in the page title. If those do not qualify, it checks product names in the homepage business's JSON-LD offers. Use clear product terms that also appear on the page. If no term qualifies, Ora searches your brand name alone. If your domain does not rank, your brand may be too generic, conflict with a more established term, or not yet indexed. Strengthen it by describing your main product clearly in your homepage title and headings, earning press mentions that link to your domain, and avoiding redirect chains that mask your main domain in search results.",
+      "result": "failed",
+      "tier": "recommended"
+    },
+    {
+      "details": "No REST rate-limit headers found on probed endpoints",
+      "id": "rate-limit-headers",
+      "name": "Rate limit response headers",
+      "recommendation": "Return standard rate-limit headers on your API responses (the RFC RateLimit headers, plus Retry-After on a 429) so agents can self-throttle in real time, and document the conventions alongside your API.",
+      "result": "failed",
+      "tier": "recommended"
+    },
+    {
+      "details": "MCP mentioned at https://hackathon-gen-ai-nine.vercel.app/docs/mcp/ but no standard manifest endpoint found",
+      "id": "mcp-server",
+      "name": "MCP server / manifest",
+      "recommendation": "Build an MCP (Model Context Protocol) server exposing your API as tools. Use Streamable HTTP transport for full score. This lets Claude, ChatGPT, and other AI agents call your product natively.",
+      "result": "partial",
+      "tier": "recommended"
+    },
+    {
+      "details": "CLI tool mentioned in llms.txt",
+      "id": "cli-tool",
+      "name": "CLI tool available",
+      "recommendation": "Publish an official CLI tool on npm, PyPI, or Homebrew. A CLI lets agents and developers script interactions with your product without building API integrations from scratch.",
+      "result": "partial",
+      "tier": "recommended"
+    }
+  ]
+}

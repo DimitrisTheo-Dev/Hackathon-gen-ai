@@ -1,0 +1,32 @@
+{
+  "sourceCommit": "2b87dd52e6c93746f0c6f8847044ef0b3b76d604",
+  "branch": "main",
+  "repositoryPrivate": true,
+  "pullRequest": "https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai/pull/1",
+  "production": {
+    "id": "dpl_DsZELBqU3wL3DCTfvFLSDyDDFSPo",
+    "url": "https://hackathon-gen-ai-nine.vercel.app",
+    "state": "READY"
+  },
+  "studioPreview": {
+    "id": "dpl_3fx5P7KWbpYeU2DeB5BJxnjchQ2o",
+    "url": "https://hackathon-gen-98b7cqknx-my-team-29ecd279.vercel.app/dev/studio/",
+    "state": "READY",
+    "access": "Vercel team access; labeled fixtures, same UI source"
+  },
+  "unitTests": 37,
+  "browserTests": 16,
+  "productionHttpChecks": 65,
+  "audit": {
+    "score": 99,
+    "scannedAt": "2026-11-14T14:05:07.815Z",
+    "url": "https://is-agentic.com/scan/hackathon-gen-ai-nine.vercel.app"
+  },
+  "notVerified": [
+    "Authenticated MCP and scoped issuer",
+    "Humanlike playable output and final composition",
+    "Real publishing receipts",
+    "Domain tenant/RLS denial tests",
+    "Uncoached human comprehension trial"
+  ]
+}
