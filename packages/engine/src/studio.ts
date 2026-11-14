@@ -105,8 +105,9 @@ export async function getContext(deps: EngineDeps, ctx: Ctx): Promise<StudioCont
       directorMode: deps.config.llm ? "ai" : "basic",
       renderBlocker: noRenderReason,
       canRender,
-      // No publishing provider has approved API access in this build; see DEMO_READINESS.md.
-      canConnectChannels: false,
+      // YouTube is the one real destination, and only where this deployment is configured for it. Connecting is an
+      // owner/admin decision made in person; agents never see this as available.
+      canConnectChannels: ctx.principal.kind === "human" && ctx.scopes.has("connections:manage") && deps.config.youtube !== null,
       canRetry: canRender,
       canCancel: ctx.scopes.has("render:write"),
       canCreateAgentToken: ctx.scopes.has("connections:manage"),
@@ -274,7 +275,9 @@ export function itemContract(item: Row, orgId: string, media: { asset: Row; url:
         state: job ? (publishToTarget[job.state] ?? "unknown") : "draft",
         publishedAt: job?.published_at ? iso(job.published_at) : null,
         providerId: job?.provider_post_id ?? null,
-        publishedUrl: job?.published_url ?? null,
+        // A link is only called "published" once the provider confirmed it is public. An uploaded-but-private
+        // video is identified by `providerId` instead.
+        publishedUrl: job?.state === "verified_published" ? (job.published_url ?? null) : null,
         error: job?.error ?? null,
       };
     }),

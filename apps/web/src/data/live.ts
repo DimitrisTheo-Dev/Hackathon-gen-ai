@@ -24,6 +24,11 @@ import {
   checkoutResultSchema,
   portalResultSchema,
   sampleInputSchema,
+  channelStatusSchema,
+  connectChannelInputSchema,
+  connectChannelResultSchema,
+  disconnectChannelInputSchema,
+  disconnectChannelResultSchema,
   cancelInputSchema,
   connectionResultSchema,
   createConnectionInputSchema,
@@ -201,6 +206,8 @@ export function createLiveClient(
         "/operations/commit_schedule",
         operationSchema,
         validate(manifestInputSchema, input),
+        // Committing uploads approved videos to destinations that schedule natively (YouTube), which takes longer than a read.
+        { timeoutMs: 115_000 },
       ),
     cancelJobs: (input) =>
       request(
@@ -275,6 +282,23 @@ export function createLiveClient(
         contextSchema.refine((value) => value.capabilities.mode === "live"),
         {},
         { headers: { "X-Faceful-Workspace": validate(idSchema, workspaceId) } },
+      ),
+    getChannels: () => request("/channels", channelStatusSchema),
+    connectChannel: async (input) =>
+      (
+        await request(
+          "/operations/connect_channel",
+          connectChannelResultSchema,
+          validate(connectChannelInputSchema, input),
+          { timeoutMs: 45_000 },
+        )
+      ).connection,
+    disconnectChannel: (input) =>
+      request(
+        "/operations/disconnect_channel",
+        disconnectChannelResultSchema,
+        validate(disconnectChannelInputSchema, input),
+        { timeoutMs: 30_000 },
       ),
   };
 }

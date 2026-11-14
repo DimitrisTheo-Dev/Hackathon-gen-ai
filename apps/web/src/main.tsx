@@ -6,6 +6,8 @@ import "./mobile.css";
 import "./director/director.css";
 import "./landing/landing.css";
 import "./live.css";
+// Sign-in, agent connection, consent, billing and templates. Loaded last: it fully describes those surfaces.
+import "./onboarding.css";
 const AuthApp = lazy(() => import("./AuthApp"));
 // `/oauth/consent` is where an external agent's OAuth request is reviewed; it shares the signed-in shell.
 const privateRoute = /^\/(studio|dev|oauth)(\/|$)/.test(location.pathname);

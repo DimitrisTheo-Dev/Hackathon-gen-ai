@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Check,
   ChevronDown,
   RefreshCw,
   Save,
-  SlidersHorizontal,
   Video,
   AlertTriangle,
   ExternalLink,
@@ -38,7 +37,8 @@ import type { DirectorAction, DirectorEntry } from '../director/model';
 import type { DirectorTurn } from '../director/planner';
 import type { ContentVersion, DirectorTurnResult } from "@castroom/contracts";
 import { failedRender, itemBadge } from "../lib/status";
-import { Versions } from "./Versions";
+// Version history is opened occasionally; it loads with the tab.
+const Versions = lazy(() => import("./Versions").then((module) => ({ default: module.Versions })));
 export { contentPatch } from "./editor/model";
 export type Draft = { baseRevision: number; value: ContentItem };
 type Props = {
@@ -64,6 +64,10 @@ type Props = {
   campaign: Campaign;
   director: { entries: DirectorEntry[]; error: string; record: (entry:DirectorEntry)=>Promise<void>; retry:()=>Promise<void> };
   onDirectorAction: (action:DirectorAction,key:string,reconcile?:boolean)=>Promise<DirectorEntry['results'][string]>;
+  /** The workspace's publishing-channels panel, shown at the top of Details → Channels. */
+  channels?: ReactNode;
+  /** True while the director is preparing a plan for this item. */
+  onDirectorBusy?: (working: boolean) => void;
   item: ContentItem;
   index: number;
   context: StudioContext;
@@ -83,7 +87,7 @@ type Props = {
 
 export function Editor({
   campaign, director, onDirectorAction, directorInstruction, onDirectorInstruction, home=false, open=true, onStart, onCreate, onShowContent,
-  onDirectorTurn, onDirectorCreated, onDirectorOpen, onTemplates, onBilling, focusDirector=false, playOnOpen=false, onPlayed, versions,
+  onDirectorTurn, onDirectorCreated, onDirectorOpen, onDirectorBusy, channels, onTemplates, onBilling, focusDirector=false, playOnOpen=false, onPlayed, versions,
   item,
   index,
   context,
@@ -288,19 +292,20 @@ export function Editor({
       {!home&&grip}
       <header className="editor-heading">
         <button className="editor-back text-button" data-surface-focus onClick={close} aria-label="Return to campaign"><ArrowLeft size={18} /><span>Campaign</span></button>
-        <div>
-          <SlidersHorizontal size={15} />
-          <strong>Creative Director</strong>
+        {/* The selected item stays in view in both Chat and Details. */}
+        <div className="director-selected">
+          <div className="director-thumb"><Preview item={item} index={index} compact brandName={brandName}/></div>
+          <div><strong title={item.title}>{item.title}</strong><small>Version {item.revision} · <span className={`status-word tone-${badge.tone}`}>{badge.label}</span></small></div>
         </div>
       </header>
-      <div className="director-tabs segmented" aria-label="Creative Director views"><button className="director-preview-switch" onClick={onShowContent}>Preview</button>
+      <div className="director-tabs segmented" data-mode={mode} aria-label="Creative Director views"><button className="director-preview-switch" onClick={onShowContent}>Preview</button>
         <button aria-pressed={mode==='chat'} onClick={()=>setMode('chat')}>AI Chat</button>
         <button aria-pressed={mode==='details'} onClick={()=>{onStart?.();setMode('details');}}>Details</button>
       </div>
-      {mode==='chat' && <>
-        <div className="director-selected"><div className="director-thumb"><Preview item={item} index={index} compact brandName={brandName}/></div><div><strong>{item.title}</strong><small>Version {item.revision} · {badge.label}</small></div><button className="text-button" onClick={()=>{onStart?.();setMode('details');}}>View</button></div>
-        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');setTab('script');}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onVersions={versions?()=>{onStart?.();setMode('details');setTab('versions');}:undefined} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
-      </>}
+      {/* Kept mounted while Details is open so an in-flight plan, the scope and attachments are not lost. */}
+      <div className="editor-chat" hidden={mode!=='chat'}>
+        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');setTab('script');}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>{onStart?.();setMode('details');setTab('versions');}:undefined} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
+      </div>
       <div className="editor-details" hidden={mode!=='details'}>
       <div className="editor-scroll">
         <div className="editor-preview">
@@ -439,13 +444,13 @@ export function Editor({
           ))}
         </div>
         {tab === "versions" && versions && (
-          <Versions
+          <Suspense fallback={<div className="view-skeleton" role="status" aria-label="Loading versions"><span className="skeleton skeleton-line" /><span className="skeleton skeleton-block" /></div>}><Versions
             item={item}
             timezone={campaign.timezone}
             load={versions.load}
             restore={versions.restore}
             blocked={dirty ? "Save or discard your unsaved edits before restoring a version." : offline ? "Reconnect to restore a version." : submitted ? "A destination has been submitted for this item, so it can’t be changed here." : !canEdit ? "Your access allows viewing only." : ""}
-          />
+          /></Suspense>
         )}
         {tab === "script" && (
           <>
@@ -686,6 +691,8 @@ export function Editor({
 
         {tab === "publish" && (
           <>
+            {/* Publishing accounts for this workspace, passed in by the studio (absent in local previews). */}
+            {channels && <div className="channels-slot" data-slot="details-channels">{channels}</div>}
             <div className="channel-tabs">
               {value.variants.map((candidate) => (
                 <button
