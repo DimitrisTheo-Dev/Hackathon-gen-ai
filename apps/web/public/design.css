@@ -1,0 +1,23 @@
+@font-face { font-family: InterVariable; font-style: normal; font-weight: 100 900; font-display: swap; src: url('/fonts/InterVariable.woff2') format('woff2'); }
+:root {
+  --font-inter: InterVariable, Inter, system-ui, -apple-system, sans-serif;
+  --ink: #2A2A27; --ink-secondary: #45434A;
+  --text-secondary: #6E6C66; --text-muted: #8A8880;
+  --background: #FAFAF7; --surface: #FFFFFF; --sidebar: #F1F0EB;
+  --subtle: #F0EFEA; --muted-surface: #ECEAE4; --border: #E4E2DA;
+  --green: #3AA676; --positive-ink: #246B4C; --positive-surface: #EDF5EF;
+  --highlight: #FFB000; --highlight-soft: rgba(255,176,0,.38);
+  --warning-ink: #74531C; --warning-surface: #FFF4D9;
+  --danger: #A23E3E; --danger-surface: #FFF1EF; --danger-border: #E6C8C1;
+  --focus: #2A2A27; --canvas: var(--background); --paper: var(--background);
+  --muted: var(--text-secondary); --line: var(--border); --warm: var(--subtle);
+  --accent: var(--ink); --accent-dark: #141413; --accent-soft: var(--subtle);
+  --shadow: 0 1px 2px rgba(42,42,39,.05), 0 6px 18px rgba(42,42,39,.06);
+  --ease: cubic-bezier(.22,.8,.26,1); --radius: 14px;
+  color-scheme: light; font-family: var(--font-inter);
+  color: var(--ink); background: var(--background);
+  font-synthesis: none; font-kerning: normal; text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--highlight-soft); color: var(--ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }

@@ -4,13 +4,13 @@ A shared content studio for people and their external AI agents. Frontend work l
 
 ## Run locally
 
-Use Node.js 24 and npm.
+Use Node.js 24 and pnpm 12 (pinned via Corepack).
 
 ```sh
-npm ci
+corepack pnpm install --frozen-lockfile
 cp .env.example .env.local
 # Add only the Supabase publishable key; never a secret/service-role key.
-npm run dev
+corepack pnpm dev
 ```
 
 Open `http://127.0.0.1:5173/dev/studio/` for the explicitly labeled development transport. Three sample BeWell drafts are editable and persist in that browser. You can also create drafts from your own supplied company brief. No provider calls, video generation, connection handshakes, approvals or publications are simulated.
@@ -18,8 +18,10 @@ Open `http://127.0.0.1:5173/dev/studio/` for the explicitly labeled development 
 `/studio/` uses Supabase Auth and `VITE_CASTROOM_API_URL`. The typed client never falls back to fixtures on live errors. Until Minas connects the API, invited users can authenticate but no live workspace is claimed. Supabase project: `hgsgvdujzatfhsjoojll`; the public Auth API was checked, database permissions were not.
 
 ```sh
-npm test
-npm run build
+corepack pnpm test
+corepack pnpm build
+corepack pnpm exec playwright install chromium
+corepack pnpm test:ui
 ```
 
 ## Integration boundary
@@ -27,6 +29,8 @@ npm run build
 - `apps/web`: studio, focused editor, agent onboarding, static public docs.
 - `packages/contracts`: proposed Zod read/write schemas, pending Minas agreement.
 - `apps/web/src/data/client.ts`: one typed interface; `live.ts` is the route adapter.
+- `packages/public-api`: implemented public read-only discovery API and OpenAPI; it is separate from Minas’s domain API.
+- `packages/cli`: repository CLI for public reads and local plan validation. Run `corepack pnpm --silent castroom --help`.
 - `docs/product/contract-handoff.md`: proposed operations and integration blockers.
 - `docs/demo/verification.md`: executed checks and live acceptance gaps.
 
@@ -43,6 +47,6 @@ The Vercel project is linked to this private GitHub repository. Preview builds e
 
 ## Attribution and limits
 
-React/Vite placeholder, GitHub/Vercel setup and Supabase API wiring predate this studio implementation (`7714fbd`). The hackathon work adds the studio, contracts, transport, docs and tests. Moonjar inspired the spatial composition; no Moonjar assets or code are redistributed. Original CSS storyboards are labeled as such. BeWell facts link to Quintessential’s published case study; no partnership or media permission is implied. Humanlike is the intended rendering integration, supplied by Minas. Dependencies retain their upstream licenses through npm.
+React/Vite placeholder, GitHub/Vercel setup and Supabase API wiring predate this studio implementation (`7714fbd`). The hackathon work adds the studio, contracts, transport, docs and tests. Moonjar inspired the spatial composition; no Moonjar assets or code are redistributed. Original CSS storyboards are labeled as such. BeWell facts link to Quintessential’s published case study; no partnership or media permission is implied. Humanlike is the intended rendering integration, supplied by Minas. Dependencies retain their upstream licenses in the pnpm dependency graph. Inter Variable is self-hosted with its SIL Open Font License in `apps/web/public/fonts/LICENSE.txt`.
 
 Real MCP client authentication, Humanlike video/audio, final composition, publishing receipts, tenant/RLS denial tests and uncoached teammate trials remain blocked on engine/provider access. No time-saved, engagement, security certification or two-minute setup claim is made.

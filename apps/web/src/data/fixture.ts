@@ -90,7 +90,7 @@ function initialCampaign(): Campaign {
       media: null,
       style: {
         captions: true,
-        brandColor: ["#be8167", "#8c7ba9", "#6c8d7f"][index],
+        brandColor: ["#8A7D6D", "#6E6C66", "#5F6C66"][index],
         captionPosition: "bottom",
       },
       sourceIds: ["source-bewell"],
@@ -141,7 +141,7 @@ const context: StudioContext = contextSchema.parse({
       "Do not imply a client endorsement or partnership.",
       "Keep the tone clear, inviting and calm.",
     ],
-    color: "#6c8d7f",
+    color: "#5F6C66",
   },
   avatars: [],
   channels: platforms.map((platform) => ({

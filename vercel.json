@@ -1,24 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "npm run build",
+  "buildCommand": "corepack pnpm run build",
   "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/studio/",
-      "destination": "/index.html"
+      "destination": "/studio/index.html"
     },
     {
       "source": "/dev/studio/",
-      "destination": "/index.html"
+      "destination": "/studio/index.html"
     },
     {
       "source": "/studio/:path*",
-      "destination": "/index.html"
+      "destination": "/studio/index.html"
     },
     {
       "source": "/dev/studio/:path*",
-      "destination": "/index.html"
+      "destination": "/studio/index.html"
     }
   ],
   "headers": [
@@ -43,7 +43,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self' 'sha256-x1Fz5/LBQlG5ARDqxxewxb70SMY/uQ9lUjGOihv176U='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
         }
       ]
     },
@@ -102,6 +102,9 @@
   ],
   "proxy": {
     "entrypoint": "proxy.ts",
-    "matcher": ["/((?!assets|studio|dev|api|v1|mcp|.well-known).*)"]
-  }
+    "matcher": [
+      "/((?!assets|studio|dev|v1|api/v1).*)"
+    ]
+  },
+  "installCommand": "corepack pnpm install --frozen-lockfile"
 }

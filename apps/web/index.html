@@ -8,55 +8,27 @@
       name="keywords"
       content="content production studio, MCP, campaign editing"
     />
-    <meta name="theme-color" content="#f6f4f0" />
+    <meta name="theme-color" content="#FAFAF7" />
     <meta
       name="description"
       content="Castroom is a shared content studio for people and their agents. Read setup instructions and current integration status."
     />
+    <link rel="canonical" href="https://hackathon-gen-ai-nine.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Castroom — Your agent runs your content studio" />
+    <meta property="og:description" content="A shared content production studio for briefs, campaign drafts, video revisions and authorized schedule review. See what works today." />
+    <meta property="og:url" content="https://hackathon-gen-ai-nine.vercel.app/" />
+    <meta property="og:image" content="https://hackathon-gen-ai-nine.vercel.app/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/design.css" />
+    <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="alternate" type="text/markdown" href="https://hackathon-gen-ai-nine.vercel.app/" />
+    <link rel="describedby" type="application/vnd.oai.openapi+json" href="/openapi.json" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Castroom — Content production for your agent</title>
+    <title>Castroom — Agent-native content production studio</title>
   </head>
   <body>
-    <div id="root">
-      <main>
-        <h1>Castroom: a content production studio for your agent</h1>
-        <p>
-          Create campaigns with your agent. Fine-tune them here. Castroom gives
-          people and their external agents one place to work on company briefs,
-          content drafts, video versions and schedule reviews.
-        </p>
-        <h2>One campaign, two interfaces</h2>
-        <p>
-          Codex or Claude Code can plan a multi-item campaign through the
-          intended MCP interface. The visual studio provides a focused editor
-          for the selected script, authorized presenter, channel caption and
-          requested schedule. You can also create drafts manually from supplied
-          company context.
-        </p>
-        <h2>Current development status</h2>
-        <p>
-          The studio and public documentation are implemented. The shared
-          backend, authenticated MCP setup, Humanlike rendering and publishing
-          providers are not integrated yet. Example drafts are available only in
-          explicit development previews; they are not generated videos or
-          accepted publishing jobs.
-        </p>
-        <h2>Setup and capabilities</h2>
-        <p>
-          Read the
-          <a href="/docs/setup/">Codex and Claude Code setup templates</a>,
-          <a href="/docs/capabilities/">supported formats and current limits</a
-          >, <a href="/docs/security/">authentication and approval model</a>,
-          and <a href="/docs/errors/">recoverable errors</a>. No working MCP or
-          OpenAPI endpoint is advertised before the engine is ready.
-        </p>
-        <p>
-          <a href="/docs/">Documentation</a> ·
-          <a href="/llms.txt">Agent documentation index</a> ·
-          <a href="/studio/">Sign in to your studio</a>
-        </p>
-      </main>
-    </div>
+    <div id="root"><!--PUBLIC_APP--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

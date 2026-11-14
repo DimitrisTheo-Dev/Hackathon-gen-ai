@@ -47,6 +47,7 @@ import { Connect } from "./Connect";
 import { Review, Grant } from "./Review";
 import { CreateCampaign } from "./CreateCampaign";
 import { operationKey } from "../lib/operation-key";
+import { CommandPalette } from "../components/CommandPalette";
 
 type View = "canvas" | "schedule" | "connect" | "brand";
 export function Studio({
@@ -81,6 +82,10 @@ export function Studio({
   const [scheduleView, setScheduleView] = useState("agenda");
   const [showActivity, setShowActivity] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sort, setSort] = useState("campaign");
+  const [offline, setOffline] = useState(!navigator.onLine);
   const busyRef = useRef(false);
   const campaignRequest = useRef(0);
   const initialLocation = useRef(new URLSearchParams(location.search));
@@ -101,6 +106,19 @@ export function Studio({
     setContext(await client.getContext());
   }, [client]);
   useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault(); setCommandOpen(open => !open);
+      }
+      if (event.key === "Escape") setSidebar(false);
+    };
+    const network = () => setOffline(!navigator.onLine);
+    window.addEventListener("keydown", keys);
+    window.addEventListener("online", network);
+    window.addEventListener("offline", network);
+    return () => { window.removeEventListener("keydown", keys); window.removeEventListener("online", network); window.removeEventListener("offline", network); };
+  }, []);
+  useEffect(() => {
     let active = true;
     setLoading(true);
     Promise.all([client.getContext(), client.listCampaigns()])
@@ -119,7 +137,7 @@ export function Studio({
           setSelected((current) =>
             current && currentCampaign.items.some((i) => i.id === current)
               ? current
-              : matchMedia("(max-width: 760px)").matches
+              : matchMedia("(max-width: 1000px)").matches
                 ? null
                 : (currentCampaign.items[0]?.id ?? null),
           );
@@ -201,7 +219,7 @@ export function Studio({
         value: structuredClone(next),
       },
     }));
-    if (matchMedia("(max-width: 760px)").matches)
+    if (matchMedia("(max-width: 1000px)").matches)
       requestAnimationFrame(() =>
         document.querySelector<HTMLInputElement>("#item-title")?.focus(),
       );
@@ -290,6 +308,14 @@ export function Studio({
       setManifest(next);
     });
   }
+  function openCampaign(id: string, contentId?: string) {
+    void action(async () => {
+      await fetchCampaign(id);
+      setSelected(contentId ?? null);
+      setSearch(""); setStatusFilter("all");
+      go("canvas");
+    });
+  }
   if (loading)
     return (
       <div className="loading-page">
@@ -317,10 +343,10 @@ export function Studio({
         </main>
       </div>
     );
-  const matches =
-    campaign?.items.filter((i) =>
-      `${i.title} ${i.script}`.toLowerCase().includes(search.toLowerCase()),
-    ) ?? [];
+  const matches = (campaign?.items.filter((i) =>
+    `${i.title} ${i.script}`.toLowerCase().includes(search.toLowerCase()) &&
+    (statusFilter === "all" || (statusFilter === "attention" ? i.status === "failed" || i.renderRevision === null && !!i.media : i.status === statusFilter)),
+  ) ?? []).sort((a, b) => sort === "recent" ? Date.parse(b.updatedAt) - Date.parse(a.updatedAt) : sort === "title" ? a.title.localeCompare(b.title) : 0);
   const accepted =
     campaign?.items
       .flatMap((i) => i.targets)
@@ -353,6 +379,7 @@ export function Studio({
       <div
         className={`studio-shell ${sidebar ? "nav-open" : ""} ${item && view === "canvas" ? "has-editor" : ""}`}
       >
+        {sidebar && <button className="nav-backdrop" aria-label="Close navigation" onClick={() => setSidebar(false)} />}
         <aside className="sidebar">
           <a className="wordmark" href="/">
             <Mark />
@@ -372,22 +399,9 @@ export function Studio({
             </div>
             <ChevronDown size={14} />
           </div>
-          <search className="search-box">
-            <Search size={15} />
-            <label className="sr-only" htmlFor="campaign-search">
-              Search content
-            </label>
-            <input
-              id="campaign-search"
-              type="search"
-              placeholder="Search content…"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setView("canvas");
-              }}
-            />
-          </search>
+          <button className="search-box" onClick={() => setCommandOpen(true)} aria-label="Search projects and content">
+            <Search size={17} /><span>Search studio</span><kbd>⌘ K</kbd>
+          </button>
           <nav aria-label="Studio">
             <button
               className={view === "canvas" ? "active" : ""}
@@ -426,16 +440,11 @@ export function Studio({
               <button
                 key={c.id}
                 className={campaign?.id === c.id ? "current-project" : ""}
-                onClick={() =>
-                  void action(async () => {
-                    await fetchCampaign(c.id);
-                    setSelected(null);
-                    go("canvas");
-                  })
-                }
+                onClick={() => openCampaign(c.id)}
+                title={c.title}
               >
                 <span className="project-dot" />
-                {c.title}
+                <span className="project-name">{c.title}</span><small>{c.items.length}</small>
               </button>
             ))}
           </nav>
@@ -512,6 +521,7 @@ export function Studio({
               </strong>
             </div>
             <div className="topbar-right">
+              <button className="icon-button" onClick={() => setCommandOpen(true)} aria-label="Find projects or content"><Search size={18} /></button>
               <span className="timezone-label">
                 <Clock3 size={13} />
                 {context.workspace.timezone}
@@ -530,6 +540,7 @@ export function Studio({
             tabIndex={-1}
             className={`workspace-main view-${view}`}
           >
+            {offline && <div className="feedback"><Notice error>You’re offline. Unsaved edits stay open; reconnect before saving to the shared workspace.</Notice></div>}
             {(error || notice) && (
               <div className="feedback">
                 {error && (
@@ -723,7 +734,7 @@ export function Studio({
                     </button>
                   </div>
                   <span className="item-count">
-                    {campaign.items.length} content items
+                    {matches.length} {matches.length === 1 ? "item" : "items"}
                   </span>
                   <button
                     className="text-button activity-toggle"
@@ -735,6 +746,11 @@ export function Studio({
                 </div>
                 {view === "canvas" ? (
                   <div className="canvas">
+                    <div className="canvas-tools">
+                      <label className="canvas-search"><Search size={16}/><input type="search" aria-label="Filter campaign content" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find in this campaign" /></label>
+                      <select aria-label="Filter by content status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">All content</option><option value="draft">Drafts</option><option value="ready">Ready</option><option value="attention">Needs attention</option></select>
+                      <select aria-label="Sort content" value={sort} onChange={e => setSort(e.target.value)}><option value="campaign">Campaign order</option><option value="recent">Recently changed</option><option value="title">Title</option></select>
+                    </div>
                     <div className="board-caption">
                       <span>
                         {campaign.companyContext?.name ?? context.brand.name} /
@@ -821,7 +837,7 @@ export function Studio({
                         <p>Try a different title or phrase.</p>
                         <button
                           className="button secondary"
-                          onClick={() => setSearch("")}
+                          onClick={() => { setSearch(""); setStatusFilter("all"); }}
                         >
                           Clear search
                         </button>
@@ -1037,7 +1053,7 @@ export function Studio({
             ]);
             setCampaign(next);
             setSelected(
-              matchMedia("(max-width: 760px)").matches
+              matchMedia("(max-width: 1000px)").matches
                 ? null
                 : (next.items[0]?.id ?? null),
             );
@@ -1132,6 +1148,7 @@ export function Studio({
           )}
         </Modal>
       )}
+      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => setCreating(true)} onConnect={() => go("connect")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
     </div>
   );
 }

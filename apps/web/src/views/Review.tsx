@@ -49,6 +49,11 @@ export function Review({
         item.media?.sha256 !== entry.assetHash
       );
     });
+  const groupedBlockers = new Map<string, Set<string>>();
+  for (const blocker of manifest.blockers) {
+    const ids = groupedBlockers.get(blocker.message) ?? new Set<string>();
+    ids.add(blocker.itemId); groupedBlockers.set(blocker.message, ids);
+  }
   const blocked =
     stale ||
     manifest.blockers.length > 0 ||
@@ -131,10 +136,10 @@ export function Review({
         <div className="review-blockers">
           <h3>Before this can be scheduled</h3>
           <ul>
-            {manifest.blockers.map((b, i) => (
-              <li key={i}>
+            {Array.from(groupedBlockers, ([message, itemIds]) => (
+              <li key={message}>
                 <AlertTriangle size={14} />
-                {b.message}
+                <div>{message}<small className="blocker-scope">{itemIds.size === campaign.items.length ? `Applies to all ${itemIds.size} content ${itemIds.size === 1 ? "item" : "items"}.` : `Applies to: ${Array.from(itemIds, id => campaign.items.find(item => item.id === id)?.title ?? id).join(", ")}`}</small></div>
               </li>
             ))}
           </ul>

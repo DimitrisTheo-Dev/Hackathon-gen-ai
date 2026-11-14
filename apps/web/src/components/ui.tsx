@@ -183,11 +183,6 @@ export function Preview({
       <span className="poster-brand">
         {brandName} <span>stories</span>
       </span>
-      <div className="poster-art" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
       <div className="poster-title">{item.title}</div>
       <div className="poster-bottom">
         <Icon size={15} />

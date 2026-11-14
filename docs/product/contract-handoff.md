@@ -2,7 +2,7 @@
 
 Status: proposed v0.1, not yet agreed. Baseline: `7714fbd`. Branch: `work/dimitris-studio`.
 
-The existing React/Vite app is preserved under `apps/web`; root npm scripts and lockfile remain Dimitris-owned. No API, migration or engine files are changed. Shared runtime schemas live in `packages/contracts/src/index.ts` and are exported as `@castroom/contracts`.
+The existing React/Vite app is preserved under `apps/web`; root pnpm scripts and lockfile remain Dimitris-owned. No API, migration or engine files are changed. Shared runtime schemas live in `packages/contracts/src/index.ts` and are exported as `@castroom/contracts`.
 
 Please review the proposed read models before integrating. In particular: context/capability booleans, campaign with ordered items, `revision` versus `renderRevision`, jobs with polling hints, immutable manifests, connections with server-observed `lastSeenAt`, and bounded grants. All missing values are explicit `null`; IDs are opaque strings; exact timestamps use UTC ISO 8601 with workspace IANA timezone retained. The browser never submits actor identity or approval booleans for manual approvals.
 

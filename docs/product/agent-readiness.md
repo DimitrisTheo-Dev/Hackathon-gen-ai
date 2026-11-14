@@ -1,6 +1,6 @@
 # Castroom agent-readiness evidence
 
-Scope: public first-party documentation and the intended protected Castroom action surface. Updated 14 November 2026. Studio candidate `742589c`; deployed evidence is recorded in `docs/demo/evidence`. No overall conformance or numerical score is claimed.
+Scope: public first-party documentation and the intended protected Castroom action surface. Updated 14 November 2026. Current redesign follows `95cd773`; new deployed evidence is recorded in `docs/demo/evidence`. No overall conformance or numerical score is claimed.
 
 The [AgentReady v2.0 guide](https://www.agentready.org/) was checked on 14 November 2026 against the installed requirement map. **MUST**, **SHOULD**, and **MAY** retain their actual levels. A justified SHOULD deferral remains an unmet recommendation; optional features are not release requirements. The retired `AR-READ-10` is not reinstated.
 
@@ -24,10 +24,10 @@ Evidence labels: **S** = inspected static source; **D** = deployed HTTP evidence
 | AR-READ-03 SHOULD | Pass for public pages; S/D | Initial homepage explains purpose and links setup, capabilities and private studio. |
 | AR-READ-04 SHOULD | Pass for honest development guidance; live setup fails | Blocker: no endpoint/token issuer yet. Exercise complete first-call setup after backend integration. |
 | AR-READ-05 SHOULD | Pass for S | Examples use semantic `pre/code` and language classes. Verify rendered wrapping. |
-| AR-READ-06 SHOULD | Partial coverage recorded as fail | Docs link the planned root index; real OpenAPI/MCP artifacts remain unavailable. Link only validated endpoints. |
+| AR-READ-06 SHOULD | Pass for public resources; domain setup blocked | Public OpenAPI and CLI now link from the homepage, docs and llms index. Live domain API/MCP remain unavailable. |
 | AR-READ-07 SHOULD | Pass; S/D | `/llms.txt` links canonical public docs and discloses unavailable execution. |
-| AR-READ-08 SHOULD | Pass for docs; S/D | Factual WebPage JSON-LD repeats visible title/purpose. Homepage product JSON-LD remains deferred; no fabricated offers/ratings. |
-| AR-READ-09 MAY | Partial | Homepage and 404 negotiate Markdown with `Vary: Accept`; separate Markdown versions of all docs are deferred. |
+| AR-READ-08 SHOULD | Pass for docs; S/D | Factual WebPage JSON-LD repeats visible title/purpose. Homepage SoftwareApplication JSON-LD now matches visible development status; no fabricated offers/ratings. |
+| AR-READ-09 MAY | Pass for public docs | Homepage, all eight documentation routes and 404 negotiate Markdown with `Vary: Accept`. |
 | AR-READ-11 SHOULD | Pass for S on known limits; pricing not applicable | No paid product/prices offered. Docs disclose unknown quotas/costs and pending capabilities; add actual limits from service. |
 
 ## Act
@@ -35,11 +35,11 @@ Evidence labels: **S** = inspected static source; **D** = deployed HTTP evidence
 | Requirement / level | Status; evidence | Impact / action / verification |
 | --- | --- | --- |
 | AR-ACT-01 SHOULD | Fail; C absent | Blocker: scoped token issuer and live consent/revocation must be tested. Token fallback is not OAuth. |
-| AR-ACT-02 SHOULD | Fail; no live OpenAPI | High: Minas must supply real schema tied to shared operations and errors. Validate responses. |
+| AR-ACT-02 SHOULD | Pass for public discovery; domain API pending | OpenAPI 3.1.1 describes four real read operations with runtime-derived schemas, unique operationIds, parameters and RFC 9457 errors. SwaggerParser and HTTP checks validate it. |
 | AR-ACT-03 SHOULD | Fail; no live MCP | Blocker: implement authenticated Streamable HTTP and verify discovery in both target clients. Registry publication pending. |
 | AR-ACT-04 MAY | Fail; deferred | Low: server-card conventions/host support must be confirmed before publication. |
 | AR-ACT-05 MAY | Fail; deferred | Low: MCP Apps is optional; external studio serves the first journey. |
-| AR-ACT-06 SHOULD | Fail; justified deferral | Low: standalone SDKs/CLI deferred in favor of targeted MCP clients; avoid two language SDKs without a user need. |
+| AR-ACT-06 SHOULD | Partial | Repository CLI supports real public reads and local bounded-plan validation, with tests. Public registry distribution and campaign execution are unavailable; an authorized checkout is required. |
 | AR-ACT-07 SHOULD | Fail; justified deferral | Low: WebMCP remains a draft; target clients use remote MCP. Feature-detect if later adopted. |
 | AR-ACT-08 MAY | Not applicable | No agent purchase/billing task or paid checkout in this build. |
 | AR-ACT-09 MAY | Not applicable | No open-ended public content-query service is needed for the bounded campaign workflow. |
@@ -49,7 +49,7 @@ All Act failures describe the current unintegrated studio candidate, not a findi
 
 ## Official scanner procedure
 
-Run the official `is-agentic` CLI against **only the intended public origin** after deployment, using its current [docs](https://is-agentic.com/docs). Never submit tenant URLs, signed media links, or credentials. The documented command is `npx is-agentic <public-domain> --json`.
+Run the official `is-agentic` CLI against **only the intended public origin** after deployment, using its current [docs](https://is-agentic.com/docs). Never submit tenant URLs, signed media links, or credentials. The documented command is `corepack pnpm dlx is-agentic <public-domain> --json`.
 
 Preserve the canonical report URL, scan timestamp, target origin, raw result, and cache status. A stored result can be returned from the upstream freshness cache; a null score remains null. The [methodology](https://is-agentic.com/methodology) says public scans have point-in-time limits and do not certify security, accessibility, or compatibility. Fix observed essential gaps and recheck; keep genuine Codex/Claude trials as separate evidence.
 
@@ -62,3 +62,9 @@ Scanner executed against https://hackathon-gen-ai-nine.vercel.app: **46**, times
 3. Verify private studio/API resources remain authenticated and excluded from public discovery. Robots/noindex is not access control.
 4. Confirm actual MCP/OpenAPI links only after backend deployment. Test expired/revoked token and wrong workspace behavior before calling setup ready.
 5. Reconcile this matrix with the final candidate and save executed evidence in `docs/demo/verification.md`.
+
+## 14 November neutral redesign and readiness pass
+
+The requested fixes now include prerendered homepage content; root/docs Markdown negotiation; Markdown 404s; read-only JSON discovery with OpenAPI; RFC 9457 errors; explicit proposed scope definitions; JSON-LD/canonical/OG metadata; trust pages; agent when-to-use instructions; and a repository CLI. `scripts/verify-public.ts` checks 63 HTTP responses/files. Local results are in `evidence/public-local-redesign.json`; production results follow deployment.
+
+The machine-readable permission definitions deliberately say `proposed_not_issued`. They do **not** satisfy enforced scoped authentication. OAuth metadata is not fabricated: the absent issuer returns a truthful JSON 404. Real OAuth/agent grants, MCP, Humanlike and publisher receipts remain Minas integration gates. Publishing a CLI package needs registry credentials and a chosen public package identity; no package was published. Organization street address/contact details were not supplied and are not invented. Search indexing cannot be guaranteed by a deployment. A free public read API is not represented as a free video-rendering plan. These prevent any claim of 100% readiness.

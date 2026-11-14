@@ -1,2 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://hackathon-gen-ai-nine.vercel.app/</loc></url><url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/</loc></url><url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/setup/</loc></url><url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/capabilities/</loc></url><url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/security/</loc></url><url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/errors/</loc></url></urlset>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/setup/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/api/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/mcp/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/cli/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/capabilities/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/security/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/docs/errors/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/about/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/contact/</loc><lastmod>2026-11-14</lastmod></url>
+  <url><loc>https://hackathon-gen-ai-nine.vercel.app/privacy/</loc><lastmod>2026-11-14</lastmod></url>
+</urlset>

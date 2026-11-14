@@ -1,0 +1,18 @@
+{
+  "operationKey": "25d720d1-2264-40b9-8f56-6996e7c8c4ae",
+  "title": "Example: three product stories",
+  "companyContext": {
+    "name": "Example Company",
+    "description": "A fictional company used only to validate the Castroom draft format.",
+    "audience": "Prospective product users",
+    "tone": "Clear and conversational; avoid unsupported performance claims.",
+    "sourceText": "User-supplied example brief. The product helps a team organize its drafts and review changes.",
+    "sourceUrl": null,
+    "missingInformation": "Authorized avatar, connected accounts, exact dates and final approval remain to be supplied."
+  },
+  "items": [
+    { "title": "An organized starting point", "script": "Start with a clear brief. Keep the purpose and audience together before creating your first draft." },
+    { "title": "Make a focused revision", "script": "Choose one draft, improve its opening, and review the changed version in context." },
+    { "title": "Review before sharing", "script": "Read the final copy and inspect the finished media before authorizing its next step." }
+  ]
+}
