@@ -139,3 +139,54 @@ export function agentHandoff(
     2,
   );
 }
+
+/**
+ * Why the render action is unavailable right now, in words safe to show, or "" when it can run.
+ * The order goes from what the person cannot change (no renderer, no access) to what they can fix next.
+ */
+export function renderBlockReason(state: {
+  kind: ContentItem["kind"];
+  canRender: boolean;
+  renderBlocker: string | null;
+  canEdit: boolean;
+  submitted: boolean;
+  offline: boolean;
+  changedRemotely: boolean;
+  dirty: boolean;
+  hasPresenter: boolean;
+  languageSupported: boolean;
+  hasScript: boolean;
+}): string {
+  if (state.kind !== "avatar_video") return "This format has no video to render.";
+  if (!state.canRender) return state.renderBlocker ?? "Rendering is unavailable in this workspace.";
+  if (!state.canEdit) return "Your access is view-only.";
+  if (state.submitted) return "A destination was already submitted for this item.";
+  if (state.offline) return "Reconnect to render.";
+  if (state.changedRemotely) return "Load the latest version first.";
+  if (state.dirty) return "Save your changes first.";
+  if (!state.hasPresenter) return "Choose a presenter first.";
+  if (!state.languageSupported) return "This presenter doesn’t support the script language.";
+  if (!state.hasScript) return "Write a script first.";
+  return "";
+}
+
+/** The one line shown beside the save state while there are unsaved edits. */
+export function saveHint(state: {
+  dirty: boolean;
+  nextRevision: number;
+  kind: ContentItem["kind"];
+  videoChanged: boolean;
+  hasVideo: boolean;
+}): string {
+  if (!state.dirty) return "";
+  const saving = `Saving creates v${state.nextRevision}`;
+  if (state.kind !== "avatar_video" || !state.hasVideo) return `${saving}.`;
+  return state.videoChanged
+    ? `${saving} — the video will need a new render.`
+    : `${saving} — the video is reused.`;
+}
+
+/** "1 source", "3 drafts": counts read as words, and callers drop the zero ones. */
+export function countLabel(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}

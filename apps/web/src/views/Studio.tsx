@@ -13,7 +13,6 @@ import {
   Grid2X2,
   LayoutTemplate,
   Layers,
-  List,
   LogOut,
   Menu,
   PanelLeft,
@@ -22,10 +21,9 @@ import {
   Plug,
   RefreshCw,
   Search,
-  Settings2,
+  SlidersHorizontal,
   ShieldCheck,
   Sparkles,
-  TriangleAlert,
   Video,
   X,
   Zap,
@@ -53,6 +51,7 @@ import { operationKey } from "../lib/operation-key";
 import { CommandPalette } from "../components/CommandPalette";
 import { itemBadge, liveActivity, timeAgo } from "../lib/status";
 import { useAutoGrow } from "../lib/use-auto-grow";
+import { rememberPanel } from "../components/ShellSkeleton";
 import "../studio.css";
 import "../channels.css";
 
@@ -68,7 +67,8 @@ const Grant = lazy(() => loadReview().then((m) => ({ default: m.Grant })));
 const CreateCampaign = lazy(() => loadCreate().then((m) => ({ default: m.CreateCampaign })));
 const Billing = lazy(() => loadBilling().then((m) => ({ default: m.Billing })));
 const Templates = lazy(() => loadTemplates().then((m) => ({ default: m.Templates })));
-const Channels = lazy(() => import("./Channels").then((m) => ({ default: m.Channels })));
+const loadChannels = () => import("./Channels");
+const Channels = lazy(() => loadChannels().then((m) => ({ default: m.Channels })));
 const SIDEBAR_KEY = "faceful:sidebar";
 function ViewSkeleton() {
   return <div className="view-skeleton" role="status" aria-label="Loading"><span className="skeleton skeleton-title" /><span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" /><span className="skeleton skeleton-block" /></div>;
@@ -77,13 +77,54 @@ function ViewSkeleton() {
 import { useDirectorHistory } from '../director/use-history';
 import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
 type View = "home" | "canvas" | "schedule" | "connect" | "brand" | "billing";
+/** Search, filter and sort only earn their place once a project is too long to take in at a glance. */
+const TOOLS_FROM = 7;
+type Target = ContentItem["targets"][number];
+/** One quiet pill per requested time, worded from the state the engine reported and nothing else. */
+const TARGET_STATUS: Record<Target["state"], { label: string; tone: string }> = {
+  draft: { label: "Draft time", tone: "draft" },
+  approval_required: { label: "Needs approval", tone: "queued" },
+  queued: { label: "Queued", tone: "queued" },
+  accepted: { label: "Scheduled", tone: "scheduled" },
+  published: { label: "Published", tone: "published" },
+  failed: { label: "Failed", tone: "failed" },
+  unknown: { label: "Unknown", tone: "failed" },
+  cancel_requested: { label: "Cancelling", tone: "queued" },
+  cancelled: { label: "Cancelled", tone: "draft" },
+};
+function dayParts(instant: string, timezone: string) {
+  const date = new Date(instant);
+  const part = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-GB", { timeZone: timezone, ...options }).format(date);
+  return {
+    key: new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date),
+    weekday: part({ weekday: "short" }), day: part({ day: "numeric" }), month: part({ month: "short" }),
+    time: part({ hour: "2-digit", minute: "2-digit", hour12: false }),
+  };
+}
+/** The week as an agenda: one entry per calendar day (in the project's timezone), unscheduled drafts last. */
+function scheduleDays(campaign: Campaign) {
+  const days = new Map<string, { key: string; at: string | null; items: ContentItem[] }>();
+  for (const item of campaign.items) {
+    const first = item.targets.map((target) => target.scheduledAt).sort()[0] ?? null;
+    const key = first ? dayParts(first, campaign.timezone).key : "unscheduled";
+    const day = days.get(key) ?? { key, at: first, items: [] };
+    day.items.push(item); days.set(key, day);
+  }
+  return [...days.values()].sort((a, b) => (a.at === null ? 1 : b.at === null ? -1 : a.key.localeCompare(b.key)));
+}
+function listNames(names: string[]) {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
 const VIEWS = ["home", "canvas", "schedule", "connect", "brand", "billing"];
 export function Studio({
   client,
   onSignOut,
+  onReady,
 }: {
   client: StudioClient;
   onSignOut?: () => void;
+  /** Called once the first view is complete (data, code and type), so the shell skeleton can lift. */
+  onReady?: () => void;
 }) {
   const [context, setContext] = useState<StudioContext | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -109,7 +150,6 @@ export function Studio({
   const [manifest, setManifest] = useState<ScheduleManifest | null>(null);
   const [grant, setGrant] = useState(false);
   const [sidebar, setSidebar] = useState(false);
-  const [scheduleView, setScheduleView] = useState("agenda");
   const [showActivity, setShowActivity] = useState(false);
   const [homeIdea,setHomeIdea]=useState("");
   const [homeReply,setHomeReply]=useState("");
@@ -122,6 +162,8 @@ export function Studio({
   const [focusDirector,setFocusDirector]=useState(false);
   const [playItem,setPlayItem]=useState<string|null>(null);
   const [errorBilling,setErrorBilling]=useState(false);
+  // A save was refused because the project changed elsewhere: the notice offers to load the latest version.
+  const [errorRefresh,setErrorRefresh]=useState(false);
   const [loadFailure,setLoadFailure]=useState("");
   const [checkoutReturn,setCheckoutReturn]=useState<"success"|"cancelled"|null>(()=>{
     const value=new URLSearchParams(location.search).get("checkout");
@@ -177,11 +219,24 @@ export function Studio({
     const timer = window.setInterval(() => { if (!noticeHeld.current && (shown += 250) >= 7000) setNotice(""); }, 250);
     return () => window.clearInterval(timer);
   }, [notice]);
+  const ready = useRef(onReady); ready.current = onReady;
   useEffect(() => {
-    const warm = () => { void loadCreate(); void loadReview(); void loadConnect(); void loadBilling(); void loadTemplates(); };
-    const timer = window.setTimeout(warm, 2500);
-    return () => window.clearTimeout(timer);
-  }, []);
+    if (loading) return;
+    let live = true;
+    // The skeleton lifts only when nothing is left to pop in: this view's own code and the typeface are in.
+    const mode = context?.capabilities.mode;
+    const code = view === "connect" ? loadConnect() : view === "billing" ? loadBilling() : view === "schedule" && mode === "live" ? loadChannels() : null;
+    const type = document.fonts?.load ? Promise.race([document.fonts.load("500 14px InterVariable"), new Promise((resolve) => window.setTimeout(resolve, 1500))]) : null;
+    void Promise.allSettled([code, type]).then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!live) return;
+      ready.current?.();
+      // Everything else a person can open from here is fetched now, while the browser is idle.
+      const warm = () => { void loadCreate(); void loadReview(); void loadConnect(); void loadTemplates(); if (mode === "live") { void loadBilling(); void loadChannels(); } };
+      if (window.requestIdleCallback) window.requestIdleCallback(warm, { timeout: 1500 }); else window.setTimeout(warm, 300);
+    })));
+    return () => { live = false; };
+    // Once per load: `view` and `context` are read as they stand when loading finishes.
+  }, [loading]);
   const busyRef = useRef(false);
   const campaignRequest = useRef(0);
   const initialLocation = useRef(new URLSearchParams(location.search));
@@ -278,7 +333,10 @@ export function Studio({
     else url.searchParams.delete("campaign");
     if (selected) url.searchParams.set("item", selected);
     else url.searchParams.delete("item");
-    history.replaceState(history.state, "", url);
+    // A bare "#" (left behind when a sign-in return clears its fragment) is dropped here, in the same single update.
+    if (!url.hash) url.hash = "";
+    // Nothing is written when the address already says this: a refresh causes no history change at all.
+    if (url.href !== location.href) history.replaceState(history.state, "", url);
     document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "billing" ? "Billing" : (campaign?.title ?? "Studio")} · Faceful`;
   }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
@@ -310,12 +368,15 @@ export function Studio({
     (i) =>
       drafts[i.id] && Object.keys(contentPatch(i, drafts[i.id].value)).length,
   );
+  // The next load reserves the panel's column only if it was open here (see the boot skeleton).
+  useEffect(() => { if (!loading && view === "canvas" && matchMedia("(min-width: 1001px)").matches) rememberPanel(Boolean(item)); }, [loading, view, Boolean(item)]);
   function go(next: View) {
     setView(next);
     if(next==="home")setSelected(current=>current??campaign?.items[0]?.id??null);
     setSidebar(false);
     setError("");
     setErrorBilling(false);
+    setErrorRefresh(false);
     setNotice("");
   }
   function select(
@@ -349,12 +410,14 @@ export function Studio({
     setBusy(true);
     setError("");
     setErrorBilling(false);
+    setErrorRefresh(false);
     setNotice("");
     try {
       await fn();
     } catch (e) {
       const code = e instanceof ApiError ? e.code : "";
       setErrorBilling(e instanceof ApiError && Boolean(e.reviewUrl?.includes("view=billing")));
+      setErrorRefresh(code === "revision_conflict");
       setError(
         `${e instanceof Error ? e.message : "The operation failed."}${code === "revision_conflict" ? " Your local draft has been kept. Refresh the campaign to compare the latest version." : ""}`,
       );
@@ -473,6 +536,13 @@ export function Studio({
       setManifest(next);
     });
   }
+  function refreshCampaign() {
+    if (!campaign) return;
+    void action(async () => {
+      await fetchCampaign(campaign.id);
+      setNotice("Latest saved campaign loaded. Local unsaved drafts are preserved.");
+    });
+  }
   function openCampaign(id: string, contentId?: string) {
     if (busyRef.current) return;
     const previous = campaign;
@@ -480,7 +550,7 @@ export function Studio({
     const cached = campaigns.find(c => c.id === id);
     if (cached) setCampaign(cached);
     setSelected(contentId ?? null);
-    setSearch(""); setStatusFilter("all"); go("canvas");
+    setSearch(""); setStatusFilter("all"); setSort("campaign"); setFiltersOpen(false); go("canvas");
     void action(async () => {
       try { await fetchCampaign(id); }
       catch (error) { setCampaign(previous); setSelected(previousSelected); throw error; }
@@ -575,25 +645,8 @@ export function Studio({
     void fetchCampaign(campaign.id).catch(() => undefined);
     return saved;
   }
-  if (loading)
-    return (
-      <div className="app-frame studio-loading" role="status" aria-busy="true">
-        <div className="studio-shell is-home">
-          <aside className="sidebar" aria-hidden="true">
-            <span className="wordmark"><Mark /><span>Faceful</span></span>
-            <span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" /><span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" />
-          </aside>
-          <div className="workspace">
-            <div className="topbar" aria-hidden="true"><span className="skeleton skeleton-line short" /></div>
-            <div className="workspace-main studio-loading-main">
-              <span className="skeleton skeleton-title" aria-hidden="true" />
-              <span className="skeleton skeleton-composer" aria-hidden="true" />
-              <p>Opening your studio…</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  // While context and projects load, the shell skeleton (components/ShellSkeleton.tsx) is the only thing on screen.
+  if (loading) return null;
   if (!context)
     return (
       <div className="auth-page">
@@ -623,8 +676,11 @@ export function Studio({
         </main>
       </div>
     );
-  const matches = (campaign?.items.filter((i) =>
-    `${i.title} ${i.script}`.toLowerCase().includes(search.toLowerCase()) &&
+  const toolsAvailable = (campaign?.items.length ?? 0) >= TOOLS_FROM;
+  const filtering = toolsAvailable && (search.trim() !== "" || statusFilter !== "all" || sort !== "campaign");
+  // Below that size there are no tools on screen, so nothing may be filtered out of sight.
+  const matches = !toolsAvailable ? (campaign?.items ?? []) : (campaign?.items.filter((i) =>
+    `${i.title} ${i.script}`.toLowerCase().includes(search.trim().toLowerCase()) &&
     (statusFilter === "all" || (statusFilter === "attention" ? i.status === "failed" || i.renderRevision === null && !!i.media : i.status === statusFilter)),
   ) ?? []).sort((a, b) => sort === "recent" ? Date.parse(b.updatedAt) - Date.parse(a.updatedAt) : sort === "title" ? a.title.localeCompare(b.title) : 0);
   const accepted =
@@ -642,6 +698,10 @@ export function Studio({
   const activeConnections = context.connections.filter(
     (c) => c.lastSeenAt && !c.revokedAt && new Date(c.expiresAt) > new Date(),
   );
+  const scheduled = accepted - published;
+  const brandName = campaign?.companyContext?.name ?? context.brand.name;
+  // Requested times whose platform has no connected account. Said once, in one banner, not on every row.
+  const unlinked = [...new Set((campaign?.items ?? []).flatMap((i) => i.targets).filter((t) => !context.channels.some((c) => c.id === t.accountId)).map((t) => platformNames[t.platform]))];
   const credits = context.capabilities.renderUnitsRemaining;
   const inProject = Boolean(campaign) && (view === "canvas" || view === "schedule");
   return (
@@ -727,12 +787,8 @@ export function Studio({
             <div className="breadcrumbs">
               <button className="icon-button mobile-menu" aria-label="Toggle navigation" aria-expanded={sidebar} onClick={() => setSidebar(!sidebar)}><Menu size={18} /></button>
               <button className="mobile-project-switch" onClick={() => setSidebar(true)} aria-label="Switch project"><span>{campaign?.title ?? "Your projects"}</span><ChevronDown size={15}/></button>
-              <Folder size={14} />
-              <span>Projects</span>
-              <ChevronRight size={12} />
-              <strong>
-                {view === "connect" ? "Agent connections" : view === "brand" ? "Brand & sources" : view === "billing" ? "Billing" : view === "home" ? "Create" : (campaign?.title ?? "Your campaigns")}
-              </strong>
+              {/* A project's title lives once, in its own header below; other pages are named here. */}
+              {!inProject && <strong>{view === "connect" ? "Agents" : view === "brand" ? "Brand & sources" : view === "billing" ? "Billing" : view === "schedule" ? "Schedule" : view === "home" ? "Create" : "Projects"}</strong>}
             </div>
             {inProject && (
               <div className="segmented topbar-views" role="group" aria-label="Project view">
@@ -741,7 +797,6 @@ export function Studio({
               </div>
             )}
             <div className="topbar-right">
-              <span className="timezone-label"><Clock3 size={13} />{context.workspace.timezone}</span>
               {inProject && <button className="icon-button activity-toggle" aria-label="Campaign activity" title="Activity" onClick={() => setShowActivity(true)}><Clock3 size={16} /></button>}
               <button className="icon-button" onClick={() => setCommandOpen(true)} aria-label="Find projects or content" title="Search (⌘K)"><Search size={16} /></button>
               <a className="icon-button" href="/docs/" aria-label="Open documentation" title="Documentation"><ArrowUpRight size={16} /></a>
@@ -759,6 +814,7 @@ export function Studio({
                   <Notice error>
                     {error}
                     {errorBilling && <button className="text-button" onClick={() => go("billing")}>Open billing</button>}
+                    {errorRefresh && campaign && <button className="text-button" onClick={refreshCampaign}>Refresh project</button>}
                     <button className="text-button" onClick={() => setError("")}>Dismiss</button>
                   </Notice>
                 )}
@@ -774,7 +830,7 @@ export function Studio({
             {view === "home" && !campaign ? (<div className="empty-state studio-first">
               <h1>What will we create today?</h1>
               <p>Describe a video. Faceful drafts it, and you shape it together.</p>
-              <form className="home-idea-form" aria-busy={homeBusy} onSubmit={e=>{e.preventDefault();void submitHomeIdea();}}>
+              <form className="home-idea-form" aria-busy={homeBusy} onSubmit={e=>{e.preventDefault();void submitHomeIdea();}} onClick={e=>{if(e.target===e.currentTarget)homeInput.current?.focus();}}>
                 <label className="sr-only" htmlFor="home-idea">What would you like to create?</label>
                 <textarea ref={homeInput} id="home-idea" value={homeIdea} onChange={e=>setHomeIdea(e.target.value)} rows={3} maxLength={1500} placeholder="A 15-second Instagram Reel introducing our app, friendly and energetic…" enterKeyHint="send" disabled={homeBusy} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void submitHomeIdea();}}}/>
                 <div className="home-idea-bar">
@@ -820,70 +876,68 @@ export function Studio({
                 onCreateCampaign={() => setCreating(true)}
               /></Suspense>
             ) : view === "brand" ? (
-              <div className="brand-view">
-                <span className="section-kicker">Your shared context</span>
-                <h1>{campaign?.companyContext?.name ?? context.brand.name}</h1>
-                <p className="lead">
-                  {campaign?.companyContext?.description ??
-                    context.brand.description}
-                </p>
+              <div className="brand-page">
+                <header className="brand-head">
+                  <span className="brand-monogram" aria-hidden="true">{brandName.trim().charAt(0).toUpperCase() || "F"}</span>
+                  <div>
+                    <h1>{brandName}</h1>
+                    <p>{campaign?.companyContext?.description ?? context.brand.description}</p>
+                  </div>
+                </header>
                 {campaign?.companyContext && (
-                  <dl className="brief-summary">
-                    <dt>Audience</dt>
-                    <dd>
-                      {campaign.companyContext.audience || "Not supplied"}
-                    </dd>
-                    <dt>Tone</dt>
-                    <dd>
-                      {campaign.companyContext.tone ||
-                        "Follow workspace brand guidance"}
-                    </dd>
-                    <dt>Missing information</dt>
-                    <dd>
-                      {campaign.companyContext.missingInformation ||
-                        "No additional gaps recorded"}
-                    </dd>
+                  <dl className="brand-facts">
+                    <div><dt>Audience</dt><dd>{campaign.companyContext.audience || "Not supplied"}</dd></div>
+                    <div><dt>Tone</dt><dd>{campaign.companyContext.tone || "Follows the guidance below"}</dd></div>
+                    {campaign.companyContext.missingInformation && <div><dt>Still missing</dt><dd>{campaign.companyContext.missingInformation}</dd></div>}
                   </dl>
                 )}
-                <section>
-                  <h2>Brand guidance</h2>
-                  <ul className="rule-list">
-                    {context.brand.rules.map((rule) => (
-                      <li key={rule}>
-                        <Check size={16} />
-                        {rule}
-                      </li>
-                    ))}
-                  </ul>
+                <section aria-labelledby="brand-guidance">
+                  <h2 id="brand-guidance">Guidance</h2>
+                  {context.brand.rules.length ? (
+                    <ul className="brand-rules">
+                      {context.brand.rules.map((rule) => <li key={rule}><Check size={13} aria-hidden="true" /><span>{rule}</span></li>)}
+                    </ul>
+                  ) : (
+                    <p className="brand-empty">No guidance yet. Until rules are added, drafts follow each project’s brief.</p>
+                  )}
                 </section>
-                <section>
-                  <h2>Source material</h2>
-                  {campaign?.sources.map((s) => (
-                    <article className="source-card" key={s.id}>
-                      <FileText size={22} />
-                      <div>
-                        <h3>{s.title}</h3>
-                        <p>{s.excerpt}</p>
-                        {s.url && (
-                          <a href={s.url} target="_blank" rel="noreferrer">
-                            Read original case study <ArrowUpRight size={13} />
-                          </a>
-                        )}
-                        <small>
-                          Retrieved{" "}
-                          {dateLabel(s.retrievedAt, context.workspace.timezone)}{" "}
-                          · {s.permittedAssetIds.length} permitted media assets
-                        </small>
-                      </div>
-                    </article>
-                  ))}
+                <section aria-labelledby="brand-sources">
+                  <h2 id="brand-sources">Sources{campaign && <small>{campaign.title}</small>}</h2>
+                  {campaign?.sources.length ? (
+                    <div className="source-grid">
+                      {campaign.sources.map((s) => (
+                        <article className="source" key={s.id}>
+                          <span className="source-icon" aria-hidden="true"><FileText size={16} /></span>
+                          <h3>{s.title}</h3>
+                          <p title={s.excerpt}>{s.excerpt}</p>
+                          <footer>
+                            {s.url && <a className="button secondary" href={s.url} target="_blank" rel="noreferrer">Open source<ArrowUpRight size={13} aria-hidden="true" /></a>}
+                            <small>
+                              Retrieved {new Intl.DateTimeFormat("en-GB", { timeZone: context.workspace.timezone, day: "numeric", month: "short", year: "numeric" }).format(new Date(s.retrievedAt))}
+                              {s.permittedAssetIds.length > 0 && ` · ${s.permittedAssetIds.length} permitted media ${s.permittedAssetIds.length === 1 ? "asset" : "assets"}`}
+                            </small>
+                          </footer>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="brand-empty-card">
+                      <span className="source-icon" aria-hidden="true"><FileText size={16} /></span>
+                      <strong>No sources yet</strong>
+                      <p>{campaign ? "Add source evidence before publishing. Drafts can only cite what is listed here." : "Sources appear here once a project has them."}</p>
+                    </div>
+                  )}
                 </section>
-                <Notice>
-                  Source references do not grant media rights or publishing
-                  permission.{" "}
-                  {campaign?.id === "fixture-bewell-week" &&
-                    "Quintessential is an unofficial demo agency; no endorsement is implied."}
-                </Notice>
+                {campaign?.brief && (
+                  <section aria-labelledby="brand-brief">
+                    <h2 id="brand-brief">Brief</h2>
+                    <p className="brand-brief">{campaign.brief}</p>
+                  </section>
+                )}
+                <p className="brand-footnote">
+                  Source references do not grant media rights or publishing permission.
+                  {campaign?.id === "fixture-bewell-week" && " Quintessential is an unofficial demo agency; no endorsement is implied."}
+                </p>
               </div>
             ) : !campaign && view === "schedule" && !fixture ? (
               // No project yet: channels can still be connected here, and Google returns to this view to finish connecting.
@@ -917,58 +971,37 @@ export function Studio({
               </div>
             ) : (
               <>
-                <div className="campaign-heading">
-                  <div>
-                    <div className="campaign-meta">
+                <header className="project-head">
+                  <div className="project-heading">
+                    <h1>{campaign.title}</h1>
+                    <p className="campaign-meta">
                       {campaign.origin === "sample" && <span className="sample-chip" title="Seeded demonstration content. Nothing in it was rendered or published.">Sample</span>}
                       <span>{campaign.items.length} {campaign.items.length === 1 ? "draft" : "drafts"}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{fixture ? "Saved on this device" : "Shared workspace"}</span>
-                    </div>
-                    <h1>{campaign.title}</h1>
-                    <p>
-                      {campaign.companyContext
-                        ? `Stories for ${campaign.companyContext.name}. Ready to shape.`
-                        : campaign.brief.split(".")[0] + "."}
+                      {/* Counts appear only once the engine has reported something to count. */}
+                      {finished > 0 && <span>{finished} {finished === 1 ? "video" : "videos"} ready</span>}
+                      {scheduled > 0 && <span>{scheduled} scheduled</span>}
+                      {published > 0 && <span>{published} published</span>}
+                      <span>Times in {campaign.timezone.replaceAll("_", " ")}</span>
+                      {fixture && <span>Saved on this device</span>}
                     </p>
-                    <details className="mobile-campaign-brief"><summary>Read brief</summary><p>{campaign.brief}</p></details>
                   </div>
-                  <div className="campaign-actions">
-                    <button className="button secondary new-campaign-button" onClick={() => setCreating(true)}><Plus size={14} />New campaign</button>
-                    <button
-                      className="button secondary refresh-button"
-                      disabled={busy}
-                      aria-label="Refresh campaign"
-                      title="Refresh"
-                      onClick={() =>
-                        void action(async () => {
-                          await fetchCampaign(campaign.id);
-                          setNotice("Latest saved campaign loaded. Local unsaved drafts are preserved.");
-                        })
-                      }
-                    >
-                      <RefreshCw size={14} />
-                      <span className="refresh-label">Refresh</span>
-                    </button>
-                    <button className="button primary" disabled={busy || unsaved} onClick={() => void prepare()}><CalendarDays size={15} />Review schedule</button>
+                  <div className="project-actions">
+                    {view === "canvas" && toolsAvailable && (
+                      <button className="icon-button tools-toggle" aria-label="Filter and sort content" title="Find, filter and sort" aria-expanded={filtersOpen} aria-controls="canvas-tools" data-active={filtering ? "" : undefined} onClick={() => setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={16} /></button>
+                    )}
+                    <button className="button primary" disabled={busy || unsaved} aria-describedby={unsaved ? "review-blocked" : undefined} onClick={() => void prepare()}><CalendarDays size={15} />Review schedule</button>
                   </div>
-                </div>
-                {unsaved && <p className="draft-reminder">Save your edits before reviewing the schedule.</p>}
+                  {unsaved && <p className="draft-reminder" id="review-blocked">Save your edits before reviewing the schedule.</p>}
+                </header>
                 {view === "canvas" ? (
                   <div className="canvas">
-                    <div className={`canvas-tools ${filtersOpen ? "filters-open" : ""}`}>
-                      <label className="canvas-search"><Search size={16}/><input type="search" aria-label="Filter campaign content" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find in this campaign" /></label>
-                      <button className="icon-button mobile-filter-toggle" aria-label="Filter and sort content" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}><Settings2 size={18}/></button>
-                      <button className="icon-button mobile-activity" aria-label="Campaign activity" onClick={() => setShowActivity(true)}><Clock3 size={18}/></button>
-                      <select aria-label="Filter by content status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">All content</option><option value="draft">Drafts</option><option value="ready">Ready</option><option value="attention">Needs attention</option></select>
-                      <select aria-label="Sort content" value={sort} onChange={e => setSort(e.target.value)}><option value="campaign">Campaign order</option><option value="recent">Recently changed</option><option value="title">Title</option></select>
-                    </div>
-                    <div className="board-caption">
-                      <span>
-                        {campaign.companyContext?.name ?? context.brand.name} · {matches.length} {matches.length === 1 ? "item" : "items"}
-                      </span>
-                      <span>Portrait · 9:16</span>
-                    </div>
+                    {toolsAvailable && filtersOpen && (
+                      <div className="canvas-tools" id="canvas-tools">
+                        <label className="canvas-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Filter campaign content" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find in this project" /></label>
+                        <select aria-label="Filter by content status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">All content</option><option value="draft">Drafts</option><option value="ready">Ready</option><option value="attention">Needs attention</option></select>
+                        <select aria-label="Sort content" value={sort} onChange={e => setSort(e.target.value)}><option value="campaign">Project order</option><option value="recent">Recently changed</option><option value="title">Title</option></select>
+                      </div>
+                    )}
                     <div className="content-grid">
                       {matches.map((i, position) => {
                         const index = campaign.items.indexOf(i);
@@ -996,8 +1029,10 @@ export function Studio({
                                   item={previewItem}
                                   index={index}
                                   passive
-                                  brandName={campaign.companyContext?.name ?? context.brand.name}
+                                  brandName={brandName}
                                 />
+                                {/* The engine's state for this draft. While work is in flight the pill above already says so. */}
+                                <span className="card-state">{!live && <span className={`status-pill tone-${badge.tone}`}><i aria-hidden="true" />{badge.label}</span>}</span>
                                 {i.media && (
                                   <span className="has-video-badge">
                                     <Video size={13} />
@@ -1005,28 +1040,10 @@ export function Studio({
                                   </span>
                                 )}
                               </div>
-                              <div className="card-heading">
-                                <h2>{previewItem.title}</h2>
-                                <span className="card-selection">{isSelected ? <Check size={11} /> : null}</span>
-                              </div>
-                              <div className="card-state">
-                                <span className={`status-pill tone-${badge.tone}`}><i aria-hidden="true" />{optimisticItems[i.id] ? "Saving draft…" : badge.label}</span>
-                                <span className="card-version">v{i.revision}</span>
-                              </div>
+                              <h2>{previewItem.title}</h2>
+                              {/* One time line: the requested time, or when the draft last changed if none is set. */}
+                              <p className="card-time">{badge.tone === "failed" ? "Render failed · open to retry" : i.targets[0] ? dateLabel(i.targets[0].scheduledAt, campaign.timezone) : `Edited ${timeAgo(i.updatedAt, now)}`}</p>
                             </button>
-                            <div className="card-footer">
-                              <div className="platforms" aria-label="Destinations">
-                                {i.variants.map((v) => (
-                                  <span key={v.platform} aria-label={platformNames[v.platform]}>
-                                    <PlatformIcon platform={v.platform} />
-                                  </span>
-                                ))}
-                              </div>
-                              <span>{i.targets[0] ? dateLabel(i.targets[0].scheduledAt, campaign.timezone) : "No time set"}</span>
-                            </div>
-                            {badge.tone === "failed"
-                              ? <p className="card-activity is-failed"><TriangleAlert size={12} aria-hidden="true" />Render failed · open the draft to retry</p>
-                              : isSelected && <p className="card-activity"><Check size={12} aria-hidden="true" />Saved v{i.revision} · {timeAgo(i.updatedAt, now)}</p>}
                           </article>
                         );
                       })}
@@ -1044,143 +1061,76 @@ export function Studio({
                         </button>
                       </div>
                     )}
-                    <div className="canvas-context">
-                      <FileText size={16} />
-                      <span>
-                        {campaign.sources.length
-                          ? `Based on ${campaign.sources.length} supplied source${campaign.sources.length === 1 ? "" : "s"}`
-                          : "Add source evidence before publishing"}
-                      </span>
-                      <button
-                        className="text-button"
-                        onClick={() => go("brand")}
-                      >
-                        View source <ArrowUpRight size={12} />
-                      </button>
-                    </div>
                   </div>
                 ) : (
                   <div className="schedule-view">
-                    <div className="schedule-header">
-                      <div>
-                        <h2>Campaign schedule</h2>
+                    {unlinked.length > 0 && (
+                      <div className="channel-banner" role="note">
+                        <span className="channel-banner-icon" aria-hidden="true"><Plug size={16} /></span>
                         <p>
-                          All requested times in {campaign.timezone}. Draft
-                          times are not accepted posts.
+                          <strong>{context.channels.length ? `No channel connected for ${listNames(unlinked)}` : "No channel connected yet"}</strong>
+                          <span>{fixture ? "These are draft times. Channels are connected in a signed-in workspace; nothing posts from this local one." : "These are draft times. Nothing posts until a channel is connected and you approve the schedule."}</span>
                         </p>
+                        {fixture
+                          ? <a className="button secondary" href="/studio/?view=schedule">Connect a channel</a>
+                          : <button className="button secondary" onClick={() => {
+                              const slot = document.querySelector<HTMLElement>(".channels-slot");
+                              slot?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+                              slot?.querySelector<HTMLElement>("button, a[href]")?.focus({ preventScroll: true });
+                            }}>Connect a channel</button>}
                       </div>
-                      <div className="segmented">
-                        <button
-                          aria-pressed={scheduleView === "agenda"}
-                          onClick={() => setScheduleView("agenda")}
-                        >
-                          <List size={14} />
-                          Agenda
-                        </button>
-                        <button
-                          aria-pressed={scheduleView === "calendar"}
-                          onClick={() => setScheduleView("calendar")}
-                        >
-                          <CalendarDays size={14} />
-                          Calendar
-                        </button>
-                      </div>
-                    </div>
-                    <div
-                      className={
-                        scheduleView === "calendar" ? "calendar-grid" : "agenda"
-                      }
-                    >
-                      {campaign.items.map((i, index) => (
-                        <section className="agenda-item" key={i.id}>
-                          <div className="agenda-date">
-                            <strong>
-                              {i.targets[0]
-                                ? new Intl.DateTimeFormat("en-GB", {
-                                    timeZone: campaign.timezone,
-                                    day: "numeric",
-                                  }).format(new Date(i.targets[0].scheduledAt))
-                                : "—"}
-                            </strong>
-                            <span>
-                              {i.targets[0]
-                                ? new Intl.DateTimeFormat("en-GB", {
-                                    timeZone: campaign.timezone,
-                                    weekday: "short",
-                                  }).format(new Date(i.targets[0].scheduledAt))
-                                : "Unscheduled"}
-                            </span>
-                          </div>
-                          <div className="agenda-content">
-                            <button
-                              className="text-button agenda-title"
-                              onClick={() => {
-                                select(i);
-                                go("canvas");
-                              }}
-                            >
-                              {i.title}
-                              <ChevronRight size={14} />
-                            </button>
-                            {i.targets.map((t, n) => (
-                              <div
-                                className="destination"
-                                key={`${t.platform}-${n}`}
-                              >
-                                <PlatformIcon platform={t.platform} />
-                                <div>
-                                  <strong>
-                                    {context.channels.find(
-                                      (c) => c.id === t.accountId,
-                                    )?.displayName ??
-                                      `${platformNames[t.platform]} · account needed`}
-                                  </strong>
-                                  <small>
-                                    {dateLabel(t.scheduledAt, t.timezone)} ·{" "}
-                                    {
-                                      i.variants.find(
-                                        (v) => v.platform === t.platform,
-                                      )?.visibility
-                                    }
-                                  </small>
-                                  {t.error && (
-                                    <span className="destination-error">
-                                      {t.error}
-                                    </span>
+                    )}
+                    <ol className="week" aria-label="Requested times, by day">
+                      {scheduleDays(campaign).map((day, position) => {
+                        const date = day.at ? dayParts(day.at, campaign.timezone) : null;
+                        return (
+                          <li className="day-card" key={day.key} style={{ "--i": Math.min(position, 6) } as CSSProperties}>
+                            <p className={`day-badge ${date ? "" : "is-open"}`}>
+                              {date ? <><span>{date.weekday}</span><strong>{date.day}</strong><span>{date.month}</span></> : <span>No date</span>}
+                            </p>
+                            <div className="day-drafts">
+                              {day.items.map((i) => (
+                                <section className="day-draft" key={i.id} aria-label={i.title}>
+                                  <button className="day-title" onClick={() => { select(i); go("canvas"); }}>
+                                    <span>{i.title}</span><ChevronRight size={14} aria-hidden="true" />
+                                  </button>
+                                  {i.targets.length === 0 ? <p className="day-empty">No time requested yet.</p> : (
+                                    <ul className="day-targets">
+                                      {i.targets.map((t, n) => {
+                                        const at = dayParts(t.scheduledAt, t.timezone);
+                                        const status = TARGET_STATUS[t.state];
+                                        return (
+                                          <li key={`${t.platform}-${n}`}>
+                                            <span className="target-icon"><PlatformIcon platform={t.platform} /></span>
+                                            <span className="target-name">{context.channels.find((c) => c.id === t.accountId)?.displayName ?? platformNames[t.platform]}</span>
+                                            <time dateTime={t.scheduledAt} title={dateLabel(t.scheduledAt, t.timezone, true)}>{date && at.key !== date.key ? `${at.weekday} ${at.day} ${at.month}, ` : ""}{at.time}</time>
+                                            <span className={`status-pill tone-${status.tone}`}><i aria-hidden="true" />{status.label}</span>
+                                            {(t.error || t.publishedUrl || (t.platform === "youtube" && t.state === "accepted" && t.providerId)) && (
+                                              <span className="target-detail">
+                                                {t.error && <span className="destination-error">{t.error}</span>}
+                                                {t.publishedUrl && <a href={t.publishedUrl} target="_blank" rel="noreferrer">Open published post<ArrowUpRight size={12} aria-hidden="true" /></a>}
+                                                {/* Accepted by YouTube and waiting for its publish time: the upload is real, so link to it. */}
+                                                {t.platform === "youtube" && t.state === "accepted" && t.providerId && !t.publishedUrl && (
+                                                  <a href={`https://studio.youtube.com/video/${encodeURIComponent(t.providerId)}/edit`} target="_blank" rel="noreferrer">Open in YouTube Studio<ArrowUpRight size={12} aria-hidden="true" /></a>
+                                                )}
+                                              </span>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
                                   )}
-                                  {t.publishedUrl && (
-                                    <a
-                                      href={t.publishedUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      Open published post
-                                    </a>
-                                  )}
-                                  {/* Accepted by YouTube and waiting for its publish time: the upload is real, so link to it. */}
-                                  {t.platform === "youtube" && t.state === "accepted" && t.providerId && !t.publishedUrl && (
-                                    <a
-                                      href={`https://studio.youtube.com/video/${encodeURIComponent(t.providerId)}/edit`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      Open in YouTube Studio <ArrowUpRight size={12} />
-                                    </a>
-                                  )}
-                                </div>
-                                <span className={`status-chip ${t.state}`}>
-                                  {t.state.replaceAll("_", " ")}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-                      ))}
-                    </div>
+                                </section>
+                              ))}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
                     {/* Publishing accounts: connect and list them where times are planned. Live workspaces only. */}
                     {!fixture && <div className="channels-slot" data-slot="schedule-channels"><Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense></div>}
                     <button
-                      className="text-button"
+                      className="text-button schedule-grant"
                       onClick={() => setGrant(true)}
                     >
                       <ShieldCheck size={15} />
@@ -1188,18 +1138,6 @@ export function Studio({
                     </button>
                   </div>
                 )}
-                <footer className="workspace-footer">
-                  <span className="quiet-status">
-                    <span />
-                    {fixture ? "Saved on this device" : "Live workspace"}
-                  </span>
-                  <div className="run-summary">
-                    <span><Video size={13} /><strong>{finished}</strong> {finished === 1 ? "video" : "videos"} ready</span>
-                    <span><CalendarDays size={13} /><strong>{accepted}</strong> scheduled</span>
-                    <span><Check size={13} /><strong>{published}</strong> published</span>
-                    <span><strong>{campaign.humanInterventions}</strong> {fixture ? "local edits" : "edits by people"}</span>
-                  </div>
-                </footer>
               </>
             )}
           </main>
@@ -1342,6 +1280,10 @@ export function Studio({
       </Suspense>
       {showActivity && campaign && (
         <Modal title="Campaign activity" onClose={() => setShowActivity(false)}>
+          <div className="activity-tools">
+            <p>{campaign.humanInterventions} {fixture ? (campaign.humanInterventions === 1 ? "local edit" : "local edits") : (campaign.humanInterventions === 1 ? "edit by a person" : "edits by people")}</p>
+            <button className="button secondary" disabled={busy} onClick={refreshCampaign}><RefreshCw size={14} />Refresh</button>
+          </div>
           <div className="activity-list">
             {campaign.activity.length === 0 ? (
               <p>No activity recorded.</p>

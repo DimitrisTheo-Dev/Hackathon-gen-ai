@@ -55,9 +55,6 @@
   .skeleton-composer { block-size: 132px; inline-size: min(640px, 100%); border-radius: 18px; }
   .skeleton-block { block-size: 180px; inline-size: 100%; border-radius: 14px; }
   .view-skeleton { display: grid; gap: 14px; padding: 40px clamp(20px, 5vw, 56px); max-inline-size: 760px; }
-  .studio-loading .sidebar { gap: 16px; }
-  .studio-loading-main { display: grid !important; place-content: center; justify-items: center; gap: 18px; text-align: center; }
-  .studio-loading-main p { font-size: 13px; color: var(--text-secondary); }
 
   /* Toasts: float over the canvas instead of pushing it down */
   .workspace-main > .feedback { position: sticky; inset-block-start: calc(100% - 48px); z-index: 6; block-size: 0; display: grid; justify-items: center; align-content: end; gap: 8px; padding: 0 16px; pointer-events: none; margin: 0; }
@@ -78,32 +75,14 @@
   .app-frame .content-card.selected { box-shadow: 0 0 0 2px var(--ink), var(--elev-2); }
   .app-frame .content-select { display: block; inline-size: 100%; padding: 0; border: 0; background: transparent; text-align: start; border-radius: 12px; }
   .app-frame .card-preview { position: relative; border-radius: 11px; overflow: hidden; outline: 1px solid rgba(0,0,0,.06); outline-offset: -1px; }
-  .app-frame .card-heading { display: flex; align-items: start; gap: 8px; padding: 12px 6px 0; }
-  .app-frame .card-heading h2 { flex: 1; min-inline-size: 0; font-size: 14px; font-weight: 550; line-height: 1.35; letter-spacing: -.01em; text-wrap: balance; overflow-wrap: anywhere; }
-  .app-frame .card-selection { inline-size: 18px; block-size: 18px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; background: transparent; color: var(--surface); transition: background-color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out); transform: scale(.9); }
-  .app-frame .content-card.selected .card-selection { background: var(--ink); transform: scale(1); }
-  .app-frame .card-state { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 6px 4px; font-size: 12px; color: var(--text-secondary); text-transform: none; }
-  .app-frame .card-state .state-dot { display: none; }
-  .app-frame .card-version { font-variant-numeric: tabular-nums; color: var(--text-muted); }
-  .app-frame .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 6px 2px; padding-block-start: 8px; border-block-start: 1px solid var(--border); font-size: 11.5px; color: var(--text-secondary); }
-  .app-frame .card-footer .platforms { display: flex; gap: 6px; color: var(--text-muted); }
   .app-frame .has-video-badge { position: absolute; inset: auto auto 8px 8px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(10px) saturate(160%); font-size: 11px; font-weight: 500; color: var(--ink); }
   .live-pill { position: absolute; inset: -11px auto auto 14px; z-index: 2; pointer-events: none; display: inline-flex; align-items: center; gap: 7px; max-inline-size: calc(100% - 28px); padding: 4px 10px 4px 9px; border-radius: 999px; background: var(--surface); box-shadow: 0 0 0 1px rgba(42,42,39,.08), 0 2px 8px rgba(42,42,39,.10); font-size: 11.5px; font-weight: 550; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .live-pill.tone-queued { color: var(--warning-ink); }
   @starting-style { .live-pill { opacity: 0; transform: translateY(-4px) scale(.96); } }
   .live-pill { transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); transform-origin: left center; }
-  .card-activity { display: flex; align-items: center; gap: 6px; margin: 8px 6px 4px; font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-  .card-activity > svg { color: var(--green); }
-  .card-activity.is-failed { color: var(--danger); }
-  .card-activity.is-failed > svg { color: currentColor; flex: none; }
-  .app-frame .board-caption { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
   /* Canvas surface: calm dotted paper */
   .app-frame .canvas { background-color: var(--background); background-image: var(--dot-grid); background-size: 22px 22px; background-position: 11px 11px; }
-  .app-frame .canvas-tools label, .app-frame .canvas-tools select { background-color: var(--surface); border-color: transparent; box-shadow: var(--elev-1); border-radius: 10px; }
-  .app-frame .canvas-tools label:focus-within { box-shadow: 0 0 0 1px var(--focus); }
-  .app-frame .canvas-context { display: flex; align-items: center; justify-content: center; gap: 8px; margin-block-start: 22px; padding: 0; border: 0; background: transparent; box-shadow: none; font-size: 12px; color: var(--text-muted); }
-  .app-frame .canvas-context .text-button { font-size: 12px; color: var(--text-secondary); }
   /* ⌘K palette: one quiet search row, compact groups. It opens without animation (see .instant below). */
   .command-search { padding: 2px 4px 12px; gap: 10px; color: var(--text-secondary); transition: border-color var(--dur-fast) ease; }
   .command-search:focus-within { border-block-end-color: var(--ink); color: var(--ink); }
@@ -119,15 +98,7 @@
   .schedule-view.no-project { max-inline-size: 880px; inline-size: 100%; margin-inline: auto; box-sizing: border-box; }
   .schedule-view.no-project .schedule-header h1 { font-size: 24px; font-weight: 620; letter-spacing: -.03em; line-height: 1.2; }
   .schedule-view.no-project .schedule-header p { font-size: 13px; }
-  .agenda .destination a { display: inline-flex; align-items: center; gap: 4px; }
 
-  /* Footer status bar */
-  .app-frame .workspace-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 8px 20px; border-block-start: 1px solid var(--border); background: var(--surface); font-size: 12px; color: var(--text-secondary); }
-  .app-frame .run-summary { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; border: 0; background: transparent; font-size: 12px; }
-  .app-frame .run-summary > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-  .app-frame .run-summary strong { font-weight: 550; color: var(--ink); font-variant-numeric: tabular-nums; }
-  .app-frame .quiet-status { display: inline-flex; align-items: center; gap: 7px; }
-  .app-frame .quiet-status > span { inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--green); }
 
   /* ───────────── desktop + tablet shell (sidebar visible) ───────────── */
   @media (min-width: 761px) {
@@ -186,21 +157,9 @@
     .app-frame .breadcrumbs strong { color: var(--ink); font-weight: 550; }
     .app-frame .topbar-right { justify-content: flex-end; gap: 2px; grid-column: 3; }
     .app-frame .topbar-right .icon-button { inline-size: 32px; block-size: 32px; display: grid; place-items: center; border: 0; background: transparent; }
-    .app-frame .timezone-label { margin-inline-end: 8px; color: var(--text-muted); }
     .app-frame .topbar-right .activity-toggle { margin-inline-start: 0; }
     .topbar-views { grid-column: 2; }
 
-    /* Campaign heading: one compact row */
-    .app-frame .campaign-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 20px 24px 14px; border: 0; background: transparent; }
-    .app-frame .campaign-meta { display: flex; align-items: center; gap: 7px; margin-block-end: 4px; font-size: 12px; color: var(--text-muted); }
-    .app-frame .campaign-heading h1 { font-size: clamp(20px, 1.9vw, 26px); line-height: 1.15; font-weight: 600; letter-spacing: -.025em; text-wrap: balance; }
-    .app-frame .campaign-heading > div:first-child > p { margin-block-start: 4px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); max-inline-size: 60ch; }
-    .app-frame .campaign-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
-    .app-frame .campaign-actions .button { min-block-size: 34px; padding-inline: 12px; font-size: 13px; gap: 6px; white-space: nowrap; }
-    .app-frame .refresh-button { inline-size: 34px; padding: 0; justify-content: center; }
-    .app-frame .refresh-button .refresh-label { display: none; }
-    .app-frame .canvas { padding: 8px 24px 32px; border-block-start: 0; }
-    .app-frame .canvas-tools { margin-block-end: 14px; }
     .app-frame .content-grid { gap: 22px; }
 
     /* Rows the sidebar can show on hover */
@@ -232,7 +191,6 @@
   @media (min-width: 1600px) { .app-frame { --panel-w: 420px; --sidebar-w: 264px; } }
 
   @media (hover: hover) and (pointer: fine) {
-    .app-frame .content-card:not(.selected):hover { box-shadow: var(--elev-2); transform: translateY(-2px); }
     .app-frame .button.secondary:hover:not(:disabled) { background: var(--subtle); }
     .app-frame .segmented button:not([aria-pressed="true"]):hover { color: var(--ink); }
   }
@@ -400,12 +358,7 @@
   }
   @media (max-width: 760px) {
     .app-frame .topbar { background: var(--glass); backdrop-filter: blur(14px) saturate(160%); }
-    .app-frame .topbar-views, .app-frame .topbar .activity-toggle, .app-frame .timezone-label { display: none; }
-    .app-frame .campaign-meta { display: flex; grid-column: 1 / -1; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
-    .app-frame .campaign-meta { grid-row: 1; }
-    .app-frame .campaign-heading h1 { grid-row: 2; font-size: 26px; font-weight: 600; letter-spacing: -.03em; }
-    .app-frame .mobile-campaign-brief, .app-frame .campaign-actions { grid-row: 3; }
-    .app-frame .campaign-heading:has(.mobile-campaign-brief[open]) .campaign-actions { grid-row: 4; }
+    .app-frame .topbar-views { display: none; }
     .app-frame .mobile-dock { padding-block-start: 4px; border-block-start: 1px solid var(--border); background: var(--glass); backdrop-filter: blur(18px) saturate(170%); }
     .app-frame .mobile-dock button { min-block-size: 50px; border-radius: 12px; font-size: 10.5px; font-weight: 500; gap: 3px; color: var(--text-secondary); transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
     .app-frame .mobile-dock button[aria-current="page"] { background: transparent; color: var(--ink); }
@@ -417,9 +370,6 @@
     .home-starters { display: grid; grid-template-columns: 1fr 1fr; }
     .home-starters button { min-block-size: 44px; justify-content: flex-start; border-radius: 12px; padding-inline: 10px; gap: 7px; font-size: 13px; text-align: start; }
     .app-frame .home-actions .text-button { min-block-size: 44px; }
-    /* The run summary stays at the end of the page on phones: counts are part of the honest record. */
-    .app-frame .workspace-footer { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 16px 18px; background: transparent; }
-    .app-frame .run-summary { gap: 6px 14px; }
     .app-frame .content-card { border-radius: 18px; }
     .app-frame .canvas { background-size: 20px 20px; }
     .workspace-main > .feedback { inset-block-start: calc(100% - 12px); padding-inline: 12px; }
@@ -472,7 +422,6 @@
   @media (prefers-reduced-motion: reduce) {
     /* Gentler, not absent: state still changes by colour and opacity; nothing travels or loops. */
     .app-frame :is(.button, .icon-button, .segmented button, .content-select, .sidebar-row, .director-send):active { transform: none; }
-    .app-frame .content-card:hover { transform: none; }
     .thinking-dots > i { opacity: .6; }
     .workspace-main > .feedback > *, .live-pill { transition: opacity var(--dur-fast) ease; transform: none; }
     @media (min-width: 761px) {
@@ -489,6 +438,185 @@
   }
   @media (forced-colors: active) {
     .app-frame :is(.content-card, .director-plan, .director-composer, .home-idea-form, .status-pill, .live-pill) { border: 1px solid transparent; }
+  }
+}
+@layer polish {
+  /* ───────────── one cursor per control, and none that flickers ─────────────
+     Chrome is not selectable text: the arrow stays an arrow over labels instead of turning into an I-beam.
+     Rows in a list are contiguous hit areas (the 2px between them is drawn inside each row), so the pointer
+     does not blink arrow/hand while it travels down a list. Nothing that is hovered moves or resizes. */
+  .app-frame :is(.sidebar, .topbar, .mobile-dock) { cursor: default; user-select: none; -webkit-user-select: none; }
+  .app-frame .segmented { gap: 0; }
+  .app-frame .canvas-search, .app-frame .home-idea-form { cursor: text; }
+  .app-frame .home-idea-form button { cursor: pointer; }
+  .app-frame .home-idea-form button:disabled { cursor: default; }
+  @media (min-width: 761px) {
+    .app-frame .sidebar nav, .app-frame .sidebar-bottom { gap: 0; }
+    .app-frame .sidebar :is(.sidebar-nav button, .project-list button, .sidebar-row) { min-block-size: 36px; border-block: 1px solid transparent; background-clip: padding-box !important; }
+    .app-frame .sidebar .project-list button.current-project { box-shadow: inset 0 0 0 1px rgba(42,42,39,.07); }
+    .app-frame .topbar-right { gap: 0; }
+    .app-frame .topbar-right .icon-button { inline-size: 34px; border-inline: 1px solid transparent; background-clip: padding-box !important; }
+  }
+
+  /* ───────────── top bar ───────────── */
+  .app-frame .breadcrumbs strong { font-size: 13px; font-weight: 550; color: var(--ink); }
+
+  /* ───────────── project header: the title once, one quiet line, one action ───────────── */
+  .project-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px; padding: 22px 24px 18px; }
+  .project-heading { min-inline-size: 0; }
+  .project-head h1 { font-size: clamp(21px, 1.9vw, 26px); line-height: 1.15; font-weight: 600; letter-spacing: -.025em; text-wrap: balance; overflow-wrap: anywhere; }
+  .app-frame .campaign-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .app-frame .campaign-meta > span { color: inherit; }
+  .campaign-meta > span + span::before { content: "·"; margin-inline: 7px; color: var(--text-muted); }
+  .campaign-meta > .sample-chip { margin-inline-end: 8px; background: var(--warning-surface); color: var(--warning-ink); }
+  .campaign-meta > .sample-chip + span::before { content: none; }
+  .project-actions { display: flex; align-items: center; gap: 8px; }
+  .app-frame .project-actions .button { min-block-size: 36px; padding-inline: 14px; gap: 7px; font-size: 13px; white-space: nowrap; }
+  .app-frame .tools-toggle { position: relative; inline-size: 36px; block-size: 36px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 10px; background: var(--surface); box-shadow: var(--elev-1); }
+  .app-frame .tools-toggle[aria-expanded="true"] { background: var(--subtle); color: var(--ink); }
+  .tools-toggle[data-active]::after { content: ""; position: absolute; inset: 6px 6px auto auto; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--ink); }
+  .app-frame .draft-reminder { grid-column: 1 / -1; margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--warning-ink); }
+
+  /* ───────────── canvas ───────────── */
+  .app-frame .canvas { flex: 1 0 auto; min-block-size: 0; padding: 4px 24px 40px; border: 0; }
+  .app-frame .canvas-tools { display: flex; flex-wrap: wrap; gap: 8px; max-inline-size: 640px; margin: 0 auto 18px; }
+  .app-frame .canvas-tools label, .app-frame .canvas-tools select { min-block-size: 36px; border: 1px solid transparent; border-radius: 10px; background-color: var(--surface); box-shadow: var(--elev-1); font-size: 13px; }
+  .app-frame .canvas-tools label { flex: 1 1 200px; display: flex; align-items: center; gap: 8px; min-inline-size: 0; padding: 0 12px; color: var(--text-secondary); }
+  .app-frame .canvas-tools label:focus-within { box-shadow: 0 0 0 1px var(--focus); color: var(--ink); }
+  .app-frame .canvas-tools label input { flex: 1; min-inline-size: 0; padding: 0; border: 0; background: transparent; font-size: 13px; color: var(--ink); }
+  .app-frame .canvas-tools select { display: block; flex: 0 1 auto; padding: 0 10px; color: var(--ink-secondary); }
+  @starting-style { .app-frame .canvas-tools { opacity: 0; } }
+  .app-frame .canvas-tools { transition: opacity var(--dur-fast) ease; }
+
+  /* Cards: the whole card is the control. Hover and selection change its shadow, never its position or size. */
+  .app-frame .content-card { position: relative; min-inline-size: 0; padding: 0; border: 0; border-radius: 18px; background: transparent; box-shadow: none; }
+  .app-frame .content-card.selected { box-shadow: none; }
+  .app-frame .content-select { position: relative; display: block; inline-size: 100%; padding: 8px; border: 1px solid transparent; border-radius: 18px; background: var(--surface); box-shadow: var(--elev-1); text-align: start; }
+  .app-frame .content-card.selected .content-select { box-shadow: 0 0 0 2px var(--ink), var(--elev-2); }
+  /* While pressed the card shrinks slightly; its hit area does not, so a press at the very edge still lands. */
+  .app-frame .content-select:active::after { content: ""; position: absolute; inset: -6px; }
+  .app-frame .content-select:focus-visible { outline-offset: 3px; border-radius: 18px; }
+  .app-frame .content-select h2 { margin: 0; padding: 12px 6px 0; font-size: 14px; font-weight: 550; line-height: 1.35; letter-spacing: -.01em; color: var(--ink); text-wrap: balance; overflow-wrap: anywhere; }
+  .app-frame .content-select h2 + .card-time { margin: 0; padding: 3px 6px 4px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  /* The status pill rides on the preview's corner, so every card has the same two text lines whatever its state. */
+  .app-frame .card-state { position: absolute; inset: 8px 8px auto auto; display: block; padding: 0; text-transform: none; }
+  .app-frame .card-state .status-pill { box-shadow: 0 0 0 1px rgba(0,0,0,.05); }
+  .app-frame .card-state .status-pill.tone-draft { background: rgba(255,255,255,.8); -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%); }
+  @media (min-width: 761px) {
+    /* Cards share the header's left edge and add columns as the canvas widens; nothing re-centres when the panel opens. */
+    .app-frame .content-grid { grid-template-columns: repeat(auto-fill, minmax(204px, 1fr)); max-inline-size: none; margin-inline: 0; gap: 20px; }
+    .app-frame .canvas-tools { margin-inline: 0; }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .app-frame .content-card:not(.selected) .content-select:hover { box-shadow: var(--elev-2); }
+    .app-frame .tools-toggle:hover { color: var(--ink); }
+  }
+
+  /* ───────────── schedule: a calm week agenda ───────────── */
+  .app-frame .schedule-view { flex: 1 0 auto; padding: 4px 24px 40px; }
+  .channel-banner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; max-inline-size: 1120px; box-sizing: border-box; margin-block-end: 14px; padding: 10px 10px 10px 12px; border: 1px solid transparent; border-radius: 14px; background: var(--warning-surface); color: var(--warning-ink); }
+  .channel-banner-icon { inline-size: 28px; block-size: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(116,83,28,.1); }
+  .channel-banner p { display: grid; gap: 1px; margin: 0; font-size: 13px; line-height: 1.45; text-wrap: pretty; }
+  .channel-banner strong { font-weight: 600; color: var(--ink); }
+  .app-frame .channel-banner .button { min-block-size: 34px; padding-inline: 13px; font-size: 13px; white-space: nowrap; text-decoration: none; }
+  .week { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); align-items: start; gap: 14px; max-inline-size: 1120px; margin: 0; padding: 0; }
+  .day-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; padding: 14px 16px 10px 14px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); }
+  .day-badge { display: grid; justify-items: center; align-content: center; inline-size: 48px; block-size: 58px; margin: 0; border-radius: 12px; background: var(--subtle); color: var(--ink); }
+  .day-badge span { font-size: 10.5px; font-weight: 550; line-height: 1.25; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-secondary); }
+  .day-badge strong { font-size: 20px; font-weight: 600; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .day-badge.is-open span { max-inline-size: 36px; text-align: center; }
+  .day-drafts { display: grid; gap: 10px; min-inline-size: 0; }
+  .day-draft + .day-draft { padding-block-start: 10px; border-block-start: 1px solid var(--border); }
+  .app-frame .day-title { display: flex; align-items: center; gap: 4px; max-inline-size: 100%; min-block-size: 30px; margin: 0 0 2px; padding: 0; border: 0; border-radius: 8px; background: none; text-align: start; font-size: 14.5px; font-weight: 550; line-height: 1.3; letter-spacing: -.01em; color: var(--ink); }
+  .day-title > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .day-title > svg { flex: 0 0 auto; color: var(--text-muted); transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast) ease; }
+  .day-targets { list-style: none; margin: 0; padding: 0; }
+  .day-targets > li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto; align-items: center; gap: 0 10px; min-block-size: 34px; font-size: 13px; color: var(--ink-secondary); }
+  .target-icon { display: grid; place-items: center; color: var(--text-secondary); }
+  .target-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .day-targets time { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-secondary); }
+  .target-detail { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 12px; padding-block-end: 6px; font-size: 12.5px; line-height: 1.5; }
+  .target-detail a { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+  .target-detail .destination-error { margin: 0; color: var(--danger); }
+  .day-empty { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  .app-frame .schedule-grant { margin-block-start: 18px; color: var(--text-secondary); }
+  .schedule-view .channels-slot { max-inline-size: 1120px; margin-block: 20px 0; }
+  @media (hover: hover) and (pointer: fine) {
+    .day-title:hover > svg { transform: translateX(2px); color: var(--ink); }
+    .app-frame .schedule-grant:hover { color: var(--ink); }
+  }
+
+  /* ───────────── brand & sources ───────────── */
+  .brand-page { box-sizing: border-box; inline-size: 100%; max-inline-size: 880px; padding: 26px 24px 48px; }
+  .brand-head { display: flex; align-items: center; gap: 16px; }
+  .brand-monogram { flex: 0 0 auto; inline-size: 56px; block-size: 56px; display: grid; place-items: center; border-radius: 16px; background: var(--art-wash); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); font-size: 24px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
+  .brand-head h1 { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.025em; overflow-wrap: anywhere; }
+  .brand-head p { margin-block-start: 4px; max-inline-size: 64ch; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .brand-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 24px; margin: 24px 0 0; padding: 14px 16px; border: 1px solid transparent; border-radius: 14px; background: var(--surface); box-shadow: var(--elev-1); }
+  .brand-facts dt { font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+  .brand-facts dd { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+  .brand-page section { margin-block-start: 32px; }
+  .brand-page h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; }
+  .brand-page h2 small { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 400; letter-spacing: 0; color: var(--text-secondary); }
+  .brand-rules { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 8px 12px; margin: 0; padding: 0; }
+  .brand-rules li { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px 11px 12px; border: 1px solid transparent; border-radius: 12px; background: var(--surface); box-shadow: var(--elev-1); font-size: 13.5px; line-height: 1.45; text-wrap: pretty; }
+  .brand-rules li > svg { flex: 0 0 auto; box-sizing: border-box; inline-size: 20px; block-size: 20px; padding: 3.5px; border-radius: 50%; background: var(--subtle); color: var(--ink); }
+  .source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+  .source { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; padding: 16px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); }
+  .source-icon { grid-row: 1 / span 2; align-self: start; inline-size: 34px; block-size: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--subtle); color: var(--ink-secondary); }
+  .source h3 { align-self: end; margin: 0; font-size: 14px; font-weight: 550; line-height: 1.35; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .source p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  .source footer { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-block-start: 14px; }
+  .app-frame .source footer .button { min-block-size: 32px; padding-inline: 12px; gap: 6px; font-size: 13px; text-decoration: none; }
+  .source footer small { font-size: 12px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .brand-empty { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+  .brand-empty-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; padding: 16px; border: 1px dashed var(--border); border-radius: 16px; }
+  .brand-empty-card strong { align-self: end; font-size: 14px; font-weight: 550; line-height: 1.35; }
+  .brand-empty-card p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .brand-brief { margin: 0; max-inline-size: 70ch; font-size: 14px; line-height: 1.6; color: var(--ink-secondary); text-wrap: pretty; }
+  .brand-footnote { margin: 32px 0 0; padding-block-start: 16px; border-block-start: 1px solid var(--border); max-inline-size: 76ch; font-size: 12px; line-height: 1.6; color: var(--text-secondary); text-wrap: pretty; }
+
+  /* Activity dialog: the edit count and a manual refresh live with the record they describe */
+  .activity-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-end: 14px; }
+  .activity-tools p { margin: 0; font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .app-frame .activity-tools .button { min-block-size: 34px; padding-inline: 12px; gap: 6px; font-size: 13px; }
+
+  @media (max-width: 760px) {
+    /* The top bar already names the project (it is the project switcher), so the heading is kept for assistive tech only. */
+    .project-head { padding: 12px 16px; gap: 4px 12px; }
+    .project-head h1 { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; overflow: clip; clip-path: inset(50%); white-space: nowrap; }
+    /* Phones: the facts stack as two short lines beside the action; the local-storage note lives in the Projects sheet. */
+    .app-frame .campaign-meta { display: grid; gap: 0; margin: 0; }
+    .campaign-meta > span + span::before { content: none; }
+    .campaign-meta > span:last-child:not(:nth-child(-n+2)) { display: none; }
+    .campaign-meta > .sample-chip { justify-self: start; margin: 0 0 2px; }
+    .source p { -webkit-line-clamp: 3; line-clamp: 3; }
+    .app-frame .project-actions .button { min-block-size: 44px; }
+    .app-frame .tools-toggle { inline-size: 44px; block-size: 44px; }
+    .app-frame .canvas { padding: 4px 16px 32px; }
+    .app-frame .canvas-tools label { min-block-size: 44px; flex: 1 1 100%; }
+    .app-frame .canvas-tools select { min-block-size: 44px; flex: 1 1 0; min-inline-size: 0; }
+    .app-frame .topbar .activity-toggle { display: inline-flex; margin: 0; }
+    .app-frame .schedule-view { padding: 4px 16px 32px; }
+    .channel-banner { grid-template-columns: auto minmax(0, 1fr); padding: 12px; }
+    .app-frame .channel-banner .button { grid-column: 1 / -1; min-block-size: 44px; justify-content: center; }
+    .day-card { padding: 12px 14px 8px 12px; gap: 12px; }
+    .app-frame .day-title { min-block-size: 44px; margin: -6px 0 -4px; }
+    .day-targets > li { min-block-size: 40px; }
+    .app-frame .schedule-grant { min-block-size: 44px; }
+    .brand-page { padding: 20px 16px 40px; }
+    .brand-monogram { inline-size: 48px; block-size: 48px; border-radius: 14px; font-size: 21px; }
+    .brand-head h1 { font-size: 23px; }
+    .app-frame .source footer .button { min-block-size: 44px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .day-card { animation: fade-in 220ms ease calc(var(--i, 0) * 40ms) both; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .day-title:hover > svg { transform: none; }
+  }
+  @media (prefers-contrast: more) {
+    .app-frame :is(.content-select, .day-card, .source, .brand-rules li, .brand-facts) { box-shadow: 0 0 0 1px var(--ink); }
   }
 }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }

@@ -1,6 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { LoaderCircle, Mail } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import { EMAIL_CODE_LENGTH, emailAuthError, normalizeEmailCode, requestEmailCode, verifyEmailCode } from "./lib/email-auth";
 import type { StudioClient } from "./data/client";
@@ -8,10 +8,12 @@ import { createLiveClient } from "./data/live";
 const Studio = lazy(() => import("./views/Studio").then((m) => ({ default: m.Studio })));
 const OAuthConsent = lazy(() => import("./views/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
 import { Mark, Notice } from "./components/ui";
+import { boot } from "./components/ShellSkeleton";
 
 declare const __FIXTURE_ENABLED__: boolean;
 
-/** Quiet full-screen state while a session or the studio is loading. No card flashes for returning users. */
+/** Quiet full-screen state while an agent's connection request is checked. The studio itself never uses it:
+ *  its one loading visual is the shell skeleton (components/ShellSkeleton.tsx). */
 function Entering({ label }: { label: string }) {
   return (
     <div className="ob-entering" role="status">
@@ -19,6 +21,28 @@ function Entering({ label }: { label: string }) {
       <p>{label}</p>
     </div>
   );
+}
+
+/** If the studio's code cannot be fetched or fails while opening, say so. Without this the page would stay
+ *  on the skeleton (or go blank) with nothing to do. */
+class StudioBoundary extends Component<{ children: ReactNode; onFailed: () => void }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onFailed(); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="auth-page">
+        <a className="wordmark" href="/"><Mark />Faceful</a>
+        <main className="auth-card">
+          <h1>The studio couldn’t open.</h1>
+          <p>Part of the app didn’t load. Check your connection, then reload the page.</p>
+          <button className="button primary" onClick={() => location.reload()}>Reload</button>
+          <a href="/docs/errors/">Troubleshooting</a>
+        </main>
+      </div>
+    );
+  }
 }
 
 function GoogleMark() {
@@ -37,7 +61,10 @@ export default function AuthApp() {
   const isFixture = location.pathname.startsWith("/dev/studio") && __FIXTURE_ENABLED__;
   const [client, setClient] = useState<StudioClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  // With no stored session the sign-in card is the first thing rendered: there is nothing to wait for.
+  const [loading, setLoading] = useState(() => document.documentElement.dataset.boot !== "auth");
+  // True once the studio has drawn itself completely; until then the shell skeleton stays over it.
+  const [studioReady, setStudioReady] = useState(false);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
@@ -59,6 +86,13 @@ export default function AuthApp() {
   const isConsent = location.pathname.startsWith("/oauth/consent");
   const isStudio = location.pathname.startsWith("/studio") || isFixture || isConsent;
   const step = session ? "stuck" : pendingEmail ? "code" : "email";
+  // The session has arrived and its client is created by the next effect; nothing else may flash in between.
+  const openingStudio = Boolean(session) && !client && !error && !isConsent && isStudio;
+  // One continuous skeleton from first paint until the studio is complete: while a stored session is restored,
+  // while the studio's code and data load, and after an interactive sign-in.
+  const covering = isStudio && !isConsent && (client ? !studioReady : loading ? boot.expectsStudio() : openingStudio);
+  useLayoutEffect(() => { boot.cover(covering); }, [covering]);
+  useEffect(() => { if (!client) setStudioReady(false); }, [client]);
 
   useEffect(() => {
     const deadline = Math.max(resendAt, verifyRetryAt);
@@ -226,11 +260,15 @@ export default function AuthApp() {
   if (client)
     return <>
       {error && <div className="auth-feedback"><Notice error>{error}</Notice></div>}
-      <Suspense fallback={<Entering label="Opening your studio…" />}>
-        <Studio client={client} onSignOut={isFixture ? undefined : () => void signOut()} />
-      </Suspense>
+      <StudioBoundary onFailed={() => setStudioReady(true)}>
+        <Suspense fallback={null}>
+          <Studio client={client} onSignOut={isFixture ? undefined : () => void signOut()} onReady={() => setStudioReady(true)} />
+        </Suspense>
+      </StudioBoundary>
     </>;
-  if (loading) return <Entering label="Opening your workspace…" />;
+  if (loading && isConsent) return <Entering label="Opening your workspace…" />;
+  // The shell skeleton is over the page; rendering anything here would only flash underneath it.
+  if (loading || openingStudio) return null;
 
   const slots = Array.from({ length: EMAIL_CODE_LENGTH }, (_, index) => code[index] ?? "");
   const caretAt = Math.min(code.length, EMAIL_CODE_LENGTH - 1);
@@ -241,14 +279,12 @@ export default function AuthApp() {
         {/* Keyed so each step fades in as one piece instead of morphing field by field. */}
         <div className="ob-step" key={step}>
           {step === "stuck" ? <>
-            <span className="ob-emblem" aria-hidden="true"><Mark /></span>
-            <h1>You’re signed in</h1>
+            <h1><Mark />You’re signed in</h1>
             <p className="ob-sub">The studio could not be opened from this address. Nothing was lost; no sample content was substituted.</p>
             <a className="ob-button ob-button-quiet" href="/docs/">View integration status</a>
             <button className="ob-link" type="button" disabled={busy === "signout"} onClick={() => void signOut()}>{busy === "signout" ? "Signing out…" : "Sign out"}</button>
           </> : step === "code" ? <>
-            <span className="ob-emblem" aria-hidden="true"><Mail size={22} strokeWidth={1.75} /></span>
-            <h1>Check your email</h1>
+            <h1><Mark />Check your email</h1>
             <p className="ob-sub" id="auth-code-help">Enter the 6-digit code we sent to <strong>{pendingEmail}</strong>.</p>
             <form onSubmit={(event) => { event.preventDefault(); void verify(code); }} aria-busy={busy === "verify"} noValidate>
               <label className="sr-only" htmlFor="email-code">Sign-in code</label>
@@ -302,8 +338,7 @@ export default function AuthApp() {
               <button className="ob-link" type="button" disabled={busy !== null} onClick={changeEmail}>Use a different email</button>
             </div>
           </> : <>
-            <span className="ob-emblem" aria-hidden="true"><Mark /></span>
-            <h1>{isConsent ? "Sign in to connect your agent" : "Sign in to Faceful"}</h1>
+            <h1><Mark />{isConsent ? "Sign in to connect your agent" : "Sign in to Faceful"}</h1>
             {isConsent && <p className="ob-sub">An application asked to work in your workspace. Sign in to review its request.</p>}
             <button className="ob-button ob-button-primary ob-google" type="button" disabled={busy !== null || !supabase} onClick={() => void signInWithGoogle()}>
               <span className="ob-google-chip">{busy === "google" ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <GoogleMark />}</span>

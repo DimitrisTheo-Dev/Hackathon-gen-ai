@@ -27,6 +27,10 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     await page.goto(`${origin}/dev/studio/?view=canvas`);
     await expect(page.locator('.content-card')).toHaveCount(3);
     await page.screenshot({path:`${evidence}/${engine.name()}-phone-initial.png`});
+    // Search, filter and sort only exist once a project has more than six drafts.
+    await expect(page.getByRole('button',{name:'Filter and sort content'})).toHaveCount(0);
+    await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);const items=state.campaigns[0].items;for(let n=4;n<=7;n++)items.push({...structuredClone(items[0]),id:`fixture-extra-${n}`,title:`Extra draft ${n}`});localStorage.setItem(key,JSON.stringify(state));});
+    await page.reload(); await expect(page.locator('.content-card')).toHaveCount(7);
     await page.getByRole('button',{name:'Filter and sort content'}).click();
     await page.getByRole('combobox',{name:'Filter by content status'}).selectOption('ready');
     await expect(page.getByRole('heading',{name:'No matching content'})).toBeVisible();
@@ -128,7 +132,9 @@ test('phone loading, empty, failed workspace and expired media are explicit and 
   const paused=new Promise<void>(resolve=>release=resolve);
   await page.route('**/assets/AuthApp-*.js',async route=>{await paused;await route.continue();});
   await page.goto('/dev/studio/?view=canvas',{waitUntil:'domcontentloaded'});
-  await expect(page.getByText('Opening your studio…')).toBeVisible();
+  // One loading visual: the skeleton of the studio shell, already in the static page. No sentence screen.
+  await expect(page.getByRole('status',{name:'Opening your studio'})).toBeVisible();
+  await expect(page.locator('.boot-shell')).toBeVisible();await expect(page.locator('.loading-page')).toHaveCount(0);
   await page.screenshot({path:`${evidence}/loading-375.png`});
   release();await expect(page.locator('.content-card')).toHaveCount(3);
   await page.evaluate(()=>{const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);state.campaigns[0].items[0].media={id:'expired-media',url:'https://example.com/expired.mp4',expiresAt:'2020-01-01T00:00:00.000Z',sha256:'example',revision:1,durationSeconds:20,hasAudio:true};localStorage.setItem(key,JSON.stringify(state));});

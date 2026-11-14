@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import { stepSpring, shouldDismiss } from "../lib/sheet-motion";
 
 export function useMedia(query: string) {
@@ -75,7 +75,8 @@ export function SurfaceDialog({ title, className, editor = false, inline = false
   }
   function close() { settle((ref.current?.getBoundingClientRect().height ?? innerHeight) + 32, true); }
 
-  useEffect(() => {
+  // A layout effect: the surface is open in the same frame it mounts, so a panel never pops in one frame late.
+  useLayoutEffect(() => {
     const dialog = ref.current!;
     finished.current = false;
     priorFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;

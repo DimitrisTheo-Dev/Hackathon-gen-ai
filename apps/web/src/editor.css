@@ -1,0 +1,397 @@
+/*
+ * Editor surfaces: Details, the docked AI Director and the campaign creation flow.
+ *
+ * Unlayered on purpose. The shared sheets live in cascade layers (base → responsive → polish); the rules
+ * here own these three surfaces, so they are scoped tightly (.editor-details, .director-panel.is-docked,
+ * .create-flow) and restate their own phone and reduced-motion behaviour instead of relying on layer order.
+ * The chat-first home (.director-panel.is-home) is styled by studio.css and is not touched here.
+ *
+ * Motion (DESIGN.md and the design principles): press 120ms scale(.97); disclosures, menus and tooltips
+ * 150–180ms ease-out on opacity and transform only; step reveals stagger 40ms and never block input.
+ * Anything opened from the keyboard appears at once ([data-instant], [data-motion="none"]).
+ * Hover styles sit behind (hover: hover) and (pointer: fine); reduced motion keeps colour and opacity.
+ */
+
+/* ───────────── Details: one column — preview, title, script, then a short list ───────────── */
+.editor-details { --group: var(--background); }
+.editor-details .editor-scroll { padding: 16px 16px 28px; scrollbar-width: thin; overscroll-behavior: contain; }
+
+.editor-details .editor-preview { inline-size: 164px; margin: 2px auto 0; container-type: inline-size; }
+.editor-details .editor-preview.is-storyboard { inline-size: 128px; }
+.editor-details .editor-preview :is(.poster, .video-wrap) { border-radius: 14px; box-shadow: 0 1px 2px rgba(42,42,39,.05), 0 8px 22px rgba(42,42,39,.08); outline: 1px solid rgba(0,0,0,.06); outline-offset: -1px; }
+.editor-details .editor-preview.is-storyboard .poster-brand { font-size: 13px; }
+.editor-details .editor-preview.is-storyboard .poster-title { font-size: 17px; line-height: 1.14; }
+.editor-details .editor-preview.is-storyboard .poster-bottom { font-size: 11px; line-height: 1.3; gap: 4px; margin-block-start: 10px; }
+.editor-details .editor-preview.is-storyboard .poster-bottom svg { inline-size: 12px; block-size: 12px; }
+
+.editor-details .title-input { display: block; box-sizing: border-box; inline-size: 100%; margin: 12px 0 0; padding: 7px 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ink); text-align: center; text-overflow: ellipsis; font-size: 17px; font-weight: 600; line-height: 1.3; letter-spacing: -.02em; transition: background-color 160ms ease, border-color 160ms ease; }
+.editor-details .title-input:focus { background: var(--surface); }
+.editor-details .notice { margin: 12px 0 0; border-radius: 12px; font-size: 12.5px; line-height: 1.5; }
+.editor-details .notice p { margin-block-start: 2px; }
+.editor-details .editor-recovery-actions { margin-block: 10px 0; }
+.editor-details .editor-recovery-actions .button { min-block-size: 34px; font-size: 12.5px; }
+.editor-recovery { margin-block-start: 12px; padding: 4px 12px; border-radius: 12px; background: var(--group); border: 1px solid var(--border); font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+.editor-recovery summary { display: flex; align-items: center; gap: 8px; min-block-size: 36px; cursor: pointer; list-style: none; color: var(--ink-secondary); font-weight: 500; }
+.editor-recovery summary::-webkit-details-marker { display: none; }
+.editor-recovery[open] { padding-block-end: 12px; }
+.editor-recovery p { margin: 0; }
+
+/* Fields */
+.editor-details .field { margin: 0; gap: 6px; }
+.editor-details .field > label { font-size: 12.5px; font-weight: 500; line-height: 1.4; color: var(--ink-secondary); }
+.editor-details .field > label > span { font-size: 11.5px; font-weight: 400; color: var(--text-secondary); }
+.editor-details .field :is(input:not([type="checkbox"], [type="color"]), textarea, select) { box-sizing: border-box; inline-size: 100%; padding: 9px 11px; border-radius: 10px; background: var(--surface); font-size: 14px; line-height: 1.5; }
+.editor-details .field small, .detail-panel > small, .detail-panel > p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+.editor-details .field > .notice { margin: 2px 0 0; }
+.editor-details .script-field { margin-block-start: 16px; }
+.editor-details .script-field textarea { min-block-size: 108px; max-block-size: 42dvh; padding: 11px 12px; border-radius: 12px; line-height: 1.6; field-sizing: content; resize: none; }
+@supports not (field-sizing: content) { .editor-details .script-field textarea { resize: vertical; } }
+.field-count { align-self: flex-end; font-size: 11.5px; line-height: 1.2; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+.editor-details .brand-warning { margin-block-start: 10px; padding: 10px 12px; gap: 9px; border: 0; border-radius: 12px; background: var(--warning-surface); color: var(--warning-ink); font-size: 12.5px; line-height: 1.5; }
+.editor-details .brand-warning > svg { margin-block-start: 2px; }
+.editor-details .brand-warning p { margin: 0; }
+.editor-details .brand-warning strong { font-weight: 600; }
+.editor-details .brand-warning .text-button { min-block-size: 28px; padding: 0; color: inherit; font-size: 12.5px; font-weight: 550; text-decoration: underline; text-underline-offset: 3px; }
+.editor-details .brand-warning small { display: block; font-size: 11.5px; line-height: 1.45; }
+
+/* The list: each row names a part of the draft and shows its current value; it opens in place. */
+.detail-list { margin-block-start: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--group); overflow: clip; }
+.detail-section + .detail-section { border-block-start: 1px solid var(--border); }
+.detail-row { position: relative; display: flex; align-items: center; gap: 10px; min-block-size: 46px; padding: 0 10px 0 14px; transition: background-color 120ms ease; }
+.detail-row h3 { flex: 0 0 auto; margin: 0; font: inherit; }
+.detail-row h3 button { padding: 0; border: 0; background: none; color: var(--ink); font-size: 14px; font-weight: 500; line-height: 1.3; text-align: start; cursor: pointer; }
+/* The whole row is the target, and the row carries the focus ring. */
+.detail-row h3 button::after { content: ""; position: absolute; inset: 0; }
+.detail-row h3 button:focus-visible { outline: none; }
+.detail-row:has(button:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 13px; }
+.detail-row:active { background: rgba(42,42,39,.06); }
+.detail-value { display: inline-flex; align-items: center; gap: 7px; min-inline-size: 0; margin-inline-start: auto; overflow: hidden; color: var(--text-secondary); font-size: 13px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.detail-chevron { flex: 0 0 auto; color: var(--text-secondary); pointer-events: none; transition: transform 160ms var(--ease-out); }
+.detail-section[data-open="true"] .detail-chevron { transform: rotate(90deg); }
+.detail-panel { display: grid; gap: 14px; padding: 4px 14px 16px; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
+@starting-style { .detail-panel { opacity: 0; transform: translateY(-4px); } }
+.detail-section[data-instant] :is(.detail-panel, .detail-chevron) { transition: none; }
+.detail-panel .version-panel { padding-block: 0; }
+.detail-panel .channels-slot { margin: 0; }
+.detail-facts { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; font-size: 13.5px; line-height: 1.4; }
+.detail-facts dt { color: var(--ink); font-weight: 450; }
+.detail-facts dd { margin: 0; color: var(--text-secondary); text-align: end; }
+.guidance-rules { display: grid; gap: 5px; margin: 0; padding-inline-start: 17px; font-size: 13px; line-height: 1.5; color: var(--ink-secondary); }
+.guidance-source { display: grid; gap: 2px; }
+.guidance-source :is(a, strong) { display: inline-flex; align-items: center; gap: 5px; justify-self: start; color: var(--ink-secondary); font-size: 12.5px; font-weight: 500; }
+.editor-details .channel-tabs { display: flex; margin: 0; }
+.editor-details .channel-tabs button { flex: 1; min-inline-size: 0; min-block-size: 32px; padding: 0 8px; gap: 6px; font-size: 12.5px; }
+
+/* Switches and small inline controls */
+.editor-details .toggle-field { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-block-size: 30px; }
+.editor-details .toggle-field > label { flex: 1; color: var(--ink); font-size: 13.5px; font-weight: 450; cursor: pointer; }
+.editor-details input[role="switch"] { appearance: none; position: relative; flex: 0 0 auto; inline-size: 38px; block-size: 22px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: var(--text-muted); cursor: pointer; transition: background-color 160ms ease; }
+.editor-details input[role="switch"]::before { content: ""; position: absolute; inset: 2px auto 2px 2px; inline-size: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(42,42,39,.3); transition: transform 160ms var(--ease-out); }
+.editor-details input[role="switch"]:checked { background: var(--ink); }
+.editor-details input[role="switch"]:checked::before { transform: translateX(16px); }
+.editor-details input[role="switch"]:disabled { opacity: .48; cursor: not-allowed; }
+.editor-details input[role="switch"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-color: transparent; }
+.editor-details .color-field { gap: 10px; }
+.editor-details .color-field code { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; }
+.editor-details .color-field input { inline-size: 34px; block-size: 28px; padding: 2px; border-radius: 8px; cursor: pointer; }
+
+/* Handing off to an agent: opened from the footer menu, closed again when done. */
+.editor-handoff { display: grid; gap: 12px; margin-block-start: 16px; padding: 10px 14px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--group); transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
+@starting-style { .editor-handoff { opacity: 0; transform: translateY(6px); } }
+.editor-handoff-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-inline-end: -6px; }
+.editor-handoff h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.editor-handoff p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.editor-handoff > .button { justify-self: start; min-block-size: 34px; font-size: 12.5px; }
+.editor-handoff summary { min-block-size: 28px; align-content: center; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.editor-handoff .editor-handoff-code { margin: 6px 0 0; max-block-size: 220px; overflow: auto; font-size: 11.5px; }
+
+/* Footer: the save state, one hint, and the actions. */
+.editor-details .editor-footer { position: relative; display: grid; gap: 8px; max-block-size: none; overflow: visible; padding: 10px 14px max(12px, env(safe-area-inset-bottom)); border-block-start: 1px solid var(--border); background: var(--glass); backdrop-filter: blur(14px) saturate(160%); }
+.editor-details .editor-footer > .notice { margin: 0; }
+.editor-status { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-block-size: 18px; }
+.editor-details .save-state { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--ink-secondary); font-size: 12px; font-weight: 500; line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.editor-details .save-state > svg { color: var(--positive-ink); }
+.editor-details .unsaved-dot { inline-size: 7px; block-size: 7px; margin-inline: 3px; background: var(--highlight); }
+.editor-hint { flex: 1 1 150px; margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; text-wrap: pretty; }
+.editor-details .editor-offline { margin: 0; color: var(--danger); font-size: 12px; }
+.editor-details .editor-actions { display: flex; align-items: center; gap: 8px; margin: 0; }
+.editor-details .editor-actions > .button, .editor-render { flex: 1 1 0; min-inline-size: 0; }
+.editor-details .editor-actions .button { min-block-size: 38px; padding-inline: 12px; font-size: 13px; white-space: nowrap; }
+.editor-render { position: relative; display: flex; }
+.editor-render > .button { flex: 1; min-inline-size: 0; }
+.editor-render > .button[aria-disabled="true"] { opacity: .48; cursor: not-allowed; }
+.editor-render > .button[aria-disabled="true"]:active { transform: none; }
+/* Why rendering is unavailable: on hover after a beat, on keyboard focus at once; a tap shows it inline. */
+.editor-render[data-tip]::after { content: attr(data-tip); position: absolute; inset: auto auto calc(100% + 8px) 50%; z-index: 5; inline-size: max-content; max-inline-size: 232px; padding: 7px 10px; border-radius: 9px; background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 450; line-height: 1.4; text-align: center; text-wrap: balance; pointer-events: none; opacity: 0; transform: translate(-50%, 3px) scale(.97); transform-origin: bottom center; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
+.editor-render[data-tip]:has(:focus-visible)::after { opacity: 1; transform: translate(-50%, 0); transition: none; }
+.editor-more { position: relative; flex: 0 0 auto; }
+.editor-more > .icon-button { inline-size: 38px; block-size: 38px; border-radius: 10px; background: var(--surface); box-shadow: var(--elev-1); color: var(--ink-secondary); }
+.editor-menu { position: absolute; inset: auto auto calc(100% + 8px) 0; z-index: 6; display: grid; min-inline-size: 224px; padding: 5px; border: 1px solid transparent; border-radius: 12px; background: var(--surface); box-shadow: var(--elev-2); transform-origin: bottom left; transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out); }
+@starting-style { .editor-menu { opacity: 0; transform: translateY(4px) scale(.95); } }
+.editor-menu[data-instant] { transition: none; }
+.editor-menu button { display: flex; align-items: center; gap: 10px; inline-size: 100%; min-block-size: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px; font-weight: 450; text-align: start; white-space: nowrap; }
+.editor-menu button > svg { color: var(--text-secondary); }
+.editor-menu button:focus-visible { outline: none; background: rgba(42,42,39,.07); }
+
+/* ───────────── AI Director, docked beside the canvas ───────────── */
+.director-panel.is-docked .director-intro { padding: 10px 2px 12px; }
+.director-panel.is-docked .director-symbol { inline-size: 32px; block-size: 32px; border-radius: 10px; }
+.director-panel.is-docked .director-intro h3 { margin: 12px 0 4px; font-size: 18px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; text-wrap: balance; }
+.director-panel.is-docked .director-intro p { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+
+/* What the director is working with: one chip, the rules inside it. */
+.director-panel.is-docked .director-context { margin: 0 2px; padding: 0; border: 0; }
+.director-context-chip { display: inline-flex; align-items: center; gap: 6px; max-inline-size: 100%; min-block-size: 30px; padding: 0 9px 0 12px; border: 0; border-radius: 999px; background: rgba(42,42,39,.055); color: var(--ink-secondary); font-size: 12.5px; font-weight: 500; transition: background-color 160ms ease, transform 120ms var(--ease-out); }
+.director-context-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.director-context-chip > svg { flex: 0 0 auto; color: var(--text-secondary); transition: transform 160ms var(--ease-out); }
+.director-context[data-open="true"] .director-context-chip > svg { transform: rotate(180deg); }
+.director-context-body { margin-block-start: 8px; padding: 10px 12px; border-radius: 12px; background: var(--background); color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
+@starting-style { .director-context-body { opacity: 0; transform: translateY(-4px); } }
+.director-context[data-instant] :is(.director-context-body, .director-context-chip > svg) { transition: none; }
+.director-context-body ul { display: grid; gap: 4px; margin: 0; padding-inline-start: 16px; color: var(--ink-secondary); }
+.director-context-body p { margin: 0; padding: 0; }
+.director-context-body ul + p { margin-block-start: 8px; }
+
+/* Proposals: the diff reads as text, not data. */
+.director-panel .director-diff del, .director-panel .director-diff ins { max-block-size: 132px; overflow-wrap: anywhere; }
+.director-panel .director-plan details { margin-block: 6px 0; }
+.director-panel .director-plan summary { min-block-size: 28px; }
+
+/* Composer: placeholder, attach, scope, edit script, send. */
+.director-panel.is-docked .director-compose-area { padding: 8px 12px max(10px, env(safe-area-inset-bottom)); border-block-start: 0; background: transparent; }
+.director-panel.is-docked .director-suggestions { margin: 0 2px 10px; }
+.director-panel.is-docked .director-composer textarea { min-block-size: 44px; padding: 11px 13px 4px; }
+.director-panel.is-docked .director-composer-actions { display: flex; align-items: center; gap: 2px; padding: 2px 6px 6px; }
+.director-panel.is-docked .director-composer select { appearance: none; flex: 0 1 auto; inline-size: auto; max-inline-size: 46%; min-inline-size: 0; block-size: 28px; margin: 0 2px; field-sizing: content; padding: 0 24px 0 10px; border: 0; border-radius: 999px; background: rgba(42,42,39,.055) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236E6C66' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center; color: var(--ink-secondary); font-size: 12px; font-weight: 500; line-height: 28px; text-overflow: ellipsis; cursor: pointer; transition: background-color 160ms ease; }
+.director-tool { display: inline-flex; align-items: center; gap: 5px; flex: 0 1 auto; min-inline-size: 0; overflow: hidden; block-size: 28px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap; transition: background-color 160ms ease, color 160ms ease, transform 120ms var(--ease-out); }
+.director-panel.is-docked .director-send { margin-inline-start: auto; }
+.director-panel.is-docked .director-attachments { padding: 8px 6px 0; font-size: 12.5px; }
+.director-panel.is-docked .director-attachments label { min-block-size: 34px; }
+.director-panel.is-docked .director-attachments small { font-size: 11.5px; color: var(--text-secondary); }
+.director-panel.is-docked .director-sync { margin: 0 4px; padding-block-end: 8px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+/* One quiet line: what the chat can't do here, and where the conversation is kept. */
+.director-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; min-block-size: 18px; margin: 7px 6px 0; }
+.director-status { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+.director-status > i { flex: 0 0 auto; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--highlight); }
+.director-panel.is-docked .director-storage { display: block; flex: 0 0 auto; margin: 0 0 0 auto; color: var(--text-secondary); font-size: 11px; line-height: 1.4; text-align: end; }
+.director-panel .director-exact-edit label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 4px 8px; font-size: 13px; font-weight: 500; }
+.director-panel .director-exact-edit label > span { font-size: 11.5px; font-weight: 400; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.director-panel .director-exact-edit textarea { box-sizing: border-box; padding: 11px 12px; border-radius: 14px; line-height: 1.55; min-block-size: 108px; max-block-size: 34dvh; field-sizing: content; resize: none; }
+.director-panel .director-exact-edit > div { align-items: center; margin-block-start: 10px; }
+.director-panel .director-exact-edit .button { min-block-size: 36px; padding-inline: 14px; font-size: 13px; }
+.director-panel.is-home .director-availability { text-wrap: balance; }
+
+/* ───────────── New campaign: three short steps with a live draft beside them ───────────── */
+.surface-dialog.modal:has(.create-flow) { inline-size: min(940px, calc(100% - 32px)); block-size: min(700px, calc(100dvh - 48px)); }
+.modal-content:has(> .create-flow) { display: flex; flex: 1 1 auto; min-block-size: 0; padding: 0; overflow: hidden; }
+.create-flow { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr) auto; min-inline-size: 0; min-block-size: 0; }
+.create-main { grid-area: 1 / 1; overflow: auto; overscroll-behavior: contain; padding: 20px 28px 28px; scrollbar-width: thin; }
+
+/* Progress rail */
+.create-rail { display: flex; align-items: center; margin: 0 0 24px -4px; padding: 0; list-style: none; }
+.create-rail li { display: flex; align-items: center; min-inline-size: 0; }
+.create-rail li + li::before { content: ""; flex: 0 0 auto; inline-size: 28px; block-size: 2px; margin-inline: 6px; border-radius: 1px; background: var(--border); transition: background-color 220ms ease; }
+.create-rail li + li:not([data-state="todo"])::before { background: var(--ink); }
+.create-rail button { display: inline-flex; align-items: center; gap: 8px; min-block-size: 32px; padding: 0 10px 0 4px; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background-color 160ms ease, color 160ms ease, transform 120ms var(--ease-out); }
+.create-rail button:disabled { opacity: 1; cursor: default; }
+.create-rail-dot { display: grid; place-items: center; flex: 0 0 auto; inline-size: 22px; block-size: 22px; border-radius: 50%; background: rgba(42,42,39,.07); color: var(--text-secondary); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; transition: background-color 200ms ease, color 200ms ease; }
+.create-rail li[data-state="current"] button { color: var(--ink); font-weight: 550; }
+.create-rail li[data-state="current"] .create-rail-dot { background: var(--ink); color: var(--surface); }
+.create-rail li[data-state="done"] button { color: var(--ink-secondary); }
+.create-rail li[data-state="done"] .create-rail-dot { background: rgba(42,42,39,.13); color: var(--ink); }
+.create-blocked { margin: -8px 0 18px; padding: 9px 12px; border-radius: 10px; background: var(--warning-surface); color: var(--warning-ink); font-size: 13px; line-height: 1.5; }
+
+/* A step */
+.create-step { display: grid; gap: 20px; }
+.create-step > header h3 { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -.025em; text-wrap: balance; }
+.create-step > header h3:focus { outline: none; }
+.create-step > header p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+.create-flow .field { margin: 0; gap: 8px; }
+.create-flow .field > label { color: var(--ink); font-size: 13px; font-weight: 550; line-height: 1.4; }
+.create-flow .field > label > span { font-size: 12px; font-weight: 400; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.create-flow .field :is(input, textarea) { box-sizing: border-box; inline-size: 100%; padding: 11px 13px; border-radius: 12px; background: var(--surface); font-size: 15px; line-height: 1.5; transition: border-color 160ms ease; }
+.create-flow textarea { field-sizing: content; min-block-size: 96px; max-block-size: 220px; resize: none; }
+@supports not (field-sizing: content) { .create-flow textarea { resize: vertical; } }
+.create-flow .field small { color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
+.create-flow [aria-invalid="true"] { border-color: var(--danger); }
+.create-flow .field small.field-error, .create-flow .field-error { color: var(--danger); font-size: 12.5px; line-height: 1.5; }
+
+/* Preset chips: tap to add or remove; the text field below stays the source of truth. */
+.create-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.create-chips button { min-block-size: 40px; padding: 0 16px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink-secondary); font-size: 14px; font-weight: 500; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms var(--ease-out); }
+.create-chips button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+
+/* Optional context, folded */
+.create-more { border: 1px solid var(--border); border-radius: 14px; background: var(--background); }
+.create-more-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; inline-size: 100%; min-block-size: 58px; padding: 10px 14px; border: 0; border-radius: 13px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 550; line-height: 1.35; text-align: start; transition: background-color 160ms ease; }
+.create-more-toggle small { display: block; margin-block-start: 1px; color: var(--text-secondary); font-size: 12.5px; font-weight: 400; }
+.create-more-toggle > svg { flex: 0 0 auto; color: var(--text-secondary); transition: transform 160ms var(--ease-out); }
+.create-more[data-open="true"] .create-more-toggle > svg { transform: rotate(180deg); }
+.create-more-panel { display: grid; gap: 18px; padding: 6px 14px 16px; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
+@starting-style { .create-more-panel { opacity: 0; transform: translateY(-4px); } }
+.create-more[data-instant] :is(.create-more-panel, .create-more-toggle > svg) { transition: none; }
+
+/* Script cards: the card draws the focus ring, the field inside takes a tint. */
+.create-scripts { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.create-script { display: grid; padding: 4px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); transition: border-color 160ms ease; }
+.create-script:focus-within { border-color: var(--focus); }
+.create-script:has([aria-invalid="true"]) { border-color: var(--danger); }
+.create-script-head { display: flex; align-items: center; justify-content: space-between; min-block-size: 32px; padding: 0 2px 0 10px; color: var(--text-secondary); font-size: 12px; font-weight: 550; }
+.create-script-head .icon-button { inline-size: 32px; block-size: 32px; min-inline-size: 0; min-block-size: 0; border-radius: 9px; color: var(--text-secondary); }
+.create-flow .create-script :is(input, textarea) { box-sizing: border-box; inline-size: 100%; border: 0; border-radius: 11px; background: transparent; padding: 7px 10px; font-size: 15px; line-height: 1.55; transition: background-color 160ms ease; }
+.create-flow .create-script input { font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.create-flow .create-script textarea { min-block-size: 92px; }
+.create-flow .create-script :is(input, textarea):is(:focus, :focus-visible) { outline: none; background: rgba(42,42,39,.04); }
+.create-script > .field-error { padding: 0 10px 4px; }
+.create-script-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-block-size: 18px; padding: 6px 10px 8px; color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.create-add { display: flex; align-items: center; justify-content: center; gap: 8px; inline-size: 100%; min-block-size: 48px; border: 1px dashed var(--text-muted); border-radius: 16px; background: transparent; color: var(--ink-secondary); font-size: 14px; font-weight: 500; transition: background-color 160ms ease, border-color 160ms ease, transform 120ms var(--ease-out); }
+
+/* Live preview: the first draft as it will sit on the canvas. */
+.create-preview { grid-area: 1 / 2; display: flex; flex-direction: column; align-items: center; gap: 20px; overflow: auto; padding: 28px 24px; border-inline-start: 1px solid var(--border); background-color: var(--background); background-image: var(--dot-grid); background-size: 22px 22px; background-position: 11px 11px; }
+.create-card { box-sizing: border-box; inline-size: 100%; max-inline-size: 188px; padding: 8px; border: 1px solid transparent; border-radius: 18px; background: var(--surface); box-shadow: var(--elev-2); }
+.create-card-art { container-type: inline-size; overflow: hidden; border-radius: 11px; outline: 1px solid rgba(0,0,0,.06); outline-offset: -1px; }
+.create-card-art .poster-title { font-size: 19px; }
+.create-card-art .poster-bottom { font-size: 11px; }
+.create-card-script { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; margin: 10px 6px 4px; color: var(--ink-secondary); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.create-preview [data-empty] { color: var(--text-secondary); }
+.create-facts { display: grid; gap: 8px; box-sizing: border-box; inline-size: 100%; margin: 0; padding-inline: 6px; font-size: 12.5px; line-height: 1.45; }
+.create-facts > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
+.create-facts dt { color: var(--text-secondary); }
+.create-facts dd { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+
+/* Footer: Back, one note, one primary action. */
+.create-actions { grid-area: 2 / 1 / 3 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 12px 20px; border-block-start: 1px solid var(--border); background: var(--surface); }
+.create-actions > .notice { flex: 1 0 100%; margin: 0; }
+.create-note { flex: 1; min-inline-size: 0; margin: 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.4; text-align: end; text-wrap: balance; }
+.create-actions .button { min-block-size: 42px; padding-inline: 16px; font-size: 14px; white-space: nowrap; }
+.create-actions kbd { margin-inline-start: 2px; padding: 3px 6px; border-radius: 6px; background: rgba(255,255,255,.16); color: rgba(255,255,255,.86); font: 500 11px/1.2 var(--font-inter); letter-spacing: .02em; }
+
+/* Focus for the controls introduced here */
+:is(.director-context-chip, .director-tool, .create-rail button, .create-chips button, .create-more-toggle, .create-add):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ───────────── press ───────────── */
+:is(.director-context-chip, .director-tool, .create-rail button, .create-chips button, .create-add):not(:disabled):active { transform: scale(.97); }
+
+/* ───────────── hover (fine pointers only) ───────────── */
+@media (hover: hover) and (pointer: fine) {
+  .editor-details .title-input:hover:not(:focus, :disabled) { background: rgba(42,42,39,.04); }
+  .detail-row:hover { background: rgba(42,42,39,.035); }
+  .editor-menu button:hover { background: rgba(42,42,39,.06); }
+  .editor-render[data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 350ms; }
+  .director-context-chip:hover { background: rgba(42,42,39,.09); }
+  .director-panel.is-docked .director-composer select:hover { background-color: rgba(42,42,39,.09); }
+  .director-tool:hover { background: rgba(42,42,39,.06); color: var(--ink); }
+  .create-rail button:hover:not(:disabled) { background: rgba(42,42,39,.05); color: var(--ink); }
+  .create-chips button:hover:not([aria-pressed="true"]) { border-color: var(--text-muted); background: var(--subtle); color: var(--ink); }
+  .create-more-toggle:hover { background: rgba(42,42,39,.035); }
+  .create-add:hover { border-color: var(--ink-secondary); background: var(--background); color: var(--ink); }
+}
+
+/* ───────────── motion ───────────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* A step arrives from the side it lives on; each block follows the one above by 40ms. */
+  .create-step:not([data-motion="none"]) > * { animation: create-in 260ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
+  .create-step[data-motion="forward"] { --from: 14px; }
+  .create-step[data-motion="back"] { --from: -14px; }
+  .create-step > :nth-child(2) { --i: 1; }
+  .create-step > :nth-child(3) { --i: 2; }
+  .create-step > :nth-child(4) { --i: 3; }
+  .create-step > :nth-child(n+5) { --i: 4; }
+  .create-script[data-fresh] { animation: editor-rise 240ms var(--ease-out) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Gentler, not absent: things still fade; nothing travels or scales. */
+  .create-step:not([data-motion="none"]) > * { animation: editor-fade 160ms ease both; }
+  .create-script[data-fresh] { animation: editor-fade 160ms ease both; }
+  :is(.detail-panel, .editor-handoff, .editor-menu, .director-context-body, .create-more-panel) { transition: opacity 160ms ease; }
+  @starting-style { :is(.detail-panel, .editor-handoff, .editor-menu, .director-context-body, .create-more-panel) { opacity: 0; transform: none; } }
+  :is(.detail-chevron, .director-context-chip > svg, .create-more-toggle > svg, .editor-details input[role="switch"]::before) { transition: none; }
+  .editor-render[data-tip]::after { transform: translate(-50%, 0); transition: opacity 150ms ease; }
+  :is(.director-context-chip, .director-tool, .create-rail button, .create-chips button, .create-add):active { transform: none; }
+}
+@keyframes create-in { from { opacity: 0; transform: translateX(var(--from, 0)); } }
+@keyframes editor-rise { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes editor-fade { from { opacity: 0; } }
+
+/* ───────────── phones and small tablets ───────────── */
+@media (max-width: 1000px) {
+  .editor-details { --group: var(--surface); }
+  .editor-details .editor-scroll { box-sizing: border-box; inline-size: 100%; max-inline-size: 620px; margin-inline: auto; padding: 8px max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left)); scroll-padding-block: 24px; }
+  .editor-details .editor-preview.has-media { inline-size: min(204px, calc(var(--surface-height, 100dvh) * .4 * 9 / 16)); }
+  .editor-details .editor-preview.is-storyboard { inline-size: 132px; }
+  .editor-details .title-input { min-block-size: 44px; font-size: 20px; }
+  .editor-details .field :is(input:not([type="checkbox"], [type="color"]), textarea, select) { min-block-size: 44px; font-size: 16px; }
+  .editor-details .field > label { font-size: 13px; }
+  .detail-row { min-block-size: 50px; }
+  .detail-row h3 button { font-size: 16px; }
+  .detail-value { font-size: 15px; }
+  .detail-facts, .editor-details .toggle-field > label { font-size: 15px; }
+  .editor-details .toggle-field { min-block-size: 44px; }
+  .editor-details .channel-tabs button { min-block-size: 40px; font-size: 14px; }
+  .editor-details .editor-recovery-actions .button, .editor-handoff > .button { min-block-size: 44px; font-size: 14px; }
+  .editor-details .brand-warning .text-button, .editor-recovery summary, .editor-handoff summary { min-block-size: 44px; }
+  .editor-details .editor-footer { padding: 10px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .editor-details .save-state, .editor-hint, .editor-details .editor-offline { font-size: 13px; }
+  .editor-details .editor-actions .button { min-block-size: 46px; font-size: 15px; }
+  .editor-more > .icon-button { inline-size: 46px; block-size: 46px; border-radius: 12px; }
+  .editor-menu { min-inline-size: 248px; }
+  .editor-menu button { min-block-size: 46px; font-size: 15px; }
+  .director-context-chip { min-block-size: 44px; padding-inline: 14px 12px; font-size: 14px; }
+  .director-context-body { font-size: 14px; }
+  .director-panel.is-docked .director-composer select { block-size: 40px; padding-inline: 12px 28px; font-size: 16px; line-height: 40px; }
+  .director-tool { block-size: 40px; padding-inline: 10px; font-size: 14px; }
+  .director-panel.is-docked .director-attachments label { min-block-size: 44px; }
+  .director-panel .director-exact-edit textarea { font-size: 16px; }
+  .director-panel .director-exact-edit .button, .director-panel .director-exact-edit .text-button { min-block-size: 44px; font-size: 15px; }
+}
+@media (pointer: coarse) {
+  .editor-details .field :is(input:not([type="checkbox"], [type="color"]), textarea, select), .editor-details .title-input { font-size: 16px; }
+  .create-flow :is(input, textarea) { font-size: 16px; }
+  .create-actions kbd { display: none; }
+}
+@media (max-width: 900px) {
+  .surface-dialog.modal:has(.create-flow) { inline-size: min(620px, calc(100% - 32px)); }
+  .create-flow { grid-template-columns: minmax(0, 1fr); }
+  .create-preview { display: none; }
+}
+@media (max-width: 760px) {
+  /* A sheet of one steady height: it does not resize between steps. */
+  .surface-dialog.modal:has(.create-flow) { inline-size: 100%; block-size: calc(var(--surface-height, 100dvh) - env(safe-area-inset-top, 0px) - 12px); }
+  .create-main { padding: 6px max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left)); }
+  .create-rail { margin-block-end: 20px; }
+  .create-rail button { min-block-size: 44px; }
+  .create-rail li + li::before { inline-size: 18px; }
+  .create-rail li:not([data-state="current"]) .create-rail-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: clip; clip-path: inset(50%); white-space: nowrap; }
+  .create-rail li:not([data-state="current"]) button { padding-inline: 4px; }
+  .create-step > header h3 { font-size: 21px; }
+  .create-flow .field :is(input, textarea), .create-flow .create-script :is(input, textarea) { font-size: 16px; }
+  .create-flow .field input { min-block-size: 46px; }
+  .create-chips button { min-block-size: 44px; }
+  .create-script-head .icon-button { inline-size: 44px; block-size: 44px; }
+  .create-actions { padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
+  .create-actions .button { min-block-size: 48px; font-size: 15px; }
+  .create-actions .button.primary { flex: 1; }
+  .create-note { flex: 1 0 100%; order: -1; text-align: start; }
+  .create-note:empty { display: none; }
+}
+@media (max-width: 380px) {
+  /* The narrowest phones: labels stay, decorative icons step aside; the script tool keeps its name for assistive tech. */
+  .editor-details .editor-actions { gap: 6px; }
+  .editor-details .editor-actions .button { padding-inline: 8px; font-size: 14px; }
+  .editor-details .editor-actions .button > svg { display: none; }
+  .director-tool { inline-size: 40px; justify-content: center; padding: 0; flex: 0 0 auto; }
+  .director-tool > span { position: absolute; inline-size: 1px; block-size: 1px; overflow: clip; clip-path: inset(50%); white-space: nowrap; }
+  .director-tool > svg { inline-size: 17px; block-size: 17px; }
+  .director-panel.is-docked .director-composer select { max-inline-size: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .editor-details .editor-footer { background: var(--surface); backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  .detail-list, .create-script, .create-chips button, .create-more, .editor-menu { border-color: var(--ink); }
+}
+@media (forced-colors: active) {
+  .create-chips button[aria-pressed="true"] { border-width: 3px; }
+  .create-rail li[data-state="current"] .create-rail-dot { outline: 2px solid; }
+}

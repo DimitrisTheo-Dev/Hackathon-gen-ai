@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CodeXml, Eye, EyeOff, KeyRound, LoaderCircle, MousePointer2, Plug, ShieldCheck, Sparkle } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Eye, EyeOff, KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 import type { StudioContext } from "@castroom/contracts";
 import type { CreateConnectionInput, StudioClient } from "../data/client";
-import { AgentIcon } from "../components/AgentIcon";
+import { AgentIcon, type AgentHost } from "../components/AgentIcon";
 import { CopyAction, Segmented, Step, relativeTime } from "./onboarding-parts";
 
-type AgentId = "claude" | "codex" | "cursor" | "gemini" | "vscode" | "generic";
+type AgentId = "claude" | "codex" | "cursor" | "gemini" | "vscode" | "windsurf" | "zed" | "generic";
 type Mode = "quick" | "manual";
 type Connection = StudioContext["connections"][number];
 
@@ -17,15 +17,22 @@ type ConnectProps = {
   onCreateCampaign?: () => void;
 };
 
-/** Only the two agents that completed a recorded session against this server are called "Tested". */
-const AGENTS: Array<{ id: AgentId; name: string; where: string; tested: boolean }> = [
-  { id: "claude", name: "Claude Code", where: "Terminal", tested: true },
-  { id: "codex", name: "Codex", where: "Terminal", tested: true },
-  { id: "cursor", name: "Cursor", where: "Editor", tested: false },
-  { id: "gemini", name: "Gemini CLI", where: "Terminal", tested: false },
-  { id: "vscode", name: "VS Code", where: "Editor", tested: false },
-  { id: "generic", name: "Any MCP client", where: "Remote MCP", tested: false },
+/**
+ * Only the two agents that completed a recorded session against this server are called "Tested".
+ * `host` picks the client's own mark; a mark names a client and claims nothing about compatibility.
+ */
+const AGENTS: Array<{ id: AgentId; host: AgentHost; name: string; where: string; tested: boolean }> = [
+  { id: "claude", host: "claude", name: "Claude Code", where: "Terminal", tested: true },
+  { id: "codex", host: "codex", name: "Codex", where: "Terminal", tested: true },
+  { id: "cursor", host: "cursor", name: "Cursor", where: "Editor", tested: false },
+  { id: "gemini", host: "gemini", name: "Gemini CLI", where: "Terminal", tested: false },
+  { id: "vscode", host: "vscode", name: "VS Code", where: "Editor", tested: false },
+  { id: "windsurf", host: "windsurf", name: "Windsurf", where: "Editor", tested: false },
+  { id: "zed", host: "zed", name: "Zed", where: "Editor", tested: false },
+  { id: "generic", host: "mcp", name: "Any MCP client", where: "Remote MCP", tested: false },
 ];
+/** The fan of tiles above the heading: decoration only, so five is enough. */
+const STACK: AgentHost[] = ["claude", "codex", "cursor", "gemini", "vscode"];
 /** What a workspace token may do. Approval, billing management and token administration stay with people. */
 const TOKEN_SCOPES = ["campaign:read", "content:edit", "render:write", "schedule:prepare", "billing:read"];
 const TOKEN_DAYS = 30;
@@ -52,25 +59,6 @@ function usableEndpoint(value: string | null): string | null {
 }
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 const isActive = (connection: Connection, now: number) => !connection.revokedAt && Date.parse(connection.expiresAt) > now;
-
-function AgentTile({ id, size = 44 }: { id: AgentId; size?: number }) {
-  const glyph = Math.round(size * 0.5);
-  return (
-    <span className="ob-agent-tile" data-agent={id} style={{ inlineSize: size, blockSize: size }} aria-hidden="true">
-      {id === "claude" || id === "codex" ? (
-        <AgentIcon host={id} size={Math.round(size * 0.62)} />
-      ) : id === "cursor" ? (
-        <MousePointer2 size={glyph} strokeWidth={1.75} />
-      ) : id === "gemini" ? (
-        <Sparkle size={glyph} strokeWidth={1.75} />
-      ) : id === "vscode" ? (
-        <CodeXml size={glyph} strokeWidth={1.75} />
-      ) : (
-        <Plug size={glyph} strokeWidth={1.75} />
-      )}
-    </span>
-  );
-}
 
 interface Snippet {
   title: string;
@@ -131,6 +119,7 @@ export function Connect({ context, client, refresh, onContinue }: ConnectProps) 
   const createRequest = useRef<CreateConnectionInput | null>(null);
   const revokeKeys = useRef<Record<string, string>>({});
   const heading = useRef<HTMLHeadingElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   const cards = useRef<Partial<Record<AgentId, HTMLButtonElement | null>>>({});
   // What each connection looked like when this view opened; anything newer is a call made since.
   const seenAtOpen = useRef<Map<string, string | null>>(new Map(context.connections.map((connection) => [connection.id, connection.lastSeenAt])));
@@ -181,13 +170,22 @@ export function Connect({ context, client, refresh, onContinue }: ConnectProps) 
     setCopiedSetup(false);
     createRequest.current = null;
     // A workspace token works in any agent; its one-time value is kept while this view stays open.
-    requestAnimationFrame(() => heading.current?.focus({ preventScroll: true }));
+    requestAnimationFrame(() => {
+      heading.current?.focus({ preventScroll: true });
+      // The steps open from their top, however far down the grid the chosen card was.
+      root.current?.scrollIntoView({ block: "start" });
+    });
   }
   function back() {
     const previous = picked;
     setPicked(null);
     setError("");
-    requestAnimationFrame(() => (previous ? cards.current[previous]?.focus({ preventScroll: true }) : undefined));
+    requestAnimationFrame(() => {
+      const card = previous ? cards.current[previous] : null;
+      card?.focus({ preventScroll: true });
+      // The card you came from is in view again; nothing moves if it already was.
+      card?.scrollIntoView({ block: "nearest" });
+    });
   }
 
   async function createToken() {
@@ -253,13 +251,13 @@ export function Connect({ context, client, refresh, onContinue }: ConnectProps) 
         : "";
 
   return (
-    <div className="ob-connect" data-view={agent ? "steps" : "grid"}>
+    <div className="ob-connect" ref={root} data-view={agent ? "steps" : "grid"}>
       {!agent ? (
         <div className="ob-connect-pane" key="grid">
           <header className="ob-connect-hero">
             <div className="ob-agent-stack" aria-hidden="true">
-              {(["claude", "codex", "cursor", "gemini", "vscode"] as AgentId[]).map((id, index) => (
-                <span key={id} style={{ "--ob-i": index } as React.CSSProperties}><AgentTile id={id} size={56} /></span>
+              {STACK.map((host, index) => (
+                <span key={host} style={{ "--ob-i": index } as React.CSSProperties}><AgentIcon host={host} size={56} tile /></span>
               ))}
             </div>
             <h1>Connect your agent</h1>
@@ -271,23 +269,39 @@ export function Connect({ context, client, refresh, onContinue }: ConnectProps) 
             <ul className="ob-agent-grid">
               {AGENTS.map((entry, index) => (
                 <li key={entry.id} style={{ "--ob-i": index } as React.CSSProperties}>
+                  {/* The button is the fixed hit area; only the face inside it moves, so the pointer never loses it. */}
                   <button type="button" className="ob-agent-card" ref={(node) => { cards.current[entry.id] = node; }} onClick={() => choose(entry.id)}>
-                    <AgentTile id={entry.id} />
-                    <strong>{entry.name}</strong>
-                    <small>{entry.where}</small>
-                    {entry.tested ? <span className="ob-badge ob-badge-tested"><Check size={11} strokeWidth={2.5} aria-hidden="true" />Tested</span> : <span className="ob-badge">Standard MCP</span>}
+                    <span className="ob-agent-face">
+                      <span className="ob-agent-mark"><AgentIcon host={entry.host} size={44} tile /></span>
+                      <strong>{entry.name}</strong>
+                      <small>{entry.where}</small>
+                      {entry.tested ? <span className="ob-badge ob-badge-tested"><Check size={11} strokeWidth={2.5} aria-hidden="true" />Tested</span> : <span className="ob-badge">Standard MCP</span>}
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
             <p className="ob-footnote">Tested with Claude Code and Codex. The others use the same standard MCP connection and are not yet verified by us.</p>
           </section>
+
+          {/* A separate page, not a Faceful-hosted feature: it runs on the person's own server and subscription. */}
+          <a className="ob-runner-card" href="/claude-login-test/" target="_blank" rel="noreferrer">
+            <span className="ob-runner-face">
+              <AgentIcon host="claude" size={36} tile />
+              <span className="ob-runner-text">
+                <strong>Claude Code in your browser<span className="ob-badge">Preview</span></strong>
+                <small>Runs on your own server with your own Claude subscription.</small>
+              </span>
+              <ArrowUpRight className="ob-runner-arrow" size={16} aria-hidden="true" />
+              <span className="sr-only"> (opens in a new tab)</span>
+            </span>
+          </a>
         </div>
       ) : (
         <div className="ob-connect-pane" key={agent.id}>
           <button type="button" className="ob-back" onClick={back}><ArrowLeft size={15} aria-hidden="true" />All agents</button>
           <header className="ob-setup-head">
-            <AgentTile id={agent.id} size={48} />
+            <AgentIcon host={agent.host} size={48} tile />
             <div>
               <h1 ref={heading} tabIndex={-1}>Connect {agent.name}</h1>
               <p>{agent.tested ? "Tested with this server." : "Standard MCP configuration. Not yet verified by us with this client."} Workspace <strong>{context.workspace.name}</strong>.</p>
