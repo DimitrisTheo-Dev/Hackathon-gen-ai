@@ -25,6 +25,7 @@
     "packages/public-api/src",
     "packages/cli/src",
     "packages/engine/src",
-    "api"
+    "api",
+    "apps/claude-runner"
   ]
 }

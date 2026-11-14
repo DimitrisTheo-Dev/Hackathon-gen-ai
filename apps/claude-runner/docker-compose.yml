@@ -1,0 +1,28 @@
+# Local:  docker compose up --build runner           -> http://127.0.0.1:${RUNNER_PORT:-8787}
+# VPS:    docker compose --profile https up -d --build -> https://$RUNNER_DOMAIN
+services:
+  runner:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - claude-home:/home/node
+    ports:
+      - "127.0.0.1:${RUNNER_PORT:-8787}:8787"
+
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on: [runner]
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  claude-home:
+  caddy-data:

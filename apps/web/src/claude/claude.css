@@ -1,0 +1,382 @@
+@layer views {
+  .cc-page {
+    min-block-size: 100dvh;
+    background: var(--background);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+  }
+  .cc-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 24px;
+    border-block-end: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .cc-header .wordmark { font-size: 19px; }
+  .cc-header-title {
+    padding-inline-start: 14px;
+    border-inline-start: 1px solid var(--line);
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .cc-layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 20px;
+    padding: 20px 24px 24px;
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: 1440px;
+    margin-inline: auto;
+    min-block-size: 0;
+  }
+  .cc-setup {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-inline-size: 0;
+  }
+  .cc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    min-inline-size: 0;
+  }
+  .cc-card.is-waiting { opacity: 0.72; }
+  .cc-card p, .cc-details ol, .cc-steps span {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+  .cc-card code, .cc-details code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: var(--subtle);
+    color: var(--ink-secondary);
+    overflow-wrap: anywhere;
+  }
+  .cc-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cc-card-head h2, .cc-console-title h2 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+  .cc-card-head .cc-chip { margin-inline-start: auto; }
+  .cc-step {
+    display: grid;
+    place-items: center;
+    inline-size: 30px;
+    block-size: 30px;
+    border-radius: 9px;
+    background: var(--subtle);
+    color: var(--ink-secondary);
+    flex-shrink: 0;
+  }
+  .cc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--background);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cc-chip.positive {
+    background: var(--positive-surface);
+    border-color: transparent;
+    color: var(--positive-ink);
+  }
+  .cc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cc-form label:not(.cc-check) {
+    font-size: 12px;
+    font-weight: 550;
+    color: var(--ink-secondary);
+    margin-block-start: 4px;
+  }
+  .cc-form .button { margin-block-start: 6px; min-block-size: 40px; }
+  .cc-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-block-start: 2px;
+  }
+  .cc-check input { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--ink); }
+  .cc-facts {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--background);
+    border: 1px solid var(--subtle);
+  }
+  .cc-facts div {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 12.5px;
+  }
+  .cc-facts dt { color: var(--text-muted); }
+  .cc-facts dd { margin: 0; color: var(--ink-secondary); overflow-wrap: anywhere; }
+  .cc-capitalize { text-transform: capitalize; }
+  .cc-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+  }
+  .cc-details summary {
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--ink-secondary);
+    font-weight: 500;
+  }
+  .cc-details[open] summary { margin-block-end: 10px; }
+  .cc-details ol { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; }
+  .cc-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 14px;
+    counter-reset: cc-step;
+  }
+  .cc-steps > li {
+    display: grid;
+    gap: 10px;
+    padding-inline-start: 34px;
+    position: relative;
+    counter-increment: cc-step;
+  }
+  .cc-steps > li::before {
+    content: counter(cc-step);
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0;
+    inline-size: 22px;
+    block-size: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--ink);
+    color: var(--surface);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .cc-steps .button { justify-self: start; }
+  .cc-steps .cc-form label { margin-block-start: 0; }
+
+  /* Console */
+  .cc-console {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .cc-console-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    padding: 14px 16px 8px;
+  }
+  .cc-console-title { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+  .cc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .cc-controls select { padding: 7px 10px; font-size: 12.5px; background: var(--surface); }
+  .cc-mode-help {
+    padding: 0 16px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-block-end: 1px solid var(--subtle);
+  }
+  .cc-transcript {
+    list-style: none;
+    margin: 0;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+    overflow-y: auto;
+    min-block-size: 240px;
+    overscroll-behavior: contain;
+  }
+  .cc-empty {
+    margin: auto;
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    text-align: center;
+    max-inline-size: 360px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .cc-empty svg { color: var(--text-muted); }
+  .cc-empty strong { color: var(--ink); font-weight: 600; font-size: 14px; }
+  .cc-msg { display: grid; gap: 4px; }
+  .cc-who {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .cc-text {
+    font-size: 14px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .cc-msg.user .cc-text {
+    padding: 10px 13px;
+    border-radius: 12px;
+    background: var(--subtle);
+    justify-self: start;
+    max-inline-size: 100%;
+  }
+  .cc-caret {
+    display: inline-block;
+    inline-size: 7px;
+    block-size: 1em;
+    margin-inline-start: 2px;
+    vertical-align: text-bottom;
+    background: var(--ink);
+    animation: cc-blink 1s steps(2) infinite;
+  }
+  @keyframes cc-blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .cc-caret { animation: none; } }
+  .cc-tool {
+    border: 1px solid var(--subtle);
+    border-radius: 9px;
+    background: var(--background);
+    font-size: 12.5px;
+  }
+  .cc-tool summary, .cc-tool-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    min-inline-size: 0;
+  }
+  .cc-tool summary { cursor: pointer; list-style: none; }
+  .cc-tool summary::-webkit-details-marker { display: none; }
+  .cc-tool strong { font-weight: 600; color: var(--ink-secondary); flex-shrink: 0; }
+  .cc-tool code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-inline-size: 0;
+  }
+  .cc-tool-icon { display: inline-flex; color: var(--text-muted); }
+  .cc-tool pre {
+    margin: 0;
+    padding: 10px 12px;
+    border-block-start: 1px solid var(--subtle);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-block-size: 320px;
+    overflow: auto;
+    color: var(--ink-secondary);
+  }
+  .cc-tool.is-error { border-color: var(--danger-border); }
+  .cc-tool.is-error .cc-tool-icon, .cc-tool.is-error strong { color: var(--danger); }
+  .cc-result {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--positive-ink);
+  }
+  .cc-result.is-error { color: var(--danger); align-items: flex-start; }
+  .cc-result.is-error svg { margin-block-start: 2px; }
+  .cc-working, .cc-quiet {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .cc-notice .notice { margin: 0; }
+  .cc-composer {
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px 14px;
+    border-block-start: 1px solid var(--subtle);
+    background: var(--surface);
+  }
+  .cc-composer textarea {
+    inline-size: 100%;
+    min-block-size: 76px;
+    max-block-size: 40dvh;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+  .cc-composer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .cc-composer-bar small { font-size: 11.5px; color: var(--text-muted); }
+
+  @media (min-width: 1000px) {
+    .cc-page { block-size: 100dvh; }
+    .cc-layout { overflow: hidden; }
+    .cc-setup { overflow-y: auto; padding-block-end: 4px; }
+  }
+  @media (max-width: 999px) {
+    .cc-layout { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; }
+    .cc-console { min-block-size: 70dvh; }
+    .cc-composer { position: sticky; inset-block-end: 0; }
+  }
+  @media (max-width: 560px) {
+    .cc-header { padding: 14px 16px; gap: 10px; }
+    .cc-header-title { font-size: 12px; padding-inline-start: 10px; }
+    .cc-card { padding: 16px; }
+    .cc-page .button, .cc-controls select, .cc-page input:not([type="checkbox"]) { min-block-size: 44px; }
+    .cc-page .text-button { min-block-size: 44px; }
+    .cc-controls { inline-size: 100%; }
+    .cc-controls select { flex: 1 1 140px; }
+    .cc-facts div { grid-template-columns: 80px minmax(0, 1fr); }
+  }
+}
