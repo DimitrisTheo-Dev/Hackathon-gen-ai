@@ -18,26 +18,26 @@ Do not try to connect yourself. A workspace owner or admin creates the token, or
 
 ## First calls
 
-1. GET https://faceful.dtheo.dev/api/public/status with Accept: application/json. Read engine and blockers before taking any action.
-2. Read https://faceful.dtheo.dev/openapi.json for the implemented public operation IDs, parameters, schemas and examples. Public reads require no authentication.
-3. GET https://faceful.dtheo.dev/api/public/docs, then GET /api/public/docs/{slug} using a listed slug.
-4. To act in a workspace, read https://faceful.dtheo.dev/docs/mcp/ and follow the setup with a member-supplied credential. Confirm the connection with list_projects before changing anything. For local draft validation only, follow the repository CLI guide.
+1. GET https://faceful.vercel.app/api/public/status with Accept: application/json. Read engine and blockers before taking any action.
+2. Read https://faceful.vercel.app/openapi.json for the implemented public operation IDs, parameters, schemas and examples. Public reads require no authentication.
+3. GET https://faceful.vercel.app/api/public/docs, then GET /api/public/docs/{slug} using a listed slug.
+4. To act in a workspace, read https://faceful.vercel.app/docs/mcp/ and follow the setup with a member-supplied credential. Confirm the connection with list_projects before changing anything. For local draft validation only, follow the repository CLI guide.
 
 ## Public resources
 
-- [API and agent documentation](https://faceful.dtheo.dev/docs/): Product purpose and how to check what a deployment has switched on.
-- [OpenAPI 3.1.1](https://faceful.dtheo.dev/openapi.json): Implemented read-only public routes.
-- [Public API guide](https://faceful.dtheo.dev/docs/api/): First calls, schemas, errors and caching.
-- [Use Faceful with your AI agent](https://faceful.dtheo.dev/docs/mcp/): The MCP endpoint, authorization, the 13 tools, limits and what has been tried.
-- [Codex and Claude Code setup](https://faceful.dtheo.dev/docs/setup/): Workspace-token setup and how to confirm a connection.
-- [Repository CLI](https://faceful.dtheo.dev/docs/cli/): pnpm commands for discovery and local draft validation; not published to a package registry.
-- [Formats and limits](https://faceful.dtheo.dev/docs/capabilities/): What can be drafted and rendered, render credits and unavailable combinations.
-- [Access and approval](https://faceful.dtheo.dev/docs/security/): Agent permissions, human-only approval and what has been tested.
-- [Errors and recovery](https://faceful.dtheo.dev/docs/errors/): Conflict, approval, quota and provider-outcome guidance.
-- [About](https://faceful.dtheo.dev/about/): Project and attribution.
-- [Contact](https://faceful.dtheo.dev/contact/): Maintainer route and safe reports.
-- [Privacy](https://faceful.dtheo.dev/privacy/): Current technical data boundaries.
-- [Sitemap](https://faceful.dtheo.dev/sitemap.xml): Public pages only.
+- [API and agent documentation](https://faceful.vercel.app/docs/): Product purpose and how to check what a deployment has switched on.
+- [OpenAPI 3.1.1](https://faceful.vercel.app/openapi.json): Implemented read-only public routes.
+- [Public API guide](https://faceful.vercel.app/docs/api/): First calls, schemas, errors and caching.
+- [Use Faceful with your AI agent](https://faceful.vercel.app/docs/mcp/): The MCP endpoint, authorization, the 13 tools, limits and what has been tried.
+- [Codex and Claude Code setup](https://faceful.vercel.app/docs/setup/): Workspace-token setup and how to confirm a connection.
+- [Repository CLI](https://faceful.vercel.app/docs/cli/): pnpm commands for discovery and local draft validation; not published to a package registry.
+- [Formats and limits](https://faceful.vercel.app/docs/capabilities/): What can be drafted and rendered, render credits and unavailable combinations.
+- [Access and approval](https://faceful.vercel.app/docs/security/): Agent permissions, human-only approval and what has been tested.
+- [Errors and recovery](https://faceful.vercel.app/docs/errors/): Conflict, approval, quota and provider-outcome guidance.
+- [About](https://faceful.vercel.app/about/): Project and attribution.
+- [Contact](https://faceful.vercel.app/contact/): Maintainer route and safe reports.
+- [Privacy](https://faceful.vercel.app/privacy/): Current technical data boundaries.
+- [Sitemap](https://faceful.vercel.app/sitemap.xml): Public pages only.
 
 ## Authority and retry boundaries
 

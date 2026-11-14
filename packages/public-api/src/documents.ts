@@ -1,5 +1,5 @@
 /** Public, curated guidance only. No workspace content belongs in this registry. */
-export const publicOrigin = "https://faceful.dtheo.dev";
+export const publicOrigin = "https://faceful.vercel.app";
 /**
  * Availability differs per deployment, so these documents never assert that a private capability is on.
  * They point readers at GET /api/public/status, which is derived from the deployment's configuration.
@@ -39,7 +39,7 @@ Read [Use Faceful with your AI agent](/docs/mcp/), [setup](/docs/setup/), [API r
     summary: "Read a deployment's integration status, agent permission definitions and public documentation with typed JSON and OpenAPI.",
     markdown: `# Faceful public API reference
 
-Base URL: https://faceful.dtheo.dev
+Base URL: https://faceful.vercel.app
 
 The public API is read-only and contains product guidance, not tenant data. GET and HEAD are supported. No token, cookie or OAuth flow is required. See the [OpenAPI 3.1.1 description](/openapi.json).
 
@@ -54,7 +54,7 @@ Responses include HTTP Link relations for the public OpenAPI description (servic
 
 ## First call
 \`\`\`bash
-curl --fail --silent --show-error https://faceful.dtheo.dev/api/public/status
+curl --fail --silent --show-error https://faceful.vercel.app/api/public/status
 \`\`\`
 
 ## Versioning and deprecation
@@ -113,13 +113,13 @@ You stay in control. You create the credential or approve the sign-in yourself. 
 The server exists only where the domain engine is configured. Check before you set anything up:
 
 \`\`\`bash
-curl --fail --silent --show-error https://faceful.dtheo.dev/api/public/status
+curl --fail --silent --show-error https://faceful.vercel.app/api/public/status
 \`\`\`
 
 Continue when engine.mcp is true. When it is false, /mcp answers 503 and there is nothing to connect to. The same response reports rendering (engine.humanlikeRendering) and billing (engine.billing), and lists blockers in plain sentences.
 
 ## Endpoint
-- URL: /mcp on the origin where you use the studio, for example https://faceful.dtheo.dev/mcp.
+- URL: /mcp on the origin where you use the studio, for example https://faceful.vercel.app/mcp.
 - Transport: Streamable HTTP, stateless. Send JSON-RPC with POST. There is no session ID and no server-sent stream; GET and DELETE return 405.
 - Protocol: 2025-11-25 through @modelcontextprotocol/sdk 1.32.2, which also accepts earlier revisions such as 2025-06-18. The 2026-07-28 revision is not implemented; a client that offers it is answered with 2025-11-25.
 - Authorization: a Bearer token in the Authorization header only. Tokens in URLs or tool arguments are not read.
@@ -136,13 +136,13 @@ export FACEFUL_TOKEN='paste the token here'
 Codex CLI:
 
 \`\`\`bash
-codex mcp add faceful --url https://faceful.dtheo.dev/mcp --bearer-token-env-var FACEFUL_TOKEN
+codex mcp add faceful --url https://faceful.vercel.app/mcp --bearer-token-env-var FACEFUL_TOKEN
 \`\`\`
 
 Claude Code, in a trusted project's .mcp.json (merge it; do not overwrite other servers):
 
 \`\`\`json
-{"mcpServers":{"faceful":{"type":"http","url":"https://faceful.dtheo.dev/mcp","headers":{"Authorization":"Bearer \${FACEFUL_TOKEN}"}}}}
+{"mcpServers":{"faceful":{"type":"http","url":"https://faceful.vercel.app/mcp","headers":{"Authorization":"Bearer \${FACEFUL_TOKEN}"}}}}
 \`\`\`
 
 Start the client from the shell that has FACEFUL_TOKEN. You can revoke the token in the studio at any time; new calls with it are refused. Revoking does not undo work that was already accepted.
@@ -221,14 +221,14 @@ export FACEFUL_TOKEN='paste the token here'
 
 ## 2. Codex CLI
 \`\`\`bash
-codex mcp add faceful --url https://faceful.dtheo.dev/mcp --bearer-token-env-var FACEFUL_TOKEN
+codex mcp add faceful --url https://faceful.vercel.app/mcp --bearer-token-env-var FACEFUL_TOKEN
 \`\`\`
 
 ## 3. Claude Code
 Merge into a trusted project's .mcp.json without overwriting other entries, then start Claude Code from the shell that has FACEFUL_TOKEN:
 
 \`\`\`json
-{"mcpServers":{"faceful":{"type":"http","url":"https://faceful.dtheo.dev/mcp","headers":{"Authorization":"Bearer \${FACEFUL_TOKEN}"}}}}
+{"mcpServers":{"faceful":{"type":"http","url":"https://faceful.vercel.app/mcp","headers":{"Authorization":"Bearer \${FACEFUL_TOKEN}"}}}}
 \`\`\`
 
 If you open the studio on a different origin, use that origin's /mcp instead.

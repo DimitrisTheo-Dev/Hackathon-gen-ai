@@ -49,7 +49,7 @@ Manual creation saves supplied context and 1–3 scripts. It does not infer busi
 
 The Vercel project is linked to this private GitHub repository. The engine needs the server environment variables listed in `.env.example`; `GET /v1/health` shows what a deployment has configured. Preview builds enable `CASTROOM_ENABLE_FIXTURES=true`; the production environment forcibly excludes the fixture module. Public docs have initial HTML. Private studio routes require authentication before requesting live data and are excluded from indexing; the backend must authorize every object and operation.
 
-- [Production](https://faceful.dtheo.dev)
+- [Production](https://faceful.vercel.app) (also served at faceful.dtheo.dev)
 - [Studio development preview](https://hackathon-gen-98b7cqknx-my-team-29ecd279.vercel.app/dev/studio/) (Vercel team access; sample drafts only)
 - [Private repository](https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai)
 - [Shared contract handoff](docs/product/contract-handoff.md)

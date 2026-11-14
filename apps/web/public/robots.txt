@@ -3,4 +3,4 @@ Allow: /
 Disallow: /studio/
 Disallow: /dev/
 
-Sitemap: https://faceful.dtheo.dev/sitemap.xml
+Sitemap: https://faceful.vercel.app/sitemap.xml
