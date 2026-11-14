@@ -1,11 +1,13 @@
 import { connectionSchema } from "../../contracts/src/index.js";
 import { z } from "zod";
-import { audit, authenticate, hashToken, newAgentToken, requireHuman, requireScope, resolveContext, type Ctx, type EngineDeps } from "./access.js";
+import { audit, constantTimeEqual, hashToken, newAgentToken, requireHuman, requireScope, resolveContext, type Ctx, type EngineDeps } from "./access.js";
 import { createCheckout, createPortal, getBillingStatus, handleStripeWebhook } from "./billing.js";
+import { readBoundedText } from "./body.js";
 import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.js";
 import { directorTurn } from "./director.js";
 import { EngineError } from "./errors.js";
 import type { Planner } from "./llm.js";
+import { authenticateWithLimits, principalSubject, refuseCredential, RequestLimits } from "./ratelimit.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
 import { addDraft, addSource, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, removeSource, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign, updateBrand } from "./studio.js";
@@ -14,7 +16,6 @@ import { createFromTemplate, createSampleProject, listTemplates } from "./templa
 export interface HttpDeps extends EngineDeps {
   planner: Planner | null;
 }
-const MAX_BODY_BYTES = 256 * 1024;
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(body === undefined ? null : JSON.stringify(body), {
@@ -23,8 +24,8 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   });
 }
 async function body(request: Request): Promise<unknown> {
-  const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw new EngineError("validation_error", "The request is too large.");
+  // Bounded read: refused with 413 past 256 KB, counted in bytes, without buffering an oversized body first.
+  const text = await readBoundedText(request);
   if (!text) return {};
   try {
     return JSON.parse(text);
@@ -68,7 +69,12 @@ async function revokeConnection(deps: EngineDeps, ctx: Ctx, raw: unknown) {
   return { revoked: true as const };
 }
 
-const operations: Record<string, (deps: HttpDeps, ctx: Ctx, raw: unknown) => Promise<unknown>> = {
+type OperationHandler = (deps: HttpDeps, ctx: Ctx, raw: unknown) => Promise<unknown>;
+/**
+ * The operation table is a Map, never a plain object indexed by the URL: `operations["constructor"]` on an
+ * object literal is `Object`, which would echo the engine's dependencies (config and keys) back to the caller.
+ */
+const operations = new Map<string, OperationHandler>(Object.entries({
   start_campaign: startCampaign,
   revise_content: (deps, ctx, raw) => reviseContent(deps, ctx, raw),
   restore_version: restoreVersion,
@@ -92,10 +98,16 @@ const operations: Record<string, (deps: HttpDeps, ctx: Ctx, raw: unknown) => Pro
   create_run_grant: async () => {
     throw new EngineError("unsupported", "Unattended publishing grants are not available in this build. Approve each schedule in the studio.");
   },
-};
+} satisfies Record<string, OperationHandler>));
+/** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel"]);
 
-async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string): Promise<Response> {
-  const principal = await authenticate(deps, request.headers.get("authorization"));
+async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
+  const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
+  const subject = principalSubject(principal);
+  const policies = deps.config.rateLimit;
+  // Counted before any workspace resolution or provisioning, so an over-limit caller costs one database call.
+  await limits.enforce(policies.principal, subject);
   const ctx = await resolveContext(deps, principal, request.headers.get("x-faceful-workspace"), correlationId);
   const read = request.method === "GET";
   const post = request.method === "POST";
@@ -123,17 +135,29 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     if (!(await deps.store.update("user_state", { user_id: principal.userId }, row)).length) await deps.store.insert("user_state", row);
     return json(await getContext(deps, ctx));
   }
-  if (post && path === "/director/turn") return json(await directorTurn(deps, ctx, await body(request), deps.planner));
+  if (post && path === "/director/turn") {
+    // A model-backed turn costs money: a stricter burst limit sits in front of the per-workspace daily cap.
+    await limits.enforce(policies.director, subject);
+    return json(await directorTurn(deps, ctx, await body(request), deps.planner));
+  }
   if (post && (match = path.match(/^\/operations\/([a-z_]+)$/))) {
-    const operation = operations[match[1]];
+    const name = match[1];
+    const operation = operations.get(name);
     if (!operation) throw new EngineError("not_found", "Unknown studio operation.");
+    if (COSTLY_OPERATIONS.has(name)) await limits.enforce(policies.costly, subject);
     return json(await operation(deps, ctx, await body(request)));
   }
   throw new EngineError("not_found", "Unknown studio route.");
 }
 
-async function worker(deps: HttpDeps, request: Request, path: string): Promise<Response> {
-  authenticateWorker(deps, request.headers.get("authorization"));
+async function worker(deps: HttpDeps, request: Request, path: string, limits: RequestLimits): Promise<Response> {
+  // The render worker is a trusted service credential and is not throttled; refused credentials are.
+  try {
+    authenticateWorker(deps, request.headers.get("authorization"));
+  } catch (error) {
+    if (error instanceof EngineError) await refuseCredential(limits, deps.config.rateLimit, error);
+    throw error;
+  }
   if (request.method !== "POST") throw new EngineError("not_found", "Unknown worker route.");
   let match: RegExpMatchArray | null;
   if (path === "/render/claim") return json(await workerClaim(deps, await body(request)));
@@ -167,19 +191,24 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
   if (!pathname.startsWith("/v1/")) return null;
   const correlationId = crypto.randomUUID();
   const started = Date.now();
+  const limits = new RequestLimits(deps.store, deps.config.rateLimit, request.headers);
   let response: Response;
   try {
     if (pathname === "/v1/health" && request.method === "GET") response = json(health(deps));
     else if (pathname === "/v1/stripe/webhook" && request.method === "POST") {
+      // Not rate limited: every delivery is signature-verified, and dropping one would lose a billing event.
       // Signature verification needs the exact bytes Stripe sent, so the body is read as text and never re-serialised.
       const result = await handleStripeWebhook(deps, await request.text(), request.headers.get("stripe-signature"));
       response = json(result.body, result.status);
     } else if (pathname === "/v1/cron/tick") {
-      const supplied = request.headers.get("authorization");
-      if (!deps.config.cronSecret || supplied !== `Bearer ${deps.config.cronSecret}`) throw new EngineError("unauthenticated", "Scheduler credential required.");
+      // An authorized scheduler is not rate limited; a wrong secret counts as a failed credential.
+      const cronSecret = deps.config.cronSecret;
+      if (!cronSecret || !constantTimeEqual(request.headers.get("authorization") ?? "", `Bearer ${cronSecret}`)) {
+        await refuseCredential(limits, deps.config.rateLimit, new EngineError("unauthenticated", "Scheduler credential required."));
+      }
       response = json({ swept: await sweepRenderJobs(deps), publishing: await processDuePublishJobs(deps) });
-    } else if (pathname.startsWith("/v1/studio/")) response = await studio(deps, request, pathname.slice("/v1/studio".length), correlationId);
-    else if (pathname.startsWith("/v1/worker/")) response = await worker(deps, request, pathname.slice("/v1/worker".length));
+    } else if (pathname.startsWith("/v1/studio/")) response = await studio(deps, request, pathname.slice("/v1/studio".length), correlationId, limits);
+    else if (pathname.startsWith("/v1/worker/")) response = await worker(deps, request, pathname.slice("/v1/worker".length), limits);
     else throw new EngineError("not_found", "Unknown API route.");
   } catch (error) {
     if (error instanceof EngineError) {
@@ -192,6 +221,8 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
       response = json(new EngineError("unknown_outcome", `Something went wrong on our side. Check the current status before retrying. Reference: ${correlationId}`).toBody(), 500);
     }
   }
+  // RateLimit-Policy / RateLimit describe only the limits this request was actually counted against.
+  for (const [name, value] of Object.entries(limits.headers())) response.headers.set(name, value);
   response.headers.set("X-Correlation-Id", correlationId);
   // Structured access log: route and outcome only. No bodies, prompts, tokens or query strings.
   console.log(JSON.stringify({ level: "info", event: "request", correlationId, method: request.method, path: pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, ":id"), status: response.status, ms: Date.now() - started }));

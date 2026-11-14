@@ -7,6 +7,7 @@ import { EngineError } from "../packages/engine/src/errors";
 import { handleEngineRequest, type HttpDeps } from "../packages/engine/src/http";
 import { renderContent, workerClaim, workerComplete, workerUploadUrl } from "../packages/engine/src/render";
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, sweepPublishJobs, verifySubmittedPublishJobs } from "../packages/engine/src/schedule";
+import { isGoogleUploadUrl } from "../packages/engine/src/providers/youtube";
 import { MemoryStore } from "../packages/engine/src/store-memory";
 import { getCampaign, getContext, reviseContent, startCampaign } from "../packages/engine/src/studio";
 
@@ -37,6 +38,8 @@ function google() {
     channels: new Map<string, { id: string; title: string } | null | "disabled">([["minted-access-1", { id: "UC_channel_1", title: "BeWell Official" }]]),
     video: { uploadStatus: "uploaded", privacyStatus: "private" } as Record<string, string>,
     sessionStatus: 200,
+    /** Overrides the upload session URL Google hands back (to prove a foreign host is never sent the video). */
+    sessionLocation: null as string | null,
     putBehaviour: "ok" as "ok" | "network_then_unknown" | "interrupted",
     sessions: [] as Array<{ metadata: any; headers: Record<string, string>; token: string }>,
     puts: 0,
@@ -72,12 +75,13 @@ function google() {
       if (channel === undefined) return json({ error: { code: 401, status: "UNAUTHENTICATED", errors: [{ reason: "authError" }] } }, 401);
       return json(channel ? { items: [{ id: channel.id, snippet: { title: channel.title } }] } : { items: [] });
     }
-    if (url.startsWith("https://www.googleapis.com/upload/youtube/v3/videos")) {
+    if (url.startsWith("https://www.googleapis.com/upload/youtube/v3/videos") && method === "POST") {
       if (state.sessionStatus !== 200) return json({ error: { code: state.sessionStatus, errors: [{ reason: "backendError" }] } }, state.sessionStatus);
       state.sessions.push({ metadata: JSON.parse(String(init.body)), headers, token: bearer });
-      return new Response(null, { status: 200, headers: { Location: `https://upload.youtube.test/session/${state.sessions.length}` } });
+      // The shape Google returns: the session lives on the same upload host, identified by upload_id.
+      return new Response(null, { status: 200, headers: { Location: state.sessionLocation ?? `https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=unit-session-${state.sessions.length}` } });
     }
-    if (url.startsWith("https://upload.youtube.test/session/")) {
+    if (url.startsWith("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=") && method === "PUT") {
       const probe = headers["content-range"]?.startsWith("bytes */");
       if (!probe) {
         state.puts++;
@@ -309,6 +313,22 @@ test("approve → commit uploads the approved video once, private with publishAt
   assert.equal(google.sessions.length, 1);
   assert.equal(google.puts, 1);
   assert.equal((await deps.store.select("publish_jobs", {})).length, 1);
+});
+
+test("the video is only ever sent to a Google upload host, whatever upload session URL comes back", async () => {
+  assert.equal(isGoogleUploadUrl("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=x"), true);
+  for (const foreign of ["https://evil.example/upload", "http://www.googleapis.com/upload", "https://googleapis.com.evil.example/u", "https://user:pw@www.googleapis.com/u", "not a url"])
+    assert.equal(isGoogleUploadUrl(foreign), false, foreign);
+  const kit = await readyToPublish();
+  const { deps, ctx, manifest, google } = kit;
+  google.sessionLocation = "https://collector.evil.example/session/1";
+  await approveSchedule(deps, ctx, { manifestId: manifest.id, hash: manifest.hash, operationKey: key() });
+  await commitSchedule(deps, ctx, { manifestId: manifest.id, hash: manifest.hash, operationKey: key() });
+  assert.equal(google.sessions.length, 1, "the session was opened with Google");
+  assert.equal(google.puts, 0, "no bytes were sent to the foreign host");
+  assert.ok(!google.calls.some((call) => call.includes("evil.example")), "the foreign host was never contacted");
+  const job = (await deps.store.select("publish_jobs", {}))[0];
+  assert.notEqual(job.state, "submitted", "nothing is reported as uploaded");
 });
 
 test("unlisted posts upload with that privacy and no release time, and are never called published", async () => {

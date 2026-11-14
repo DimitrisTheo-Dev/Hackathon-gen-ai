@@ -1,5 +1,5 @@
 import { templateInputSchema, templateSchema, type Campaign, type Template } from "../../contracts/src/index.js";
-import { idempotent, type Ctx, type EngineDeps } from "./access.js";
+import { idempotent, requireScope, type Ctx, type EngineDeps } from "./access.js";
 import { EngineError } from "./errors.js";
 import { createProject, parse } from "./studio.js";
 
@@ -102,14 +102,17 @@ export function listTemplates(): Template[] {
 }
 
 export async function createFromTemplate(deps: EngineDeps, ctx: Ctx, raw: unknown): Promise<Campaign> {
+  // Permission first, so a caller who cannot edit never writes an idempotency record.
+  requireScope(ctx, "content:edit");
   const input = parse(templateInputSchema, raw);
   const template = definitions.find((entry) => entry.id === input.templateId);
   if (!template) throw new EngineError("not_found", "That template is not available.");
-  const items = template.items[input.language];
+  // Own keys only: a language such as "constructor" must not resolve to an inherited property.
+  const items = Object.hasOwn(template.items, input.language) ? template.items[input.language] : undefined;
   if (!items) throw new EngineError("validation_error", `This template is available in: ${Object.keys(template.items).join(", ")}.`);
   const inputs: Record<string, string> = {};
   for (const field of template.inputs) {
-    const value = (input.inputs[field.key] ?? "").trim();
+    const value = (Object.hasOwn(input.inputs, field.key) ? input.inputs[field.key] : "").trim();
     if (field.required && !value) throw new EngineError("validation_error", `“${field.label}” is needed for this template.`);
     if (value.length > field.maxLength) throw new EngineError("validation_error", `“${field.label}” is too long.`);
     // Template inputs are inserted as plain words; braces cannot introduce new placeholders.
@@ -141,6 +144,7 @@ const BEWELL_SOURCE = {
 
 /** One-click seeded scenario. Marked `origin: "sample"` everywhere so it is never mistaken for the user's own or live-generated work. */
 export async function createSampleProject(deps: EngineDeps, ctx: Ctx, raw: unknown): Promise<Campaign> {
+  requireScope(ctx, "content:edit");
   const input = parse(templateInputSchema.pick({ operationKey: true }).strict(), raw);
   return idempotent(deps, ctx, "create_sample_project", input.operationKey, input, async () => {
     const now = deps.now().toISOString();

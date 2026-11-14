@@ -15,6 +15,9 @@ declare const __FIXTURE_ENABLED__: boolean;
 const loadAuthApp = () => import("./AuthApp");
 const AuthApp = lazy(loadAuthApp);
 const ClaudeVpsPage = lazy(() => import("./claude/ClaudeVpsPage"));
+// A presentation surface for the one-minute pitch: noindex, not linked from the product.
+const PitchPage = lazy(() => import("./pitch/PitchPage"));
+const pitchRoute = /^\/pitch(\/|$)/.test(location.pathname);
 const claudeRoute = /^\/claude-login-test(\/|$)/.test(location.pathname);
 // `/oauth/consent` is where an external agent's OAuth request is reviewed; it shares the signed-in shell.
 const privateRoute = /^\/(studio|dev|oauth)(\/|$)/.test(location.pathname);
@@ -30,7 +33,7 @@ if (privateRoute) {
     if (__FIXTURE_ENABLED__ && location.pathname.startsWith("/dev/studio")) void import("./data/fixture");
   }
 }
-createRoot(document.getElementById("root")!).render(claudeRoute ? <Suspense fallback={<div className="loading-page"><p>Opening Claude Code…</p></div>}><ClaudeVpsPage /></Suspense> : privateRoute ? <><Suspense fallback={null}><AuthApp /></Suspense><BootLayer /></> : <LandingPage />);
+createRoot(document.getElementById("root")!).render(pitchRoute ? <Suspense fallback={null}><PitchPage /></Suspense> : claudeRoute ? <Suspense fallback={<div className="loading-page"><p>Opening Claude Code…</p></div>}><ClaudeVpsPage /></Suspense> : privateRoute ? <><Suspense fallback={null}><AuthApp /></Suspense><BootLayer /></> : <LandingPage />);
 
 // Installable app: the worker caches only immutable static assets and an offline page (see public/sw.js).
 // Skipped under automation so browser tests always exercise the network path.

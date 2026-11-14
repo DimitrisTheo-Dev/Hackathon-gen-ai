@@ -51,6 +51,14 @@
     {
       "source": "/claude-login-test/",
       "destination": "/studio/index.html"
+    },
+    {
+      "source": "/pitch",
+      "destination": "/studio/index.html"
+    },
+    {
+      "source": "/pitch/",
+      "destination": "/studio/index.html"
     }
   ],
   "headers": [
@@ -71,7 +79,15 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=()"
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
         },
         {
           "key": "Content-Security-Policy",
@@ -204,12 +220,38 @@
           "value": "noindex, nofollow"
         }
       ]
+    },
+    {
+      "source": "/pitch",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/pitch/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ],
   "proxy": {
     "entrypoint": "proxy.ts",
     "matcher": [
-      "/((?!assets|studio|dev|oauth|v1|api/v1|api/engine|api/mcp|claude-login-test).*)"
+      "/((?!assets|studio|dev|oauth|v1|api/v1|api/engine|api/mcp|claude-login-test|pitch).*)"
     ]
   },
   "installCommand": "corepack pnpm install --frozen-lockfile",

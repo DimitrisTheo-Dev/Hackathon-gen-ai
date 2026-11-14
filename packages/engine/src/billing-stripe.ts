@@ -39,6 +39,11 @@ export interface GatewaySubscription {
   /** Unix seconds. On current API versions the period lives on the subscription items. */
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
+  /**
+   * Unix seconds at which Stripe will end the subscription, or null. Newer API versions (e.g. 2026-10-28) record a
+   * Customer Portal cancellation here — `cancel_at` = the period end — and leave `cancel_at_period_end` false.
+   */
+  cancelAt?: number | null;
 }
 export interface GatewayEvent {
   id: string;
@@ -176,7 +181,8 @@ export function createStripeGateway(secretKey: string): StripeGateway {
         status: subscription.status,
         priceId: items[0]?.price?.id ?? null,
         currentPeriodEnd: periodEnds.length ? Math.max(...periodEnds) : null,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+        cancelAt: typeof subscription.cancel_at === "number" ? subscription.cancel_at : null,
       };
     },
   };
@@ -396,13 +402,19 @@ async function syncSubscription(deps: EngineDeps, config: StripeConfig, gateway:
   if (status === "free" && tracked && tracked !== current.id) return { outcome: "ignored_superseded_subscription", subscription: current };
   const planKey = Object.entries(config.prices).find(([, priceId]) => priceId === current.priceId)?.[0] ?? null;
   const ended = status === "free";
+  // A scheduled cancellation is either the legacy flag or a `cancel_at` time (how newer API versions record a
+  // portal cancellation). The status stays whatever Stripe says — still "active" — until Stripe ends it; the
+  // stored end date is when access actually stops.
+  const cancelAt = typeof current.cancelAt === "number" ? current.cancelAt : null;
+  const scheduledToEnd = current.cancelAtPeriodEnd || cancelAt !== null;
+  const endsAt = cancelAt ?? current.currentPeriodEnd;
   await upsertBillingState(deps, orgId, {
     status,
     plan_key: ended ? null : planKey,
     stripe_subscription_id: ended ? null : current.id,
     stripe_price_id: ended ? null : current.priceId,
-    current_period_end: !ended && current.currentPeriodEnd ? new Date(current.currentPeriodEnd * 1000).toISOString() : null,
-    cancel_at_period_end: !ended && current.cancelAtPeriodEnd,
+    current_period_end: !ended && endsAt ? new Date(endsAt * 1000).toISOString() : null,
+    cancel_at_period_end: !ended && scheduledToEnd,
     last_event_created: lastEvent,
   });
   return { outcome: `subscription_${status}`, subscription: current };
