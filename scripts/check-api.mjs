@@ -1,5 +1,8 @@
 // Runs the compiled Vercel Function entries in plain Node, exactly as the platform loads them (NodeNext ESM,
 // explicit .js specifiers). Catches unresolved imports before a deployment does. No network, no real credentials.
+// Deterministic regardless of where the build runs: provider credentials present in the build environment
+// (Stripe, renderer, model) must not change what this structural check expects.
+for (const key of Object.keys(process.env)) if (/^(STRIPE_|RENDER_|HUMANLIKE_|ANTHROPIC_|AI_GATEWAY_|DIRECTOR_|CRON_|AVATAR_)/.test(key)) delete process.env[key];
 process.env.SUPABASE_URL = 'https://example.supabase.co';
 process.env.SUPABASE_SECRET_KEY = 'sb_secret_build_check_only';
 process.env.APP_BASE_URL = 'https://faceful.example';

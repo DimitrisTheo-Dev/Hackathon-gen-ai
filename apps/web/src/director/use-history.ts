@@ -24,7 +24,15 @@ export function useDirectorHistory(context:StudioContext|null,campaign:Campaign|
     catch{setErrors(prev=>({...prev,[key]:'Conversation could not sync. Your messages remain in this tab.'}));}
   }
   async function retry(){for(const e of all[key]??[])await record(e);}
-  return {entries:all[key]??[],error:errors[key]??'',record,retry};
+  /** Records a turn under another project — used when a request creates the project it belongs to. */
+  async function recordFor(campaignId:string,entry:DirectorEntry){
+    if(!context)return;
+    const target=`${context.workspace.id}/${campaignId}`;
+    setAll(prev=>({...prev,[target]:mergeEntries([...(prev[target]??[]),entry])}));
+    try{await store.save(context.workspace.id,campaignId,entry);setErrors(prev=>({...prev,[target]:''}));}
+    catch{setErrors(prev=>({...prev,[target]:'Conversation could not sync. Your messages remain in this tab.'}));}
+  }
+  return {entries:all[key]??[],error:errors[key]??'',record,retry,recordFor};
 }
 
 function mergeEntries(entries:DirectorEntry[]){const result=new Map<string,DirectorEntry>();for(const entry of entries)result.set(entry.id,mergeDirectorEntry(result.get(entry.id),entry));return [...result.values()].sort((a,b)=>a.at.localeCompare(b.at));}

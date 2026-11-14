@@ -6,6 +6,7 @@ import { emailAuthError, normalizeEmailCode, requestEmailCode, verifyEmailCode }
 import type { StudioClient } from "./data/client";
 import { createLiveClient } from "./data/live";
 const Studio = lazy(() => import("./views/Studio").then((m) => ({ default: m.Studio })));
+const OAuthConsent = lazy(() => import("./views/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
 import { Mark, Notice } from "./components/ui";
 
 declare const __FIXTURE_ENABLED__: boolean;
@@ -18,7 +19,7 @@ export default function AuthApp() {
   const [email, setEmail] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
   const [code, setCode] = useState("");
-  const [busy, setBusy] = useState<"request" | "verify" | "signout" | null>(null);
+  const [busy, setBusy] = useState<"request" | "verify" | "signout" | "google" | null>(null);
   const [resendAt, setResendAt] = useState(0);
   const [verifyRetryAt, setVerifyRetryAt] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -26,7 +27,9 @@ export default function AuthApp() {
   const operationPending = useRef(false);
   const secondsRemaining = Math.max(0, Math.ceil((resendAt - now) / 1000));
   const verifySecondsRemaining = Math.max(0, Math.ceil((verifyRetryAt - now) / 1000));
-  const isStudio = location.pathname.startsWith("/studio") || isFixture;
+  // An external agent's OAuth request lands here; the person signs in (if needed) and answers it.
+  const isConsent = location.pathname.startsWith("/oauth/consent");
+  const isStudio = location.pathname.startsWith("/studio") || isFixture || isConsent;
 
   useEffect(() => {
     const deadline = Math.max(resendAt, verifyRetryAt);
@@ -80,8 +83,20 @@ export default function AuthApp() {
   }, [isStudio, isFixture]);
 
   useEffect(() => {
-    if (!session || isFixture) return;
-    const origin = import.meta.env.VITE_CASTROOM_API_URL;
+    // A provider can send the person back with an error instead of a session; say so and clean the URL.
+    const params = new URLSearchParams(location.hash.startsWith("#") ? location.hash.slice(1) : "");
+    const query = new URLSearchParams(location.search);
+    if (!params.has("error") && !query.has("error")) return;
+    setError("Sign-in with Google didn’t complete. Try again, or use an email code instead.");
+    query.delete("error"); query.delete("error_code"); query.delete("error_description");
+    const rest = query.toString();
+    history.replaceState(history.state, "", `${location.pathname}${rest ? `?${rest}` : ""}`);
+  }, []);
+
+  useEffect(() => {
+    if (!session || isFixture || isConsent) return;
+    // Same-origin by default: the studio and its API ship as one deployment. No fixture is ever substituted.
+    const origin = import.meta.env.VITE_CASTROOM_API_URL || location.origin;
     if (origin)
       try {
         setClient(createLiveClient(origin, async () => {
@@ -91,8 +106,24 @@ export default function AuthApp() {
       } catch {
         setError("The studio API is not configured correctly. Contact the workspace owner.");
       }
-  }, [session, isFixture]);
+  }, [session, isFixture, isConsent]);
 
+  async function signInWithGoogle() {
+    if (!supabase || operationPending.current) return;
+    operationPending.current = true; setBusy("google"); setError(""); setStatus("");
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        // Return to the consent request when there is one; otherwise to the studio.
+        options: { redirectTo: isConsent ? location.href : `${location.origin}/studio/` },
+      });
+      if (error) throw error;
+      // The browser is leaving for Google. The button stays busy until it does.
+    } catch {
+      setError("We couldn’t start Google sign-in. Try again, or use an email code instead.");
+      operationPending.current = false; setBusy(null);
+    }
+  }
   function cooldown(seconds: number) {
     const timestamp = Date.now();
     setNow(timestamp); setResendAt(timestamp + seconds * 1000);
@@ -105,7 +136,7 @@ export default function AuthApp() {
       const result = await requestEmailCode(supabase.auth, pendingEmail || email);
       setPendingEmail(result.email); setEmail(result.email); setCode("");
       cooldown(result.retryAfterSeconds);
-      setStatus("Code requested. Check your inbox and spam folder, then enter the latest code.");
+      setStatus("Code sent.");
     } catch (error) {
       const failure = emailAuthError(error, "request");
       setError(failure.message);
@@ -143,6 +174,12 @@ export default function AuthApp() {
     setPendingEmail(""); setCode(""); setError(""); setStatus("");
   }
 
+  if (isConsent && session)
+    return (
+      <Suspense fallback={<div className="loading-page"><Mark /><p>Checking the connection request…</p></div>}>
+        <OAuthConsent authorizationId={new URLSearchParams(location.search).get("authorization_id") ?? ""} email={session.user.email ?? null} onSignOut={() => void signOut()} />
+      </Suspense>
+    );
   if (client)
     return <>
       {error && <div className="auth-feedback"><Notice error>{error}</Notice></div>}
@@ -155,9 +192,9 @@ export default function AuthApp() {
       <a className="wordmark" href="/"><Mark />Faceful</a>
       <main className="auth-card">
         <span className="auth-symbol">{pendingEmail ? <Mail size={24} /> : <LockKeyhole size={24} />}</span>
-        <h1>{loading ? "Opening your workspace…" : session ? "You’re signed in" : pendingEmail ? "Check your email" : "Your next campaign starts here."}</h1>
+        <h1>{loading ? "Opening your workspace…" : session ? "You’re signed in" : pendingEmail ? "Check your email" : isConsent ? "Sign in to connect your agent" : "Your next campaign starts here."}</h1>
         {loading ? <LoaderCircle className="spin" aria-label="Checking sign-in" /> : session ? <>
-          <p>Your email is verified. Workspace access is separate from your account. The shared engine has not been connected to this deployment yet.</p>
+          <p>Your email is verified, but the studio could not be opened from this address. Nothing was lost; no sample content was substituted.</p>
           <a className="button secondary" href="/docs/">View integration status</a>
           <button className="text-button" disabled={busy === "signout"} onClick={() => void signOut()}>{busy === "signout" ? "Signing out…" : "Sign out"}</button>
         </> : <>
@@ -174,16 +211,18 @@ export default function AuthApp() {
               <button className="text-button" type="button" disabled={busy !== null} onClick={changeEmail}>Change email</button>
             </div>
           </> : <>
-            <p>Sign in or create an account with your email. We’ll request a one-time code.</p>
+            <p>{isConsent ? "An application asked to work in your Faceful workspace. Sign in to review its request." : "Sign in or create an account with your email. We’ll request a one-time code."}</p>
             <form onSubmit={sendCode} aria-busy={busy === "request"}>
               <label htmlFor="email">Email address</label>
               <input id="email" name="email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required disabled={busy !== null} />
               <button className="button primary" disabled={busy !== null || !supabase || secondsRemaining > 0}>{busy === "request" ? "Requesting code…" : secondsRemaining > 0 ? `Request a code in ${secondsRemaining}s` : "Continue with email"}</button>
             </form>
+            <p className="auth-divider" aria-hidden="true"><span>or</span></p>
+            <button className="button secondary auth-provider" type="button" disabled={busy !== null || !supabase} onClick={() => void signInWithGoogle()}>{busy === "google" ? "Opening Google…" : "Continue with Google"}</button>
           </>}
-          <small>Creating an account doesn’t grant access to a workspace or authorize publishing. Agent connections are separate.</small>
         </>}
-        {status && !session && <p className="auth-status" role="status">{status}</p>}
+        {/* The "Check your email" heading is the visible confirmation; this only announces it to screen readers. */}
+        <p className="sr-only" role="status">{session ? "" : status}</p>
         {error && <Notice error>{error}</Notice>}
         <a className="quiet-link" href="/docs/setup/"><ArrowLeft size={14} /> Setup instructions</a>
       </main>

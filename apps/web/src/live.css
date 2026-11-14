@@ -1,0 +1,106 @@
+/*
+ * Surfaces added when the studio was connected to the live engine: first-run conversation,
+ * templates, versions, billing, the agent consent screen and the workspace switcher.
+ * Tokens come from /design.css; no new colors, radii or type sizes are introduced.
+ */
+@layer views {
+  /* First-run home: the conversation before a project exists */
+  .home-turn { inline-size: min(100%, 640px); text-align: start; display: grid; gap: 8px; }
+  .home-turn:empty { display: none; }
+  .home-turn p { margin: 0; max-width: none; font-size: 13px; line-height: 1.7; color: var(--ink-secondary); overflow-wrap: anywhere; white-space: pre-line; }
+  .home-turn-request { padding: 10px 12px; border-radius: 12px; background: var(--subtle); }
+  .home-turn-request small { display: block; font-size: 11px; color: var(--text-secondary); }
+  .home-turn-working { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+  .home-suggestions { justify-content: center; margin: 0; }
+  .home-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; }
+  .home-actions .text-button { min-block-size: 32px; }
+
+  /* Director: found content and follow-up chips */
+  .director-assets { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+  .director-assets .text-button { inline-size: 100%; display: grid; gap: 2px; text-align: start; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-block-size: 44px; }
+  .director-assets .text-button span { font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+  .director-assets .text-button small { font-size: 11px; color: var(--text-secondary); }
+  .director-followups { margin: 12px 0 0; }
+  .director-response > p { white-space: pre-line; overflow-wrap: anywhere; }
+
+  /* Seeded demonstration content is always labelled */
+  .sample-chip { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 5px; background: var(--warning-surface); color: var(--warning-ink); font-size: 11px; line-height: 1.6; white-space: nowrap; flex: 0 0 auto; }
+
+  /* Status chips for states the engine reports */
+  .status-chip.ready, .status-chip.scheduled { background: var(--positive-surface); color: var(--positive-ink); }
+  .status-chip.queued, .status-chip.rendering { background: var(--warning-surface); color: var(--warning-ink); }
+  .render-blocker { line-height: 1.6; }
+
+  /* Versions */
+  .version-panel { display: grid; gap: 12px; padding-block: 6px 18px; }
+  .version-intro, .version-loading { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+  .version-blocked, .version-status { margin: 0; font-size: 12px; line-height: 1.6; color: var(--warning-ink); }
+  .version-status { color: var(--positive-ink); }
+  .version-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .version-list li { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  .version-list li.is-current { border-color: var(--ink); }
+  .version-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .version-heading strong { font-size: 13px; font-weight: 550; font-variant-numeric: tabular-nums; }
+  .version-media { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--positive-ink); }
+  .version-list small { font-size: 11px; line-height: 1.6; color: var(--text-secondary); }
+  .version-list summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); min-block-size: 32px; align-content: center; }
+  .version-script { margin: 4px 0 0; font-size: 12px; line-height: 1.7; color: var(--ink-secondary); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+  .version-list .button { justify-self: start; font-size: 12px; min-block-size: 36px; }
+
+  /* Templates */
+  .template-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .template-option { inline-size: 100%; display: grid; gap: 4px; text-align: start; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); min-block-size: 44px; }
+  .template-option strong { font-size: 14px; font-weight: 550; }
+  .template-option span { font-size: 13px; line-height: 1.6; color: var(--ink-secondary); }
+  .template-option small { font-size: 11px; line-height: 1.6; color: var(--text-secondary); }
+  .template-form > p { font-size: 13px; line-height: 1.7; color: var(--text-secondary); margin: 0; }
+
+  /* Billing */
+  .billing-view { display: grid; gap: 4px; align-content: start; }
+  .billing-view section { display: grid; gap: 14px; justify-items: start; }
+  .billing-view .button { gap: 6px; }
+  .billing-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 24px 0 0; }
+  .billing-facts > div { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); display: grid; gap: 6px; align-content: start; }
+  .billing-facts dt { font-size: 12px; color: var(--text-secondary); }
+  .billing-facts dd { margin: 0; font-size: 15px; font-weight: 550; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+  .billing-facts dd small { font-size: 11px; font-weight: 400; color: var(--text-secondary); }
+  .billing-number { font-size: 26px; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .billing-confirming { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.6; color: var(--warning-ink); background: var(--warning-surface); padding: 10px 12px; border-radius: 10px; margin: 16px 0 0; }
+  .billing-mode { margin: 0; font-size: 11px; color: var(--text-secondary); }
+  .billing-view .success-note { margin-block-start: 16px; }
+
+  /* Workspace switcher: only rendered when there is more than one workspace */
+  .workspace-select { flex: 0 0 auto; max-inline-size: 44%; min-block-size: 32px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 12px; color: var(--ink); text-overflow: ellipsis; }
+
+  /* Sign-in additions and the agent consent screen */
+  .auth-divider { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 12px; color: var(--text-muted); }
+  .auth-divider::before, .auth-divider::after { content: ""; flex: 1; block-size: 1px; background: var(--border); }
+  .auth-provider { min-block-size: 40px; justify-content: center; }
+  .auth-card > .button { justify-content: center; min-block-size: 40px; }
+  .consent-card { inline-size: min(520px, 100%); }
+  .consent-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .consent-lists h2 { font-size: 12px; font-weight: 550; margin: 0 0 8px; }
+  .consent-lists ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .consent-lists li { display: flex; align-items: start; gap: 8px; font-size: 12px; line-height: 1.6; color: var(--ink-secondary); }
+  .consent-lists svg { flex: 0 0 auto; margin-block-start: 2px; color: var(--text-secondary); }
+  .consent-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .consent-actions .button { flex: 1 1 140px; justify-content: center; min-block-size: 44px; }
+}
+@layer responsive {
+  @media (hover: hover) and (pointer: fine) {
+    .template-option:hover, .director-assets .text-button:hover { background: var(--subtle); }
+  }
+  @media (pointer: coarse) {
+    .home-actions .text-button, .version-list summary, .version-list .button, .workspace-select { min-block-size: 44px; }
+    .workspace-select { font-size: 16px; }
+  }
+  @media (max-width: 560px) {
+    .consent-lists { grid-template-columns: 1fr; }
+    .billing-view { padding: 24px 20px; }
+    .billing-facts { grid-template-columns: 1fr 1fr; }
+    .home-actions { gap: 0 12px; }
+  }
+  @media (max-width: 360px) {
+    .billing-facts { grid-template-columns: 1fr; }
+  }
+}

@@ -10,9 +10,20 @@ import {
   manifestSchema,
   operationSchema,
   reviseInputSchema,
+  directorTurnInputSchema,
+  directorTurnResultSchema,
+  restoreInputSchema,
+  templateInputSchema,
+  templateSchema,
+  versionSchema,
 } from "@castroom/contracts";
 import {
   ApiError,
+  billingStatusSchema,
+  checkoutInputSchema,
+  checkoutResultSchema,
+  portalResultSchema,
+  sampleInputSchema,
   cancelInputSchema,
   connectionResultSchema,
   createConnectionInputSchema,
@@ -58,6 +69,7 @@ export function createLiveClient(
     path: string,
     schema: z.ZodType<T>,
     body?: unknown,
+    options: { timeoutMs?: number; headers?: Record<string, string> } = {},
   ): Promise<T> {
     const token = await getToken();
     if (!token)
@@ -73,12 +85,13 @@ export function createLiveClient(
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+          ...options.headers,
         },
         body: body === undefined ? undefined : JSON.stringify(body),
         credentials: "omit",
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 15_000),
       });
     } catch {
       if (body !== undefined)
@@ -213,6 +226,55 @@ export function createLiveClient(
         "/operations/create_run_grant",
         grantResultSchema,
         validate(grantInputSchema, input),
+      ),
+    // A model may take a while to draft; the engine function allows up to two minutes.
+    directorTurn: (input) =>
+      request(
+        "/director/turn",
+        directorTurnResultSchema.refine((value) => !value.created || value.created.mode === "live"),
+        validate(directorTurnInputSchema, input),
+        { timeoutMs: 110_000 },
+      ),
+    listTemplates: () => request("/templates", z.array(templateSchema)),
+    createFromTemplate: (input) =>
+      request(
+        "/operations/create_from_template",
+        campaignSchema.refine((value) => value.mode === "live"),
+        validate(templateInputSchema, input),
+      ),
+    createSampleProject: (input) =>
+      request(
+        "/operations/create_sample_project",
+        campaignSchema.refine((value) => value.mode === "live" && value.origin === "sample"),
+        validate(sampleInputSchema, input),
+      ),
+    listVersions: (contentId) =>
+      request(
+        `/items/${encodeURIComponent(validate(idSchema, contentId))}/versions`,
+        z.array(versionSchema),
+      ),
+    restoreVersion: (input) =>
+      request(
+        "/operations/restore_version",
+        contentSchema,
+        validate(restoreInputSchema, input),
+      ),
+    getBilling: () => request("/billing", billingStatusSchema),
+    createCheckout: (input) =>
+      request(
+        "/operations/create_checkout",
+        checkoutResultSchema,
+        validate(checkoutInputSchema, input),
+        { timeoutMs: 30_000 },
+      ),
+    createPortal: () =>
+      request("/operations/create_portal", portalResultSchema, {}, { timeoutMs: 30_000 }),
+    selectWorkspace: (workspaceId) =>
+      request(
+        "/workspace/select",
+        contextSchema.refine((value) => value.capabilities.mode === "live"),
+        {},
+        { headers: { "X-Faceful-Workspace": validate(idSchema, workspaceId) } },
       ),
   };
 }

@@ -12,6 +12,12 @@ import {
   type ScheduleManifest,
   type StudioContext,
   type StudioError,
+  type ContentVersion,
+  type DirectorTurnInput,
+  type DirectorTurnResult,
+  type RestoreInput,
+  type Template,
+  type TemplateInput,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -78,6 +84,39 @@ export const grantResultSchema = z.object({
   id: idSchema,
   expiresAt: instantSchema,
 });
+/** Mirrors the engine's billing read model. Entitlement is whatever the server reports, never a redirect. */
+export const billingStatusSchema = z.object({
+  organizationId: idSchema,
+  mode: z.enum(["sandbox", "not_configured"]),
+  configurationProblem: z.string().nullable(),
+  status: z.enum(["not_configured", "free", "checkout_pending", "trialing", "active", "past_due", "cancelled", "incomplete", "unpaid", "paused"]),
+  planKey: z.string().nullable(),
+  currentPeriodEnd: instantSchema.nullable(),
+  cancelAtPeriodEnd: z.boolean(),
+  creditBalance: z.number().int(),
+  renderCreditCost: z.number().int().positive(),
+  rendersRemaining: z.number().int().nonnegative(),
+  plans: z.array(z.object({ key: z.string(), creditsPerPeriod: z.number().int().positive() })),
+  canManage: z.boolean(),
+  canCheckout: z.boolean(),
+  hasCustomer: z.boolean(),
+});
+/** `confirmationGranted` is literal true: checkout is only ever requested after an explicit click. */
+export const checkoutInputSchema = z
+  .object({ priceKey: z.string().min(1).max(40), confirmationGranted: z.literal(true), operationKey: z.uuid() })
+  .strict();
+export const checkoutResultSchema = z.object({
+  checkoutUrl: z.url({ protocol: /^https$/, hostname: /(^|\.)stripe\.com$/ }),
+  sessionId: z.string().min(1),
+  status: z.literal("created"),
+});
+export const portalResultSchema = z.object({ portalUrl: z.url({ protocol: /^https$/, hostname: /(^|\.)stripe\.com$/ }) });
+export const sampleInputSchema = z.object({ operationKey: z.uuid() }).strict();
+export type BillingStatus = z.infer<typeof billingStatusSchema>;
+export type CheckoutInput = z.infer<typeof checkoutInputSchema>;
+export type CheckoutResult = z.infer<typeof checkoutResultSchema>;
+export type PortalResult = z.infer<typeof portalResultSchema>;
+export type SampleInput = z.infer<typeof sampleInputSchema>;
 export type RenderInput = z.infer<typeof renderInputSchema>;
 export type PrepareInput = z.infer<typeof prepareInputSchema>;
 export type ManifestInput = z.infer<typeof manifestInputSchema>;
@@ -102,6 +141,17 @@ export interface StudioClient {
   createConnection(input: CreateConnectionInput): Promise<ConnectionResult>;
   revokeConnection(input: RevokeConnectionInput): Promise<void>;
   createGrant(input: GrantInput): Promise<GrantResult>;
+  /** One conversational turn. Drafting may be saved; nothing is rendered, approved, charged or published. */
+  directorTurn(input: DirectorTurnInput): Promise<DirectorTurnResult>;
+  listTemplates(): Promise<Template[]>;
+  createFromTemplate(input: TemplateInput): Promise<Campaign>;
+  createSampleProject(input: SampleInput): Promise<Campaign>;
+  listVersions(contentId: string): Promise<ContentVersion[]>;
+  restoreVersion(input: RestoreInput): Promise<ContentItem>;
+  getBilling(): Promise<BillingStatus>;
+  createCheckout(input: CheckoutInput): Promise<CheckoutResult>;
+  createPortal(): Promise<PortalResult>;
+  selectWorkspace(workspaceId: string): Promise<StudioContext>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {
