@@ -1,0 +1,79 @@
+@layer base, layout, components;
+
+@layer base {
+  :root {
+    font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+    color: #183da9;
+    background: #eaf0ff;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    --canvas: #eaf0ff;
+    --ink: #183da9;
+    --accent: #244bd7;
+    --muted: #536590;
+    --panel: #ffffff;
+    --line: #cbd6ef;
+  }
+  body { margin: 0; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+  button { font: inherit; cursor: pointer; }
+  a { color: inherit; }
+  button:disabled { cursor: wait; opacity: .6; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+  ::selection { color: white; background: var(--accent); }
+}
+
+@layer layout {
+  .page {
+    box-sizing: border-box;
+    max-inline-size: 1440px;
+    min-block-size: 100dvh;
+    margin-inline: auto;
+    padding: 32px clamp(24px, 5vw, 80px) 24px;
+    display: flex;
+    flex-direction: column;
+  }
+  .header, .footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+  main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-block: clamp(56px, 9dvh, 110px); }
+  .intro { margin-block-end: 48px; }
+  h1 { margin: 0; font-size: clamp(3rem, 1.6rem + 5.5vw, 6.5rem); font-weight: 600; line-height: 1.03; letter-spacing: -.065em; }
+  .intro > p { max-inline-size: 52ch; margin: 28px 0 0; color: var(--muted); font-size: clamp(1rem, .9rem + .5vw, 1.25rem); line-height: 1.65; }
+  .idea-panel { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 28px; background: var(--panel); border-radius: 24px; padding: clamp(24px, 3vw, 40px); }
+  .idea-copy { flex: 1 1 390px; min-inline-size: 0; }
+  .footer { color: var(--muted); font-size: .8rem; padding-block-start: 22px; border-block-start: 1px solid var(--line); align-items: start; }
+  @media (width < 600px) {
+    .page { padding-block-start: 24px; }
+    .header { gap: 16px; }
+    .wide-break { display: none; }
+    main { padding-block: 64px; }
+    .intro { margin-block-end: 36px; }
+    .idea-panel { gap: 24px; border-radius: 20px; }
+    .idea { min-block-size: 3lh; }
+    .footer { flex-direction: column; gap: 14px; }
+  }
+}
+
+@layer components {
+  .brand { display: flex; align-items: center; gap: 12px; font-size: .9rem; line-height: 1.2; font-weight: 600; text-decoration: none; }
+  .brand-mark { display: grid; place-items: center; inline-size: 44px; block-size: 44px; background: var(--accent); color: white; border-radius: 14px; font-size: 2rem; letter-spacing: -.1em; padding-inline-end: 3px; box-sizing: border-box; }
+  .stage { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--muted); }
+  .stage > span { inline-size: 7px; block-size: 7px; background: var(--accent); border-radius: 50%; }
+  h2 { margin: 0 0 12px; font-weight: 500; font-size: .85rem; color: var(--muted); }
+  .idea { margin: 0; max-inline-size: 40ch; min-block-size: 2.8em; font-size: clamp(1.25rem, 1rem + .7vw, 1.7rem); font-weight: 500; line-height: 1.4; letter-spacing: -.025em; text-wrap: pretty; }
+  .demo-note { color: var(--muted); font-size: .75rem; margin: 16px 0 0; line-height: 1.5; }
+  .shuffle { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 12px; min-block-size: 52px; padding: 14px 22px; border: 0; border-radius: 12px; background: var(--accent); color: white; font-size: .875rem; }
+  .shuffle:hover { background: var(--ink); }
+  .shuffle:active { transform: translateY(1px); }
+  .shuffle svg { inline-size: 20px; block-size: 20px; }
+  .connection summary { cursor: pointer; min-block-size: 32px; }
+  .connection-content { padding-block: 8px; }
+  .connection-result { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .connection-result > span { inline-size: 7px; block-size: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .connected { color: #206941; }
+  .unavailable { color: #a12932; }
+  .connection button { color: var(--ink); border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 8px 12px; min-block-size: 44px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .shuffle { transition: background-color 150ms, transform 150ms; }
+  }
+}
