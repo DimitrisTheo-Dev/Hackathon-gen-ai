@@ -1,0 +1,178 @@
+{
+  "scope": "flow",
+  "candidate": {
+    "apps/web/index.html": "7eb8227fd30ddddb5d34292f097688002d04ca3320af53a753f06003dfb0ac77",
+    "apps/web/package.json": "411f11b6079bf973be279e6e36a42ecd0edb43765c6223737c74e923061c2d4a",
+    "apps/web/public/docs/capabilities/index.html": "15321d59c36ac1a073440b60c00fa59f61b28686f0defd19b26db63b511bd16d",
+    "apps/web/public/docs/docs.css": "80b5bb5b9fb2151a9c2ba9f999a133425098846f4248426454f2373af3770456",
+    "apps/web/public/docs/errors/index.html": "55f8009447f1c804118ecf7240f0733af59ec7e9d06be6d51c4b354f3510e742",
+    "apps/web/public/docs/index.html": "e78deede92801f7b3b827b14264a8661647c928c111d859fe12bb287b0e8bd5f",
+    "apps/web/public/docs/security/index.html": "7551ab0436a5e298d5ddd554d02599d62a42e3cea9ea94150f0c91800ca1e982",
+    "apps/web/public/docs/setup/index.html": "8dbab2eb7560a918ae4a567938757e37d2c329c451842e49eac4f2b92278237f",
+    "apps/web/public/favicon.svg": "998fa8eac553df7b5d476a7df968ac964bb149afcc714d157ebf56a4b0d3ec49",
+    "apps/web/public/llms.txt": "2d6c98786d16c0454251ee28196d3f84a9cbeb080e38fb1416df00813c21a699",
+    "apps/web/public/robots.txt": "d6564b8ebd5ac142b759edea28daf655f1cd83db603ebd3daec019339786037d",
+    "apps/web/public/sitemap.xml": "79daa6981c8e1504931d4a4ae5de8f626c5087c91ca54d1f25e872ea38c7a230",
+    "apps/web/src/components/ui.tsx": "323cdd7bf8b3871ea11735500d260be62ff776e13c45b1398dcee92c7c349bcd",
+    "apps/web/src/data/client.ts": "f1eae994d858da609a8486ed6b8cf9479b851e99725229154e2c624ea23d0f6b",
+    "apps/web/src/data/fixture.ts": "acb0ab86a094e69a7484973c12b0e4f7ee2162af10095a3267dff11f7c311e35",
+    "apps/web/src/data/live.ts": "ba685d8600b71f123d106815c0445838b1e8a6ce6fc33c6b92455158c68b120a",
+    "apps/web/src/lib/operation-key.ts": "ecc8afed0868181b44079150fe862baca6a359dc2b049202bab01d2a4b4ba6be",
+    "apps/web/src/lib/supabase.ts": "e67e9744142db8fe705717cde3b40fe25f9f0c4e5a751768b03d909bce2e68d1",
+    "apps/web/src/lib/time.ts": "47e4cf022c292fd4897732b4ad11fb47d41584b9075c046f0c8515b608a5d272",
+    "apps/web/src/main.tsx": "ad23ea0656c474cff0ba534537e694d1b7de317681b4fc773de0bca602d25f6f",
+    "apps/web/src/style.css": "d16611ccfd177f7618f80ceb6478d61b09d4c5692caf90bb5d8006929426f005",
+    "apps/web/src/views/Connect.tsx": "743d4427330306af555ecca2def13780db715330905df81468cff94a3a8adb1a",
+    "apps/web/src/views/CreateCampaign.tsx": "336ae9f066884cebc098beb1e0bdc99634dced79010a0ef5aeed0597f79da24c",
+    "apps/web/src/views/Editor.tsx": "2ff501f3b68ded1d950c65448919d1f7f6a87e1b71462a6d4a7771bf5aeafc96",
+    "apps/web/src/views/Review.tsx": "4b4934d06778adfb7b820172d55427095b0e34248cac885b4b4b92f4ce1b0623",
+    "apps/web/src/views/Studio.tsx": "217f9c6e137b9acd1451c738743fa9ab66d8bb963aed6a2e3770c294511823c2",
+    "apps/web/src/views/editor/model.ts": "9f591b8062f60e575fbc23f8784fd6ce7b76871be26819b0503242617ade952b",
+    "apps/web/src/vite-env.d.ts": "eb4b7fce608c65170158a26c0de8710ab0e2fcb64e78c40493d25bd4ed1c89d8",
+    "apps/web/vite.config.ts": "aa5c847b0af83b77a338774b4b3bb8e37eaf7ec376c362cc87487fa922d5d42e",
+    "package-lock.json": "9df66131ac5622776c8cd10c26c4b1a5a82056a568327d79a722329ec599a103",
+    "package.json": "dc1c576663d8622867e85a0fc6ab4e506ddb5595daa42e4d1978de430ca24cad",
+    "packages/contracts/package.json": "a1aa9af3062281debba0f79eeddb52da6d19400ef3479ae09ef9a2be6d0417a9",
+    "packages/contracts/src/index.ts": "f851f725aafc90e0f14beef4992662f78771dd47f4619e03665280a4f8b34314",
+    "proxy.ts": "b25df3afaacf0bbfe168f11302b5a47d60160c6b2be1a8e469ce0267a03bb550",
+    "tsconfig.json": "4e7e968f4f81ecce7b63dd3e14a32e38816ccd94874cb717d23043683b586ec1",
+    "vercel.json": "67606e378c0c4b0fe3b55e1d93f4e278b810452c8d4a1469eaec048ef466fcc2"
+  },
+  "evidence": [
+    {
+      "id": "browser",
+      "path": "docs/demo/evidence/browser-log.txt",
+      "sha256": "fd65a4cdc37d431db53624ee24f4151a13fa60e8272ba1ac6080d65a13f04bba",
+      "kind": "interaction"
+    }
+  ],
+  "areas": [
+    {
+      "id": "structure",
+      "status": "unverified",
+      "observation": "Native Chrome/Safari screenshots were inspected in conversation, but no image artifact is retained. Exact narrow-phone and long-text stress coverage is incomplete. No rendered pass is claimed.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "typography",
+      "status": "unverified",
+      "observation": "Native Chrome/Safari screenshots were inspected in conversation, but no image artifact is retained. Exact narrow-phone and long-text stress coverage is incomplete. No rendered pass is claimed.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "spacing",
+      "status": "unverified",
+      "observation": "Native Chrome/Safari screenshots were inspected in conversation, but no image artifact is retained. Exact narrow-phone and long-text stress coverage is incomplete. No rendered pass is claimed.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "color",
+      "status": "unverified",
+      "observation": "Native Chrome/Safari screenshots were inspected in conversation, but no image artifact is retained. Exact narrow-phone and long-text stress coverage is incomplete. No rendered pass is claimed.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "components",
+      "status": "unverified",
+      "observation": "Native Chrome/Safari screenshots were inspected in conversation, but no image artifact is retained. Exact narrow-phone and long-text stress coverage is incomplete. No rendered pass is claimed.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "responsive",
+      "status": "unverified",
+      "observation": "Native Chrome/Safari screenshots were inspected in conversation, but no image artifact is retained. Exact narrow-phone and long-text stress coverage is incomplete. No rendered pass is claimed.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "character",
+      "status": "unverified",
+      "observation": "Native Chrome/Safari screenshots were inspected in conversation, but no image artifact is retained. Exact narrow-phone and long-text stress coverage is incomplete. No rendered pass is claimed.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "task",
+      "status": "fail",
+      "observation": "Manual supplied-brief draft creation, selection, edits, undo and refresh work in the labeled fixture. Live agent creation, render/audio and authorized publication cannot complete without the engine/providers.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "terminology",
+      "status": "pass",
+      "observation": "Observed development banner, draft/no-video previews, unavailable connection setup and disabled approval. No fixture was labeled as generated, connected, scheduled or published.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "states",
+      "status": "pass",
+      "observation": "Scope: observed local dirty/saved/undo states and blocked scheduling. Save changed the visible revision and survived refresh. Missing engine/accounts stayed unavailable. Live failures still require provider evidence.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "interaction",
+      "status": "pass",
+      "observation": "Scope: operated local create/edit/switch/save/undo/refresh and review dialog, editor return, narrow navigation, and project/item refresh restoration. No live side effect or uncoached human trial was exercised.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "accessibility",
+      "status": "unverified",
+      "observation": "Accessible names and native dialog close/focus return observed. A complete keyboard-only path and assistive-technology trial were not performed.",
+      "evidence": [
+        "browser"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "engine",
+      "areas": [
+        "task",
+        "states"
+      ],
+      "severity": "blocker",
+      "status": "open",
+      "location": "Agent setup, rendering and schedule submission",
+      "observation": "No live Castroom API/MCP, Humanlike output or publishing receipts available. Core end-to-end acceptance is blocked.",
+      "evidence": [
+        "browser"
+      ]
+    },
+    {
+      "id": "navigation",
+      "areas": [
+        "interaction"
+      ],
+      "severity": "major",
+      "status": "resolved",
+      "location": "Narrow studio navigation and campaign refresh",
+      "observation": "Navigation control was absent; campaign refresh could reset to the first project.",
+      "resolution": "Corrected CSS layer precedence and encoded campaign selection in the URL. Opened menu, switched campaign, selected item two, refreshed and observed the same campaign/item.",
+      "evidence": [
+        "browser"
+      ]
+    }
+  ],
+  "verdict": "blocked"
+}

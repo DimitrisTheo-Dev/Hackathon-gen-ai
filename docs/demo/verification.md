@@ -6,7 +6,7 @@ Updated 14 November 2026. This record separates inspected configuration, local f
 
 - Pre-existing commit: `7714fbd2a43c7154de2636417ae1ff1bcffa4c03`, a React/Vite/TypeScript placeholder connected to private GitHub and Vercel.
 - The earlier placeholder’s Supabase public API check succeeded. That checks endpoint reachability and a publishable key, not domain authorization, RLS, production workflow, or MCP authentication.
-- Current studio work is on `work/dimitris-studio`; record the final candidate SHA at integration.
+- Studio candidate: `742589c963b27b0d0ca45d4b3be5f65757acd4a6` on `work/dimitris-studio`. Public origin: https://hackathon-gen-ai-nine.vercel.app. Main and repository privacy are unchanged.
 - Source ownership: Dimitris owns web/root/contracts after agreement; Minas owns API, database, production/composition, publishing, and MCP execution.
 
 ## Executed documentation checks
@@ -21,7 +21,7 @@ Updated 14 November 2026. This record separates inspected configuration, local f
 | Static docs source | Pass, five pages | Parsed HTML: one title/H1 per page, `lang=en`, canonical URLs, valid internal docs links, visible answer text. |
 | Local docs HTTP | Pass, isolated static server | All five `/docs/` pages returned 200 text/html; CSS returned 200 text/css; one absent `/docs/` path returned 404. Python static server on 127.0.0.1:4181; this does not prove Vercel routing. |
 | Docs token contrast | Calculated from CSS literals | Ink/paper 12.30:1; muted/paper 4.71:1; accent/paper 6.45:1; selected accent/lavender 5.90:1; notice heading/lavender 8.01:1. Rendered/computed colors not inspected. |
-| Docs browser | Unverified in this worker | IAB access host unavailable. Root owns native Chrome verification to avoid session conflicts. |
+| Docs browser | Pass for setup page | Native Safari opened the deployed `/docs/setup/`; headings, both client templates, explicit unavailable status, and recovery links appeared. |
 | Submission time | 15 Nov 2026, 18:00 Athens | [Agenda](https://hackathon.polymath42.com/agenda), fetched 14 Nov 2026. |
 | Repo/judge visibility | Process unconfirmed | Inspected [terms](https://hackathon.polymath42.com/terms) and agenda do not require public visibility or name reviewer accounts. |
 
@@ -37,9 +37,9 @@ Updated 14 November 2026. This record separates inspected configuration, local f
 | Humanlike audio and final composition | Blocked | Playable real output; caption/brand composition in exported bytes; authorized avatar proof. |
 | All three channel outcomes | Blocked | Selected real accounts, independent provider acceptance/delivery receipts and recovery. |
 | Denial/security gate | Blocked | Wrong tenant, missing scope, expired/revoked token, forged approval, stale manifest, quota race, duplicate intent, injected source. No external publish call on denial. |
-| Desktop/intermediate/mobile interactions | Pending studio integration | Browser-operated selection/edit/save, keyboard, long text, recoverable failures and reduced motion. CSS emulation is not native-device coverage. |
-| Public docs raw HTML and 404 behavior | Pending deployment | Fetch canonical docs and unique absent route at final public origin. |
-| Official is-agentic audit | Pending deployment | Public origin only; save canonical report URL, timestamp, raw result, and whether cached/null. |
+| Desktop/intermediate/mobile interactions | Partial | Chrome/Safari desktop and narrower-window interactions exercised. Full-width editor return and mobile navigation operated. Exact 390px, full keyboard-only journey, long-text stress and reduced-motion checks remain unverified. |
+| Public docs raw HTML and 404 behavior | Pass for recorded routes | Public HTML/Markdown, `/docs/`, private no-store `/studio/`, and absent-page 404 checks in `evidence/http-after-fixes.json`. |
+| Official is-agentic audit | Executed; cached follow-up | Score 46 at 2026-11-14T13:21:51.936Z. Follow-up returned the same timestamp/result after fixes; no improved score claimed. |
 | Successful run recording / fallback media | Unavailable | Capture a real completed run; label replay and retain redacted receipts. |
 
 ## Rehearsal measurement sheet
@@ -48,7 +48,7 @@ Record one actual attempt per client without replacing a failed attempt with an 
 
 | Field | Value |
 | --- | --- |
-| Candidate SHA and deployment URL | Pending |
+| Candidate SHA and deployment URL | `742589c` / https://hackathon-gen-ai-nine.vercel.app |
 | Client version / fresh-profile method | Pending |
 | Setup start / authenticated context receipt | Pending |
 | Setup elapsed seconds | Not measured; no two-minute claim |
@@ -66,12 +66,23 @@ Do not put access tokens, cookies, provider secrets, private payloads, or full s
 
 ## Studio verification, 14 November 2026
 
-- `npm test`: 17 tests pass. Covers revision conflicts, unchanged retry identity, same-key/different-payload rejection, persistence, render/copy distinction, writable field whitelist, unavailable publication, corrupt storage, live auth-before-fetch, strict responses, no fixture fallback, interrupted writes, source URL validation, manual batch bounds, source instruction treated as data, and Athens DST ambiguity/gap rejection. These are frontend/transport tests, not backend tenant/RLS or quota-race certification.
+- `npm test`: 19 tests pass (rerun after the final navigation fix). Covers revision conflicts, unchanged retry identity, same-key/different-payload rejection, persistence, render/copy distinction, writable field whitelist, unavailable publication, corrupt storage, live auth-before-fetch, strict responses, no fixture fallback, interrupted writes, source URL validation, manual batch bounds, source instruction treated as data, and Athens DST ambiguity/gap rejection, public Markdown negotiation, and real 404 recovery responses. These are frontend/transport tests, not backend tenant/RLS or quota-race certification.
 - `npm run build`: TypeScript and Vite pass. Studio loads as a separate chunk. A 545 kB main-chunk warning remains; no performance target is claimed.
 - Explicit production build with the fixture flag set: no fixture module/storage marker and no source maps in emitted assets. Explicit preview build includes the opt-in fixture module.
 - Source secret-pattern scan: no secret-key/private-key patterns in tracked/untracked source; `.env.local` ignored. The supplied secret key was not used or committed. This limited scan is not a complete credential audit.
 - Native Chrome, local Vite, light theme: inspected full desktop and a narrower desktop window; selected the first video, entered a replacement script, switched to the second video and back, observed preserved unsaved text, saved, saw v2 and one local edit, refreshed and observed the same v2/script. Opened schedule review: zero destinations, concrete provider blockers, Approve disabled. Closed dialog and focus returned to Review schedule.
-- Opened the manual create dialog; accessible fields and explicit local-fixture notice were observed. A browser focus change interrupted the later form interaction. Full manual submit, mobile, keyboard-only path and long-text rendered checks are not yet verified.
-- Largest observed visual issue: oversized portrait cards pushed status below the fold. Reduced board max width to 640px; final rendered recheck remains pending due concurrent Chrome use. Existing screenshots were inspected in conversation but are not a retained evidence artifact.
+- Native Safari: completed manual brief → editable supplied summary → one draft. Company, audience, tone, campaign title and exact script were retained; no video or provider job was claimed. Changed the script and used Undo to restore it. Inspected channel controls with no connected accounts and agent chooser with honest unavailable status. This is local fixture evidence only.
+- Reduced oversized desktop cards to a 640px board and re-inspected the three-card composition in Safari: card status was visible. A narrower Safari window exposed a hidden navigation menu caused by important-rule layer precedence; corrected it, opened the menu, switched projects, and returned from the full-width editor. Selected the second BeWell item, reloaded and observed the same campaign/item. Exact CSS viewport dimensions were not measured. Screenshots were inspected in conversation but are not retained artifacts; visual gate areas remain unverified in the saved record.
 - Supplied Moonjar screenshots are now available and inspected. Their shell/canvas/panel relationships guide original Castroom styling. No proprietary assets were copied.
 - No uncoached human trial or measured setup/first-playable-video time occurred. No generated video, authenticated agent handshake, live approval or published post is claimed.
+
+## Public deployment and audit
+
+- Public docs remain public; studio responses use `Cache-Control: private, no-store` and `X-Robots-Tag: noindex, nofollow`. Live data still requires Supabase authentication and the domain API. No robots setting substitutes for authorization.
+- The official [is-agentic report](https://is-agentic.com/scan/hackathon-gen-ai-nine.vercel.app) recorded 46 at `2026-11-14T13:21:51.936Z`. Both raw reports are retained. The follow-up is cached: the timestamp and old findings did not change.
+- Fixed and independently fetched: richer initial homepage HTML, root Markdown negotiation with `Vary: Accept`, Markdown 404 recovery, and trailing-slash studio routes. These checks do not recalculate the scanner score.
+- Real OpenAPI/MCP metadata, scoped authentication, deterministic denial checks and provider actions remain blocked on engine integration. No invented endpoints, OAuth claims or public access changes were added for the scanner.
+- Git remote still has only `main` and `work/dimitris-studio` at final inspection. Minas's branch/API is not yet available. Shared contract remains proposed, not agreed.
+- `evidence/ui-quality.json` records a blocked live-flow gate and the exact limits of local UI evidence. No uncoached teammate trial, live client setup time, first-playable-video time, or provider-cost measurement is available.
+
+Final deployments: production `dpl_HJeZgDWLL7Vhnoc8yoRrd1oDi9bm` and preview `dpl_51AmeD2xSNYkC1XP5qLPVbBihvYb` are READY for `742589c`. [Protected studio preview](https://hackathon-gen-khh4z973p-my-team-29ecd279.vercel.app/dev/studio/) requires Vercel access. Final public entry asset excludes fixture imports/storage markers; the production sign-in boundary was opened in Safari without submitting an email. See `evidence/final-deployment.json`.

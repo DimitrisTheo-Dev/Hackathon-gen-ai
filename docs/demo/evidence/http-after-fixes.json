@@ -1,0 +1,68 @@
+{
+  "origin": "https://hackathon-gen-ai-nine.vercel.app",
+  "candidate": "463b8e1db296514dc123323b1351c2d6e10f6c07",
+  "results": [
+    {
+      "path": "/",
+      "accept": "text/html",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "body_chars": 2709
+    },
+    {
+      "path": "/",
+      "accept": "text/markdown",
+      "status": 200,
+      "type": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "body_chars": 1240,
+      "body_excerpt": "# Castroom\n\nCreate campaigns with your agent. Fine-tune them here.\n\nCastroom is a shared content production studio for agencies, companies and individuals. An external agent plans "
+    },
+    {
+      "path": "/studio/",
+      "accept": "text/html",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "vary": null,
+      "cache": "private, no-store",
+      "robots": "noindex, nofollow",
+      "body_chars": 2709
+    },
+    {
+      "path": "/docs/",
+      "accept": "text/html",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "vary": null,
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "body_chars": 4976
+    },
+    {
+      "path": "/absent-castroom-verification",
+      "accept": "text/markdown",
+      "status": 404,
+      "type": "text/markdown; charset=utf-8",
+      "vary": "Accept",
+      "cache": "no-store",
+      "robots": null,
+      "body_chars": 123,
+      "body_excerpt": "# Page not found\n\nThis public page is not available. See [Castroom documentation](/docs/) or the [agent index](/llms.txt).\n"
+    },
+    {
+      "path": "/absent-castroom-verification",
+      "accept": "text/html",
+      "status": 404,
+      "type": "text/html; charset=utf-8",
+      "vary": "Accept",
+      "cache": "no-store",
+      "robots": null,
+      "body_chars": 329
+    }
+  ]
+}

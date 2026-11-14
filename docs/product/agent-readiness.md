@@ -1,33 +1,33 @@
 # Castroom agent-readiness evidence
 
-Scope: public first-party documentation and the intended protected Castroom action surface. Updated 14 November 2026. Candidate SHA and deployed verification must be filled at integration. No overall conformance or numerical score is claimed.
+Scope: public first-party documentation and the intended protected Castroom action surface. Updated 14 November 2026. Studio candidate `742589c`; deployed evidence is recorded in `docs/demo/evidence`. No overall conformance or numerical score is claimed.
 
 The [AgentReady v2.0 guide](https://www.agentready.org/) was checked on 14 November 2026 against the installed requirement map. **MUST**, **SHOULD**, and **MAY** retain their actual levels. A justified SHOULD deferral remains an unmet recommendation; optional features are not release requirements. The retired `AR-READ-10` is not reinstated.
 
-Evidence labels: **S** = inspected static source; **D** = deployed HTTP evidence, currently pending; **C** = authenticated client evidence, currently absent. Status is pass, fail, unknown, or not applicable. Source-only results do not establish deployed behavior.
+Evidence labels: **S** = inspected static source; **D** = deployed HTTP evidence, captured for public routes; **C** = authenticated client evidence, currently absent. Status is pass, fail, unknown, or not applicable. Source-only results do not establish deployed behavior.
 
 ## Find
 
 | Requirement / level | Status; evidence | Impact / action / verification |
 | --- | --- | --- |
-| AR-FIND-01 MUST | Unknown; D pending | High: fetch public docs under normal crawler policy and inspect robots/WAF. Do not expose tenant routes. |
-| AR-FIND-02 SHOULD | Pass for S; D pending | Canonical docs answer setup, limits, permissions, recovery. Verify deployed deep links. |
-| AR-FIND-03 SHOULD | Unknown; root files owned by integration | Add/inspect public-only sitemap and robots reference; verify canonical URLs resolve. |
+| AR-FIND-01 MUST | Pass for public docs; D | Public origin and docs respond without credentials; robots excludes tenant routes. Existing deployment protection remains. This does not prove all crawlers can access every environment. |
+| AR-FIND-02 SHOULD | Pass for public docs; S/D | Canonical setup, limits, permissions and recovery pages return initial HTML with links. Live onboarding remains unavailable. |
+| AR-FIND-03 SHOULD | Pass; S/D | Public-only sitemap and robots reference resolve at the canonical origin. |
 | AR-FIND-04 MAY | Fail; not implemented | Low: AI Catalog deferred until real action resources exist. Do not publish invented endpoints. |
 
 ## Read
 
 | Requirement / level | Status; evidence | Impact / action / verification |
 | --- | --- | --- |
-| AR-READ-01 MUST | Pass for S; D pending | `apps/web/public/docs/**/index.html` contains visible answers without JS. Fetch final build paths. |
-| AR-READ-02 MUST | Unknown; D pending | High: absent page must return 404; throttling must use 429/retry hints. Inspect configuration/tests without load testing production. |
-| AR-READ-03 SHOULD | Unknown for homepage; S docs navigation passes | Verify initial homepage product explanation and real links after root integration. |
+| AR-READ-01 MUST | Pass for public pages; S/D | Docs contain visible answers in initial HTML. Homepage was expanded after the first scanner result; final HTTP response records are retained. |
+| AR-READ-02 MUST | Partial; D | Absent public routes return real 404 with recovery links. Live API throttling/429 hints remain unverified pending backend. |
+| AR-READ-03 SHOULD | Pass for public pages; S/D | Initial homepage explains purpose and links setup, capabilities and private studio. |
 | AR-READ-04 SHOULD | Pass for honest development guidance; live setup fails | Blocker: no endpoint/token issuer yet. Exercise complete first-call setup after backend integration. |
 | AR-READ-05 SHOULD | Pass for S | Examples use semantic `pre/code` and language classes. Verify rendered wrapping. |
 | AR-READ-06 SHOULD | Partial coverage recorded as fail | Docs link the planned root index; real OpenAPI/MCP artifacts remain unavailable. Link only validated endpoints. |
-| AR-READ-07 SHOULD | Unknown; root index owned by integration | Verify `/llms.txt` contains canonical public docs and current limits. |
-| AR-READ-08 SHOULD | Pass for S; D pending | Factual WebPage JSON-LD repeats visible title/purpose. No fabricated offers/ratings. |
-| AR-READ-09 MAY | Fail; not implemented | Low: Markdown alternatives deferred; initial HTML is the required reading path. |
+| AR-READ-07 SHOULD | Pass; S/D | `/llms.txt` links canonical public docs and discloses unavailable execution. |
+| AR-READ-08 SHOULD | Pass for docs; S/D | Factual WebPage JSON-LD repeats visible title/purpose. Homepage product JSON-LD remains deferred; no fabricated offers/ratings. |
+| AR-READ-09 MAY | Partial | Homepage and 404 negotiate Markdown with `Vary: Accept`; separate Markdown versions of all docs are deferred. |
 | AR-READ-11 SHOULD | Pass for S on known limits; pricing not applicable | No paid product/prices offered. Docs disclose unknown quotas/costs and pending capabilities; add actual limits from service. |
 
 ## Act
@@ -53,7 +53,7 @@ Run the official `is-agentic` CLI against **only the intended public origin** af
 
 Preserve the canonical report URL, scan timestamp, target origin, raw result, and cache status. A stored result can be returned from the upstream freshness cache; a null score remains null. The [methodology](https://is-agentic.com/methodology) says public scans have point-in-time limits and do not certify security, accessibility, or compatibility. Fix observed essential gaps and recheck; keep genuine Codex/Claude trials as separate evidence.
 
-Scanner status: **not yet run for the Castroom candidate**. No fabricated score or report URL.
+Scanner executed against https://hackathon-gen-ai-nine.vercel.app: **46**, timestamp **2026-11-14T13:21:51.936Z**, [canonical report](https://is-agentic.com/scan/hackathon-gen-ai-nine.vercel.app). Follow-up after fixes returned the same cached result. Raw reports and direct post-fix HTTP checks are in `docs/demo/evidence`; no improved score or full conformance is claimed. Remaining essential action-interface findings require the real backend, not decorative metadata.
 
 ## Integration checks
 

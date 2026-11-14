@@ -1,0 +1,23 @@
+{
+  "candidate": "742589c963b27b0d0ca45d4b3be5f65757acd4a6",
+  "checked_at": "2026-11-14T13:34:57.454769+00:00",
+  "origin": "https://hackathon-gen-ai-nine.vercel.app",
+  "production_deployment": "dpl_HJeZgDWLL7Vhnoc8yoRrd1oDi9bm",
+  "preview_url": "https://hackathon-gen-khh4z973p-my-team-29ecd279.vercel.app/dev/studio/",
+  "preview_deployment": "dpl_51AmeD2xSNYkC1XP5qLPVbBihvYb",
+  "preview_route_status": 200,
+  "root_status": 200,
+  "studio_status": 200,
+  "studio_cache": "private, no-store",
+  "studio_robots": "noindex, nofollow",
+  "entry_assets": [
+    {
+      "path": "/assets/index-D_vq6g2Q.js",
+      "sha256": "11e31970fc76b8c534cb05af9c34a7346405ccf2e2da5599a5237a4d2d14553a",
+      "fixture_storage_marker": false,
+      "fixture_dynamic_import": false,
+      "secret_key_pattern": false
+    }
+  ],
+  "limits": "Entry asset pattern checks only; no live domain authorization or provider evidence. Supabase SDK legitimately contains a literal secret-key prefix check, so a bare-prefix scan is not credential evidence."
+}
