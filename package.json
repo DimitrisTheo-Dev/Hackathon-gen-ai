@@ -8,22 +8,29 @@
   },
   "scripts": {
     "dev": "vite --config apps/web/vite.config.ts",
-    "build": "tsc --noEmit && tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs && vite build --config apps/web/vite.config.ts && tsx scripts/prerender.ts && node scripts/check-prerender.mjs",
+    "build": "tsc --noEmit && tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs && tsc --project tsconfig.api.json && node scripts/check-api.mjs && vite build --config apps/web/vite.config.ts && tsx scripts/prerender.ts && node scripts/check-prerender.mjs",
     "preview": "vite preview --config apps/web/vite.config.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "test:ui": "playwright test",
     "castroom": "tsx packages/cli/src/main.ts",
-    "check:proxy": "tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs"
+    "check:proxy": "tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs",
+    "dev:api": "node --env-file=.env.local --import tsx scripts/dev-api.ts",
+    "smoke:engine": "node --env-file=.env.local --import tsx scripts/smoke-engine.ts",
+    "check:api": "tsc --project tsconfig.api.json && node scripts/check-api.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@castroom/contracts": "workspace:*",
     "@js-temporal/polyfill": "^0.5.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@supabase/supabase-js": "2.119.0",
     "@vercel/functions": "^3.11.3",
+    "jose": "^6.2.17",
     "lucide-react": "^0.577.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "stripe": "^23.1.0",
     "zod": "4.3.6"
   },
   "devDependencies": {

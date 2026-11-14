@@ -17,7 +17,8 @@ for(const doc of publicDocuments) await check(doc.path,200,'text/markdown',{head
 for(const path of ['/api/public/status','/api/public/permissions','/api/public/docs',...publicDocuments.map(d=>'/api/public/docs/'+d.slug),'/openapi.json']) {
   await check(path,200,'application/json',{},(body,response)=>{JSON.parse(body);assert.equal(response.headers.get('x-api-version'),'1');});await check(path,200,'application/json',{method:'HEAD'},body=>assert.equal(body,''));
 }
-for(const path of ['/api/public/absent','/api/public/docs/nope','/api/missing','/.well-known/oauth-authorization-server','/.well-known/oauth-protected-resource','/mcp']) await check(path,404,'application/problem+json',{},body=>{const problem=JSON.parse(body);assert.equal(problem.status,404);assert.ok(problem.resolution.length>20);});
+// /mcp and /.well-known/oauth-protected-resource are served by the engine functions (per-deployment), so they are not public 404s.
+for(const path of ['/api/public/absent','/api/public/docs/nope','/api/missing','/.well-known/oauth-authorization-server']) await check(path,404,'application/problem+json',{},body=>{const problem=JSON.parse(body);assert.equal(problem.status,404);assert.ok(problem.resolution.length>20);});
 await check('/api/public/status',405,'application/problem+json',{method:'POST'},(body,res)=>{assert.equal(JSON.parse(body).status,405);assert.equal(res.headers.get('allow'),'GET, HEAD');});
 await check('/not-a-castroom-page',404,'text/markdown',{headers:{Accept:'text/markdown'}},body=>{assert.ok(body.length>20);assert.ok(body.includes('/docs/'));});
 await check('/not-a-castroom-page',404,'text/html');

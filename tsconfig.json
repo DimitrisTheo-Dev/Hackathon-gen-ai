@@ -23,6 +23,8 @@
     "apps/web/vite.config.ts",
     "proxy.ts",
     "packages/public-api/src",
-    "packages/cli/src"
+    "packages/cli/src",
+    "packages/engine/src",
+    "api"
   ]
 }

@@ -167,6 +167,9 @@ export const campaignSchema = z.object({
   activity: z.array(auditSchema),
   humanInterventions: z.number().int().nonnegative(),
   mode: z.enum(["live", "fixture"]),
+  /** "sample" marks seeded demonstration content; it is never presented as the user's own work. */
+  origin: z.enum(["user", "agent", "sample"]).default("user"),
+  templateId: idSchema.nullable().default(null),
 });
 export const connectionSchema = z.object({
   id: idSchema,
@@ -181,7 +184,7 @@ export const contextSchema = z.object({
     id: idSchema,
     name: z.string(),
     timezone: timezoneSchema,
-    role: z.enum(["owner", "creator"]),
+    role: z.enum(["owner", "admin", "editor", "reviewer", "creator", "agent"]),
     type: z.enum(["personal", "company", "agency"]),
   }),
   principal: z.object({
@@ -216,6 +219,10 @@ export const contextSchema = z.object({
     mode: z.enum(["live", "fixture"]),
     canCreateCampaign: z.boolean().default(false),
     canPlanWithDirector: z.boolean().default(false),
+    /** "ai": a model drafts and rewrites. "basic": only exact edits, templates and lookups work. */
+    directorMode: z.enum(["ai", "basic"]).default("basic"),
+    /** Why rendering is unavailable, in words safe to show. Null when a renderer is connected. */
+    renderBlocker: z.string().nullable().default(null),
     canRender: z.boolean(),
     canConnectChannels: z.boolean(),
     canRetry: z.boolean(),
@@ -237,6 +244,10 @@ export const contextSchema = z.object({
     openapiUrl: httpUrlSchema.nullable(),
   }),
   connections: z.array(connectionSchema),
+  /** Every workspace this principal can switch to. Empty in fixtures. */
+  workspaces: z
+    .array(z.object({ id: idSchema, name: z.string(), role: z.string(), type: z.string() }))
+    .default([]),
 });
 export const scheduleTargetInputSchema = z
   .object({
@@ -277,6 +288,29 @@ export const patchSchema = z
     targets: z.array(scheduleTargetInputSchema).optional(),
   })
   .strict();
+export const versionSchema = z.object({
+  revision: z.number().int().positive(),
+  createdAt: instantSchema,
+  actor: z.string(),
+  actorKind: z.enum(["human", "agent", "system"]),
+  summary: z.string(),
+  affectsRender: z.boolean(),
+  title: z.string(),
+  script: z.string(),
+  avatarId: idSchema.nullable(),
+  language: z.string(),
+  hasMedia: z.boolean(),
+});
+export type ContentVersion = z.infer<typeof versionSchema>;
+export const restoreInputSchema = z
+  .object({
+    contentId: idSchema,
+    revision: z.number().int().positive(),
+    expectedRevision: z.number().int().positive(),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export type RestoreInput = z.infer<typeof restoreInputSchema>;
 export const reviseInputSchema = z
   .object({
     contentId: idSchema,
@@ -345,3 +379,77 @@ export type Operation = z.infer<typeof operationSchema>;
 export type GrantInput = z.infer<typeof grantInputSchema>;
 export type Platform = z.infer<typeof platformSchema>;
 export type StudioError = z.infer<typeof errorSchema>;
+
+/* ───────────── AI Creative Director (shared by the studio UI, the engine and MCP) ───────────── */
+
+/** Every action is executed through the same typed domain operations a person uses; none can approve or publish. */
+export const directorActionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("revise"), itemId: idSchema, expectedRevision: z.number().int().positive(), patch: patchSchema }).strict(),
+  z.object({ kind: z.literal("render"), itemId: idSchema, expectedRevision: z.number().int().positive() }).strict(),
+  z.object({ kind: z.literal("review_schedule"), campaignId: idSchema, expectedRevision: z.number().int().positive() }).strict(),
+  /** Opens Stripe-hosted sandbox Checkout after the person confirms. Card details never pass through chat. */
+  z.object({ kind: z.literal("checkout"), priceKey: z.string().min(1).max(40) }).strict(),
+]);
+export type DirectorAction = z.infer<typeof directorActionSchema>;
+export const directorPlanSchema = z
+  .object({ summary: z.string().min(1).max(1000), actions: z.array(directorActionSchema).min(1).max(3) })
+  .strict();
+export type DirectorPlan = z.infer<typeof directorPlanSchema>;
+export const directorTurnInputSchema = z
+  .object({
+    campaignId: idSchema.nullable(),
+    itemId: idSchema.nullable(),
+    scope: z.enum(["item", "project"]),
+    instruction: z.string().trim().min(1).max(5000),
+    sourceIds: z.array(idSchema).max(20).default([]),
+    /** Earlier turns for continuity. Treated as conversation, never as authority. */
+    history: z.array(z.object({ instruction: z.string().max(5000), summary: z.string().max(1000) }).strict()).max(8).default([]),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export type DirectorTurnInput = z.infer<typeof directorTurnInputSchema>;
+export const directorAssetSchema = z.object({
+  campaignId: idSchema,
+  campaignTitle: z.string(),
+  itemId: idSchema,
+  title: z.string(),
+  status: z.string(),
+  revision: z.number().int().positive(),
+  hasVideo: z.boolean(),
+  updatedAt: instantSchema,
+});
+export const directorTurnResultSchema = z.object({
+  /** "ai": a model interpreted the request. "basic": matched by fixed rules only; nothing was written by a model. */
+  mode: z.enum(["ai", "basic"]),
+  summary: z.string().min(1).max(2000),
+  /** Proposed changes awaiting the person's review. Null when nothing needs approval. */
+  plan: directorPlanSchema.nullable(),
+  /** A new project whose drafts were just saved. Drafting is free and reversible; nothing was rendered. */
+  created: campaignSchema.nullable(),
+  /** Existing content to open (and play when it has a video). No generation was started. */
+  open: z.object({ campaignId: idSchema, itemId: idSchema.nullable(), play: z.boolean() }).nullable(),
+  assets: z.array(directorAssetSchema).max(20),
+  suggestions: z.array(z.string().max(80)).max(4),
+});
+export type DirectorTurnResult = z.infer<typeof directorTurnResultSchema>;
+
+export const templateSchema = z.object({
+  id: idSchema,
+  version: z.number().int().positive(),
+  name: z.string(),
+  description: z.string(),
+  aspectRatio: z.literal("9:16"),
+  durationSeconds: z.number().int().positive(),
+  channels: z.array(platformSchema),
+  languages: z.array(z.string()),
+  itemCount: z.number().int().min(1).max(3),
+  inputs: z.array(z.object({ key: z.string(), label: z.string(), placeholder: z.string(), required: z.boolean(), maxLength: z.number().int().positive() })),
+  preview: z.array(z.object({ title: z.string(), script: z.string() })),
+  /** Reserved for a future marketplace. Only first-party curated templates exist today. */
+  visibility: z.literal("curated"),
+});
+export type Template = z.infer<typeof templateSchema>;
+export const templateInputSchema = z
+  .object({ templateId: idSchema, language: z.string().min(2).max(12), inputs: z.record(z.string(), z.string().max(400)), operationKey: z.uuid() })
+  .strict();
+export type TemplateInput = z.infer<typeof templateInputSchema>;

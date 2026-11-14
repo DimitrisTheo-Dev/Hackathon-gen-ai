@@ -5,6 +5,30 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/v1/:path*",
+      "destination": "/api/engine?__path=:path*"
+    },
+    {
+      "source": "/mcp",
+      "destination": "/api/mcp?__path=mcp"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/mcp?__path=.well-known/oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/:rest*",
+      "destination": "/api/mcp?__path=.well-known/oauth-protected-resource/:rest*"
+    },
+    {
+      "source": "/oauth/consent",
+      "destination": "/studio/index.html"
+    },
+    {
+      "source": "/oauth/consent/",
+      "destination": "/studio/index.html"
+    },
+    {
       "source": "/studio/",
       "destination": "/studio/index.html"
     },
@@ -98,13 +122,75 @@
           "value": "noindex, nofollow"
         }
       ]
+    },
+    {
+      "source": "/oauth/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/offline.html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
     }
   ],
   "proxy": {
     "entrypoint": "proxy.ts",
     "matcher": [
-      "/((?!assets|studio|dev|v1|api/v1).*)"
+      "/((?!assets|studio|dev|oauth|v1|api/v1|api/engine|api/mcp).*)"
     ]
   },
-  "installCommand": "corepack pnpm install --frozen-lockfile"
+  "installCommand": "corepack pnpm install --frozen-lockfile",
+  "functions": {
+    "api/engine.ts": {
+      "maxDuration": 120
+    },
+    "api/mcp.ts": {
+      "maxDuration": 120
+    }
+  },
+  "crons": [
+    {
+      "path": "/v1/cron/tick",
+      "schedule": "17 4 * * *"
+    }
+  ]
 }

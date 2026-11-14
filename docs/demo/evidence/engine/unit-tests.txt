@@ -1,0 +1,64 @@
+# corepack pnpm exec tsx --test tests/engine.test.ts tests/billing.test.ts tests/mcp.test.ts
+# 2026-11-14T16:28:42Z · node v26.10.0 · in-memory store, real engine code; Stripe network calls faked, Stripe signature verification real
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+✔ sandbox config: live keys, live mode and malformed values are refused (0.616916ms)
+✔ not configured: free features keep working and billing reports STRIPE_NOT_CONFIGURED (2.618917ms)
+✔ checkout: one customer per workspace, hosted URL, safe return URLs, nothing granted by the redirect (7.634292ms)
+✔ checkout: same operation key replays; a different request on that key is an idempotency conflict (0.582875ms)
+✔ checkout: without a configured https APP_BASE_URL no session is created (0.438375ms)
+✔ checkout: only allowlisted price keys; client price IDs, amounts and missing confirmation are refused (0.569042ms)
+✔ checkout: a live-mode object from Stripe is refused and never recorded (0.195459ms)
+✔ permissions: editors, reviewers, outsiders and under-scoped agents cannot start checkout or open the portal (0.829458ms)
+✔ tenancy: each workspace gets its own customer; one workspace's events never touch another (2.111625ms)
+✔ portal: needs an existing billing account and returns only a Stripe-hosted URL (0.333167ms)
+✔ webhook: missing, wrong-secret, tampered and live-mode deliveries are rejected before any processing (0.585958ms)
+✔ webhook: entitlement arrives from Stripe even if the user never returns; credits are granted exactly once (0.9575ms)
+✔ webhook: an invoice for an unknown customer or a non-allowlisted price grants nothing (0.352458ms)
+✔ webhook: out-of-order and delayed subscription events converge on Stripe's current state (0.447875ms)
+✔ webhook: portal changes and cancellation are reflected; a stale deletion cannot end a newer subscription (0.604208ms)
+✔ webhook: delayed-payment checkout stays pending until Stripe confirms, and a failed one returns to free (0.292584ms)
+✔ webhook: unrelated events are acknowledged and ignored; thin-format and malformed deliveries are refused clearly (0.302292ms)
+✔ webhook: a processing failure returns 500 and Stripe's retry completes without double-applying (0.347167ms)
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+✔ first sign-in provisions exactly one personal workspace with starter credits, even under concurrent requests (3.921083ms)
+✔ create persists drafts, supplied source text stays data, and the operation key replays instead of duplicating (3.5145ms)
+✔ revisions use optimistic concurrency, keep immutable history, and restore as a new version (2.632417ms)
+✔ organizations are isolated: another member's IDs are simply not found (1.5915ms)
+✔ rendering without a connected renderer is refused honestly and holds no credits (0.486375ms)
+✔ render job lifecycle: admission holds a credit, the worker uploads a real file, completion is verified and replay-safe (2.675084ms)
+✔ a script edit after rendering keeps the old video as stale and never marks the new revision as rendered (1.283375ms)
+✔ failed, cancelled and abandoned renders return their held credits exactly once (1.602875ms)
+✔ render quota is enforced at admission, identically for every caller (1.426375ms)
+✔ agent workspace tokens are scoped, hashed, tenant-bound and revocable; agents can never approve (1.34425ms)
+✔ a schedule with unresolved blockers cannot be approved, and an edit makes a prepared review stale (1.524292ms)
+✔ Athens local times convert to exact UTC instants across the DST boundaries (4.915541ms)
+✔ templates and the labelled sample produce editable drafts without any model (1.878916ms)
+✔ director retrieval opens existing content immediately and never calls a model or starts generation (2.643ms)
+✔ director create saves drafts only; edits and schedules come back as proposals a person must apply (3.468667ms)
+✔ without a model the director says so plainly and still answers billing from server truth (0.869709ms)
+✔ HTTP surface: auth is required, errors follow the contract, and the worker and scheduler need their own credentials (4.803125ms)
+✔ live Stripe keys are rejected by configuration (0.088417ms)
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+✔ an MCP request without a token gets 401 and points at the protected-resource metadata (3.015917ms)
+✔ protected-resource metadata names this resource and the Supabase authorization server (0.836417ms)
+✔ stateless transport: GET and DELETE are refused, other paths are not ours (0.230959ms)
+✔ initialize negotiates a protocol this SDK speaks and lists exactly the documented tools (22.128291ms)
+✔ create_project saves drafts that list_projects then shows; a retried key cannot create twice (14.272583ms)
+✔ UI ↔ MCP parity: both read and write the same projects, drafts and versions (18.922125ms)
+✔ a token is limited to its scopes and to its own workspace (9.428916ms)
+✔ revoked and expired tokens are refused with 401 (1.404917ms)
+✔ start_render reports the real blocker when no renderer is connected — never a fake success (5.0625ms)
+✔ with a renderer connected, an MCP render is the same queued job and credit hold the studio sees (22.286125ms)
+✔ propose_schedule saves draft times in the workspace timezone and reports blockers; approval stays human (11.108125ms)
+✔ an OAuth client token, and even a bare member session, act only as an agent through MCP (5.644167ms)
+✔ billing through MCP reads server truth and never fabricates a checkout (5.967208ms)
+✔ malformed tool input is rejected before any domain code runs (2.394334ms)
+✔ the SDK's own Streamable HTTP client completes initialize → tools/list → tools/call against this server (8.633666ms)
+ℹ tests 51
+ℹ suites 0
+ℹ pass 51
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 472.921291
