@@ -1,0 +1,12 @@
+# One or more render workers on this machine. Each claims one job at a time.
+#   cp .env.example .env   # set FACEFUL_API_URL and REEL_WORKER_TOKEN
+#   docker compose up -d --build --scale worker=2
+services:
+  worker:
+    build:
+      context: ../..
+      dockerfile: workers/reel-render/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    # Chrome needs shared memory for frames; the default 64 MB is too small.
+    shm_size: "1gb"

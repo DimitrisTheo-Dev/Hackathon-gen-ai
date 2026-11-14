@@ -265,7 +265,7 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
     else if (action.kind === "transcript" && file.url) {
       try {
         const words = model.parseWords(await (await fetch(file.url, { credentials: "omit" })).text());
-        update((current) => model.captionsFromTranscript({ ...current, transcript: { language: current.transcript?.language ?? "el", words, sourceFileId: file.id } }));
+        update((current) => model.captionsFromTranscript({ ...current, transcript: { language: current.transcript?.language ?? item?.language ?? "en", words, sourceFileId: file.id } }));
         setTab("transcript");
         setNotice(`${words.length} words loaded. Captions were rebuilt from them.`);
         return;
@@ -579,7 +579,7 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                     <div className="video-inline-fields">
                       <label className="select-field">
                         <span>Language</span>
-                        <input value={composition.transcript.language} maxLength={12} disabled={readOnly} onChange={(event) => update((current) => ({ ...current, transcript: current.transcript && { ...current.transcript, language: event.target.value.trim() || "el" } }))} />
+                        <input value={composition.transcript.language} maxLength={12} disabled={readOnly} onChange={(event) => update((current) => ({ ...current, transcript: current.transcript && { ...current.transcript, language: event.target.value.trim() || item.language } }))} />
                       </label>
                       <label className="time-field">
                         <span>Shift all words (s)</span>

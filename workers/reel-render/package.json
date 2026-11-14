@@ -1,0 +1,21 @@
+{
+  "name": "faceful-reel-render-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Remotion render worker for Faceful reels. Runs on any VPS, boxd machine or container; outside the pnpm workspace on purpose so the web deployment never installs the renderer.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/worker.ts",
+    "once": "node src/worker.ts --once"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.539",
+    "@remotion/renderer": "4.0.539",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.539"
+  }
+}

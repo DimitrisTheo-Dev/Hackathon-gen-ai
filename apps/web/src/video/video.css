@@ -279,10 +279,10 @@
     gap: 8px;
     flex-wrap: wrap;
   }
-  .clip-fields select {
+  .clip-fields > select {
     flex: none;
   }
-  .clip-fields input {
+  .clip-fields > input {
     flex: 1 1 180px;
     min-inline-size: 0;
   }

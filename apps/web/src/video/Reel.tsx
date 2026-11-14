@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { AbsoluteFill, Easing, Html5Audio, Img, OffthreadVideo, Sequence, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Freeze, Html5Audio, Img, OffthreadVideo, Sequence, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { AudioClip, CaptionCue, ClipSource, Composition, CompositionCard, Transition, TranscriptWord, VideoClip } from "@castroom/contracts";
 
 /**
@@ -90,9 +90,21 @@ function VideoLayerClip({ clip, media, split, onMediaError }: { clip: VideoClip;
   const offset = clip.media === "video" ? clip.syncOffsetFrames : 0;
   const trim = frames(clip.in, fps);
   const separateAudio = offset !== 0 && clip.volume > 0 && !!url;
+  const muted = separateAudio || clip.volume === 0;
+  // Delaying past the in-point holds the first frame for the gap, then plays from the in-point.
+  const hold = offset - trim;
+  let picture = <Placeholder />;
+  if (url && hold > 0)
+    picture = (
+      <>
+        <Sequence durationInFrames={hold} layout="none"><Freeze frame={0}><Media clip={clip} url={url} muted trimFrames={0} onMediaError={onMediaError} /></Freeze></Sequence>
+        <Sequence from={hold} layout="none"><Media clip={clip} url={url} muted={muted} trimFrames={0} onMediaError={onMediaError} /></Sequence>
+      </>
+    );
+  else if (url) picture = <Media clip={clip} url={url} muted={muted} trimFrames={trim - offset} onMediaError={onMediaError} />;
   return (
     <div style={{ ...box, ...motion }}>
-      {url ? <Media clip={clip} url={url} muted={separateAudio || clip.volume === 0} trimFrames={trim - offset} onMediaError={onMediaError} /> : <Placeholder />}
+      {picture}
       {separateAudio && <Html5Audio src={url} volume={clip.volume} trimBefore={trim > 0 ? trim : undefined} />}
     </div>
   );
