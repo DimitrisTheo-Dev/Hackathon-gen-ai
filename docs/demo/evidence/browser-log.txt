@@ -1,0 +1,7 @@
+2026-11-14, local Vite http://127.0.0.1:5173/dev/studio/; native Chrome; light theme; exact viewport not measured.
+Observed screenshots at narrower desktop window and expanded desktop window. Narrow layout collapsed the sidebar to icons and used two card columns; expanded layout used sidebar, three cards, persistent editor. No mobile screenshot yet.
+Operated: first script field -> replacement text -> second card -> first card. Unsaved text preserved. Save -> version 2, local edits 1. Cmd-R -> version 2 and exact saved script retained.
+Operated: Review schedule -> native dialog, zero destinations, renderer/account blockers and disabled approval. Close -> focus returned to Review schedule.
+Operated: New campaign -> form fields for supplied company/source context. Later actions interrupted by concurrent browser changes; no manual submission success claimed.
+Visual issue: cards too large below fold. Source later reduced max board width to 640px; final visual recheck pending.
+Limitations: fixture only; no real media, live agent, channel receipt, narrow-mobile, keyboard-only full journey or independent human trial. Native browser access exists; browser-tab automation host reports unavailable. Subsequent native actions sometimes aborted on concurrent user changes.

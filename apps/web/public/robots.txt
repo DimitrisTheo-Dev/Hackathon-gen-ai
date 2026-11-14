@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /docs/
+Disallow: /studio/
+Disallow: /dev/
+
+Sitemap: https://hackathon-gen-ai-nine.vercel.app/sitemap.xml

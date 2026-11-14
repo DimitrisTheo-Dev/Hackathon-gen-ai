@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect your agent · Castroom</title><meta name="description" content="Bring the agent you already use."><meta name="theme-color" content="#f6f4f0"><meta name="is-agentic-site-type" content="app"><link rel="canonical" href="https://hackathon-gen-ai-nine.vercel.app/docs/setup/"><link rel="stylesheet" href="/docs/docs.css"><script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebPage", "name": "Connect your agent \u00b7 Castroom", "url": "https://hackathon-gen-ai-nine.vercel.app/docs/setup/", "description": "Bring the agent you already use.", "dateModified": "2026-11-14"}</script></head>
+<body><a class="skip" href="#content">Skip to content</a><header class="topbar"><a class="wordmark" href="/" aria-label="Castroom home"><span aria-hidden="true">c</span>castroom</a><span class="divider" aria-hidden="true"></span><a href="/docs/" class="docs-label">Documentation</a><a class="studio-link" href="/studio/">Open studio <span aria-hidden="true">↗</span></a></header><div class="layout"><nav class="sidebar" aria-label="Documentation"><a href="/docs/">Overview</a><a href="/docs/setup/" aria-current="page">Connect your agent</a><a href="/docs/capabilities/">Formats & limits</a><a href="/docs/security/">Access & approval</a><a href="/docs/errors/">Errors & recovery</a><div class="sidebar-note">Public docs<br><span>Updated 14 Nov 2026</span></div></nav><main id="content"><div class="breadcrumb"><a href="/docs/">Docs</a><span aria-hidden="true">/</span><span>Connect your agent</span></div><h1>Connect your agent</h1><p class="subtitle">Bring the agent you already use.</p>
+<p class="lead">Codex CLI and Claude Code are the first target clients. This page describes the token-based setup path. It does not describe OAuth, an install deep link, or a completed connection.</p>
+<div class="notice"><strong>Live setup is not available yet</strong><p>The production MCP endpoint and workspace token issuer are pending backend integration. The templates below are intentionally incomplete. Do not point them at the studio website or insert a Supabase key. No two-minute setup claim has been measured.</p></div>
+<h2>Before you connect</h2>
+<ol><li>Sign in to the studio and select the workspace you intend to use.</li><li>When live token creation is available, create a named, expiring agent connection with only the required scopes. Keep the token in your secret manager or shell environment, out of prompts, URLs, recordings, and git.</li><li>Set <code>CASTROOM_MCP_URL</code> to the exact endpoint supplied by the studio and <code>CASTROOM_TOKEN</code> to that connection’s token. Launch the client from that environment.</li></ol>
+<h2 id="codex">Codex CLI</h2>
+<p>The installed <strong>codex-cli 0.169.0</strong> accepts this command shape, checked with <code>codex mcp add --help</code> on 14 November 2026. Authenticated discovery against Castroom remains untested.</p>
+<pre><code class="language-bash"># Template only: the live URL and token issuer are pending.
+# CASTROOM_TOKEN is supplied by your environment, never pasted here.
+codex mcp add castroom \
+  --url "$CASTROOM_MCP_URL" \
+  --bearer-token-env-var CASTROOM_TOKEN</code></pre>
+<p>For manual configuration, merge this entry into your Codex configuration after the real endpoint is available. Replace only the URL placeholder; the token field names an environment variable.</p>
+<pre><code class="language-toml">[mcp_servers.castroom]
+url = "REPLACE_WITH_STUDIO_PROVIDED_HTTPS_MCP_URL"
+bearer_token_env_var = "CASTROOM_TOKEN"</code></pre>
+<p>Reference: <a href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli">official Codex MCP configuration</a>.</p>
+<h2 id="claude">Claude Code</h2>
+<p>The installed <strong>Claude Code 2.1.150</strong> supports remote HTTP MCP configuration. Merge the following into a trusted project’s <code>.mcp.json</code>; do not overwrite existing server entries. The token stays in the environment.</p>
+<pre><code class="language-json">{
+  "mcpServers": {
+    "castroom": {
+      "type": "http",
+      "url": "${CASTROOM_MCP_URL}",
+      "headers": {
+        "Authorization": "Bearer ${CASTROOM_TOKEN}"
+      }
+    }
+  }
+}</code></pre>
+<p>Start Claude Code from the configured environment, review the project server trust prompt, and inspect <code>/mcp</code>. Environment expansion is documented by Claude Code; a fresh authenticated Castroom trial is still pending. Reference: <a href="https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcpjson">official Claude Code MCP setup</a>.</p>
+<h2>Confirm the connection</h2>
+<p>When the backend is live, ask the agent to call <code>studio_get_context</code>. Check that it returns the intended workspace, actual capabilities, and the connection’s scopes. The studio must then show server-recorded last activity. Copying a command or seeing a server in local configuration is not a successful connection.</p>
+<pre><code class="language-text">Read my Castroom workspace context. Tell me the available avatars,
+connected accounts, current limits, and actions this connection allows.
+Do not create or publish content.</code></pre>
+<h2>First campaign request</h2>
+<p>After a successful context check, use concrete dates and named accounts. Resolve timezone ambiguity before preparing a schedule.</p>
+<pre><code class="language-text">Using the supplied company brief, prepare three distinct avatar videos.
+Use the workspace’s authorized presenter and brand rules. Draft a schedule
+for 16, 18, and 20 November 2026 at 09:00 Europe/Athens on the connected
+accounts I select. Show me the exact review manifest before publishing.</code></pre>
+<h2>Other hosts</h2><p>Other MCP clients are not tested. Streamable HTTP support alone does not establish authentication or workflow compatibility. Use your host’s official setup path and retain the same workspace scope and review requirements.</p>
+<p class="next-link"><a href="/docs/security/">Read access, expiry, and revocation behavior</a></p>
+<footer class="page-footer"><p>Castroom · Development documentation</p><a href="/docs/">Documentation home</a><a href="/llms.txt">Agent index</a></footer></main></div></body></html>

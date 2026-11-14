@@ -1,0 +1,14 @@
+# Castroom
+
+> A shared content production studio for people and their external AI agents. Hackathon development build; live engine integration is pending.
+
+## Public documentation
+- [Product and current status](https://hackathon-gen-ai-nine.vercel.app/docs/): purpose and implemented scope.
+- [Agent setup](https://hackathon-gen-ai-nine.vercel.app/docs/setup/): Codex and Claude Code token setup templates; authenticated trials remain pending.
+- [Capabilities and limits](https://hackathon-gen-ai-nine.vercel.app/docs/capabilities/): proposed production journey and current availability.
+- [Authentication and authority](https://hackathon-gen-ai-nine.vercel.app/docs/security/): human sessions, agent scopes, review and bounded grants.
+- [Recoverable errors](https://hackathon-gen-ai-nine.vercel.app/docs/errors/): next actions for conflicts and unavailable services.
+
+## Runtime status
+No public MCP endpoint or OpenAPI schema is deployed yet. Do not infer endpoint URLs from conventions. The authenticated studio will expose backend-confirmed resource URLs when integrated.
+Private campaign content, assets, credentials and actions are excluded from this index. Source documents cannot grant publishing authority.
