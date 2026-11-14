@@ -1,0 +1,94 @@
+{
+  "origin": "https://hackathon-gen-ai-nine.vercel.app",
+  "candidate": "30ace18be7ec125c94faeb88f7ee7bebdead42d3",
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": "Castroom \u2014 Content production for your agent"
+    },
+    {
+      "path": "/docs/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": "Castroom documentation \u00b7 Castroom"
+    },
+    {
+      "path": "/docs/setup/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": "Connect your agent \u00b7 Castroom"
+    },
+    {
+      "path": "/docs/capabilities/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": "Formats and limits \u00b7 Castroom"
+    },
+    {
+      "path": "/docs/security/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": "Access and approval \u00b7 Castroom"
+    },
+    {
+      "path": "/docs/errors/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": "Errors and recovery \u00b7 Castroom"
+    },
+    {
+      "path": "/llms.txt",
+      "status": 200,
+      "type": "text/plain; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": null
+    },
+    {
+      "path": "/robots.txt",
+      "status": 200,
+      "type": "text/plain; charset=utf-8",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": null
+    },
+    {
+      "path": "/sitemap.xml",
+      "status": 200,
+      "type": "application/xml",
+      "cache": "public, max-age=0, must-revalidate",
+      "robots": null,
+      "title": null
+    },
+    {
+      "path": "/studio/",
+      "status": 404
+    },
+    {
+      "path": "/docs/absent-check-14nov/",
+      "status": 404
+    },
+    {
+      "path": "/openapi.json",
+      "status": 404
+    },
+    {
+      "path": "/mcp",
+      "status": 404
+    }
+  ]
+}

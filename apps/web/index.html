@@ -3,13 +3,60 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="is-agentic-site-type" content="app" />
+    <meta
+      name="keywords"
+      content="content production studio, MCP, campaign editing"
+    />
     <meta name="theme-color" content="#f6f4f0" />
-    <meta name="description" content="Castroom is a shared content studio for people and their agents. Read setup instructions and current integration status." />
+    <meta
+      name="description"
+      content="Castroom is a shared content studio for people and their agents. Read setup instructions and current integration status."
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Castroom — Content production for your agent</title>
   </head>
   <body>
-    <div id="root"><main><h1>Castroom</h1><p>A content production studio for people and their agents. The hackathon build is in development.</p><p><a href="/docs/">Read product and setup documentation</a> · <a href="/studio/">Sign in to your studio</a></p></main></div>
+    <div id="root">
+      <main>
+        <h1>Castroom: a content production studio for your agent</h1>
+        <p>
+          Create campaigns with your agent. Fine-tune them here. Castroom gives
+          people and their external agents one place to work on company briefs,
+          content drafts, video versions and schedule reviews.
+        </p>
+        <h2>One campaign, two interfaces</h2>
+        <p>
+          Codex or Claude Code can plan a multi-item campaign through the
+          intended MCP interface. The visual studio provides a focused editor
+          for the selected script, authorized presenter, channel caption and
+          requested schedule. You can also create drafts manually from supplied
+          company context.
+        </p>
+        <h2>Current development status</h2>
+        <p>
+          The studio and public documentation are implemented. The shared
+          backend, authenticated MCP setup, Humanlike rendering and publishing
+          providers are not integrated yet. Example drafts are available only in
+          explicit development previews; they are not generated videos or
+          accepted publishing jobs.
+        </p>
+        <h2>Setup and capabilities</h2>
+        <p>
+          Read the
+          <a href="/docs/setup/">Codex and Claude Code setup templates</a>,
+          <a href="/docs/capabilities/">supported formats and current limits</a
+          >, <a href="/docs/security/">authentication and approval model</a>,
+          and <a href="/docs/errors/">recoverable errors</a>. No working MCP or
+          OpenAPI endpoint is advertised before the engine is ready.
+        </p>
+        <p>
+          <a href="/docs/">Documentation</a> ·
+          <a href="/llms.txt">Agent documentation index</a> ·
+          <a href="/studio/">Sign in to your studio</a>
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

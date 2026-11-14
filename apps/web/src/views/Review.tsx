@@ -39,9 +39,15 @@ export function Review({
   const stale =
     manifest.campaignRevision !== campaign.revision ||
     manifest.approval === "stale" ||
-    manifest.entries.some(entry => {
-      const item = campaign.items.find(item => item.id === entry.itemId);
-      return !item || item.revision !== entry.revision || item.renderRevision === null || item.media?.id !== entry.assetId || item.media?.sha256 !== entry.assetHash;
+    manifest.entries.some((entry) => {
+      const item = campaign.items.find((item) => item.id === entry.itemId);
+      return (
+        !item ||
+        item.revision !== entry.revision ||
+        item.renderRevision === null ||
+        item.media?.id !== entry.assetId ||
+        item.media?.sha256 !== entry.assetHash
+      );
     });
   const blocked =
     stale ||
@@ -50,7 +56,13 @@ export function Review({
     context.capabilities.mode === "fixture" ||
     new Date(manifest.expiresAt) <= new Date();
   async function act(action: "approve" | "commit") {
-    if (blocked || busy || submitted || Date.parse(manifest.expiresAt) <= Date.now()) return;
+    if (
+      blocked ||
+      busy ||
+      submitted ||
+      Date.parse(manifest.expiresAt) <= Date.now()
+    )
+      return;
     setBusy(true);
     setError("");
     try {
