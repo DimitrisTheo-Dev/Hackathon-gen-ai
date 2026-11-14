@@ -138,6 +138,9 @@ export function createStripeGateway(secretKey: string): StripeGateway {
           {
             mode: "subscription",
             customer: input.customerId,
+            // Plain Checkout, with this account as the seller. Accounts with Managed Payments on by default would
+            // otherwise require a product tax code and change who the merchant of record is.
+            managed_payments: { enabled: false },
             // No payment_method_types: Stripe selects eligible methods from the sandbox Dashboard settings.
             line_items: [{ price: input.priceId, quantity: 1 }],
             success_url: input.successUrl,
