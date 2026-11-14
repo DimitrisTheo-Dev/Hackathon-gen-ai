@@ -27,9 +27,9 @@ type Controls = { close: () => void; grip: ReactNode; mobile: boolean };
  * Only the explicit handle owns dragging; content keeps native scrolling/selection/zoom.
  * Editor is a non-modal complementary panel on desktop, the same DOM on mobile.
  */
-export function SurfaceDialog({ title, className, editor = false, animateEntry = true, onClose, children }: {
+export function SurfaceDialog({ title, className, editor = false, inline = false, open = true, animateEntry = true, onClose, children }: {
   title: string; className: string; editor?: boolean; onClose: () => void;
-  animateEntry?: boolean;
+  animateEntry?: boolean; inline?: boolean; open?: boolean;
   children: (controls: Controls) => ReactNode;
 }) {
   const mobile = useMedia(editor ? "(max-width: 1000px)" : "(max-width: 760px)");
@@ -43,6 +43,7 @@ export function SurfaceDialog({ title, className, editor = false, animateEntry =
   const historyEntry = useRef(false);
   const finished = useRef(false);
   const priorFocus = useRef<HTMLElement | null>(null);
+  const insideFocus = useRef<HTMLElement | null>(null);
 
   function finish() {
     if (finished.current) return;
@@ -78,12 +79,16 @@ export function SurfaceDialog({ title, className, editor = false, animateEntry =
     const dialog = ref.current!;
     finished.current = false;
     priorFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const modal = !editor || mobile;
+    if (!open) { if(dialog.open)dialog.close(); return; }
+    const modal = !inline && (!editor || mobile);
     if (dialog.open) dialog.close();
     if (modal) dialog.showModal(); else dialog.show();
     const unlock = modal ? lockPage() : () => {};
-    if (modal) dialog.querySelector<HTMLElement>("[data-surface-focus]")?.focus({ preventScroll: true });
-    if (mobile && !editor) {
+    if(insideFocus.current?.isConnected&&dialog.contains(insideFocus.current))insideFocus.current.focus({preventScroll:true});
+    else if(inline){dialog.tabIndex=-1;dialog.focus({preventScroll:true});}
+    insideFocus.current=null;
+    if (modal && !dialog.contains(priorFocus.current)) dialog.querySelector<HTMLElement>("[data-surface-focus]")?.focus({ preventScroll: true });
+    if (mobile && !editor && !inline) {
       history.pushState({ ...history.state, castroomSheet: id }, "", location.href);
       historyEntry.current = true;
     }
@@ -91,7 +96,7 @@ export function SurfaceDialog({ title, className, editor = false, animateEntry =
       if (historyEntry.current && history.state?.castroomSheet !== id) dismiss.current();
     };
     window.addEventListener("popstate", back);
-    if (mobile && !reduced && animateEntry) {
+    if (mobile && !inline && !reduced && animateEntry) {
       motion.current.position = Math.min(80, dialog.getBoundingClientRect().height * .12);
       paint(); settle(0, false);
     }
@@ -103,12 +108,13 @@ export function SurfaceDialog({ title, className, editor = false, animateEntry =
         history.replaceState(next, "", location.href);
       }
       historyEntry.current = false;
+      insideFocus.current=dialog.contains(document.activeElement)&&document.activeElement instanceof HTMLElement?document.activeElement:null;
       dialog.close(); unlock();
       if (modal && priorFocus.current?.isConnected) priorFocus.current.focus({ preventScroll: true });
       dialog.style.transform = "";
       motion.current.position = 0; motion.current.velocity = 0;
     };
-  }, [mobile, editor]);
+  }, [mobile, editor, inline && mobile, open]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -161,7 +167,7 @@ export function SurfaceDialog({ title, className, editor = false, animateEntry =
   }
   const grip = <button type="button" className="sheet-grip" aria-label={`Dismiss ${title}`} onPointerDown={down} onPointerMove={move} onPointerUp={e => up(e)} onPointerCancel={e => up(e, true)} onClick={() => { if (!ignoreClick.current) close(); ignoreClick.current = false; }}><span /></button>;
 
-  return <dialog ref={ref} className={`surface-dialog ${className}`} aria-label={title} role={editor && !mobile ? "complementary" : "dialog"} onCancel={event => { event.preventDefault(); finish(); }} onClick={event => {
+  return <dialog ref={ref} className={`surface-dialog ${className}`} aria-label={title} role={inline || editor && !mobile ? "complementary" : "dialog"} onCancel={event => { event.preventDefault(); finish(); }} onClick={event => {
     if (event.target !== ref.current || editor) return;
     const rect = ref.current.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();

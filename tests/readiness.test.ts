@@ -124,7 +124,7 @@ test("public docs have raw text, canonical URLs, semantic code and consistent na
 
 test("agent index and sitemap discover public actions without exposing private paths", async () => {
   const llms = await readFile("apps/web/public/llms.txt", "utf8");
-  assert.ok(llms.startsWith("# Castroom\n\n>"));
+  assert.ok(llms.startsWith("# Faceful\n\n>"));
   for (const section of ["## When to use", "## When not to use", "## First calls", "## Current limitations"]) assert.ok(llms.includes(section));
   for (const path of ["/openapi.json", "/docs/api/", "/docs/mcp/", "/docs/cli/"]) assert.ok(llms.includes(path));
   const sitemap = await readFile("apps/web/public/sitemap.xml", "utf8");
@@ -144,4 +144,65 @@ test('public API version pinning is enforced with explicit cache variation and r
     if(response.status===400){const problem=await response.json();assert.equal(problem.code,'unsupported_api_version');assert.equal(response.headers.get('cache-control'),'no-store');assert.match(problem.resolution,/X-API-Version: 1/);}
   }
   for(const path of Object.values(openApiDocument.paths)) assert.ok(path.get.parameters.some(parameter=>parameter.in==='header'&&parameter.name==='X-API-Version'));
+});
+
+test("RFC 8631 discovery links advertise canonical implemented resources on public API responses", async () => {
+  const { publicDiscoveryLinkHeader } = await import("../packages/public-api/src/discovery");
+  const links = [...publicDiscoveryLinkHeader.matchAll(/<([^>]+)>; rel="([^"]+)"; type="([^"]+)"; title="([^"]+)"/g)];
+  assert.equal(links.length, 6);
+  assert.ok(links.some(([, url, relation]) => url === `${publicOrigin}/openapi.json` && relation.split(" ").includes("service-desc")));
+  for (const path of ["/docs/api/", "/docs/mcp/", "/docs/cli/"]) {
+    assert.ok(links.some(([, url, relation]) => url === `${publicOrigin}${path}` && relation === "service-doc"));
+  }
+  assert.ok(links.some(([, url, relation]) => url === `${publicOrigin}/api/public/status` && relation === "status"));
+  assert.ok(links.some(([, url, relation]) => url === `${publicOrigin}/llms.txt` && relation === "index"));
+  assert.ok(!links.some(([, url]) => new URL(url).pathname === "/mcp"));
+  for (const path of [...routes.map(([path]) => path), "/openapi.json", "/api/public/missing"]) {
+    for (const method of ["GET", "HEAD", "POST"]) {
+      const response = handlePublicRequest(new Request(`https://untrusted-host.example${path}`, { method }))!;
+      assert.equal(response.headers.get("Link"), publicDiscoveryLinkHeader);
+      assert.ok(!response.headers.get("Link")!.includes("untrusted-host.example"));
+    }
+  }
+  for (const path of Object.values(openApiDocument.paths)) {
+    assert.equal(path.get.responses["200"].headers.Link.example, publicDiscoveryLinkHeader);
+  }
+});
+
+test("public presentation links discovery for HTML, Markdown and missing pages without altering private routing", async () => {
+  const { default: proxy } = await import("../proxy");
+  const { publicDiscoveryLinkHeader } = await import("../packages/public-api/src/discovery");
+  for (const path of ["/", "/index.html", ...publicDocuments.map((document) => document.path), "/about/", "/contact/", "/privacy/", "/readiness-missing-page"]) {
+    for (const accept of ["text/html", "text/markdown"]) {
+      const response = proxy(new Request(`${publicOrigin}${path}`, { headers: { Accept: accept } }));
+      assert.equal(response.headers.get("Link"), publicDiscoveryLinkHeader, `${accept} ${path}`);
+      assert.equal(response.status, path === "/readiness-missing-page" ? 404 : 200);
+    }
+  }
+  for (const path of ["/studio/", "/dev/studio/", "/v1/campaigns", "/api/v1/context"]) {
+    const response = proxy(new Request(`${publicOrigin}${path}`));
+    assert.equal(response.headers.get("Link"), null);
+    assert.equal(response.headers.get("x-middleware-next"), "1");
+  }
+  for (const path of ["/mcp", "/.well-known/oauth-authorization-server"]) {
+    const response = proxy(new Request(`${publicOrigin}${path}`));
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("Location"), null);
+  }
+});
+
+test("public discovery does not fabricate quota counters, throttling or a live MCP transport", async () => {
+  for (const path of ["/api/public/status", "/openapi.json", "/api/public/missing"]) {
+    const response = handlePublicRequest(request(path))!;
+    for (const name of ["RateLimit", "RateLimit-Policy", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"]) {
+      assert.equal(response.headers.get(name), null, `${path} ${name}`);
+    }
+  }
+  const status = await handlePublicRequest(request("/api/public/status"))!.json();
+  assert.equal(status.engine.mcp, false);
+  const apiGuide = publicDocuments.find((document) => document.slug === "api")!;
+  assert.match(apiGuide.markdown, /No application request quota or remaining-count telemetry is configured/);
+  assert.match(apiGuide.markdown, /RateLimit and RateLimit-Policy are therefore not emitted/);
+  const cliGuide = publicDocuments.find((document) => document.slug === "cli")!;
+  assert.match(cliGuide.markdown, /not published on npm/);
 });

@@ -1,7 +1,7 @@
 import { test, expect, chromium, webkit, type Page } from '@playwright/test';
 
 const origin = 'http://127.0.0.1:4173';
-const evidence = 'docs/demo/evidence/mobile-refinement';
+const evidence = 'docs/demo/evidence/creative-director';
 async function cleanConsole(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -15,7 +15,7 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
   try {
     await page.goto(origin);
     await page.getByRole('button',{name:'Open navigation',exact:true}).click();
-    await expect(page.getByRole('dialog',{name:'Explore Castroom'})).toBeVisible();
+    await expect(page.getByRole('dialog',{name:'Explore Faceful'})).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button',{name:'Open navigation',exact:true})).toBeFocused();
     await page.getByRole('button',{name:'Inspect this draft',exact:true}).click();
@@ -25,7 +25,7 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     expect(viewport).toContain('viewport-fit=cover'); expect(viewport).not.toMatch(/maximum-scale|user-scalable/);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-    await page.goto(`${origin}/dev/studio/`);
+    await page.goto(`${origin}/dev/studio/?view=canvas`);
     await expect(page.locator('.content-card')).toHaveCount(3);
     await page.screenshot({path:`${evidence}/${engine.name()}-phone-initial.png`});
     await page.getByRole('button',{name:'Filter and sort content'}).click();
@@ -42,11 +42,11 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     const editor = page.getByRole('dialog',{name:'Content editor'});
     await expect(editor).toBeVisible();
     await expect(page.getByRole('button',{name:'Return to campaign'})).toBeFocused();
-    await page.locator('#script').fill('A draft retained when I leave this editor.');
+    await page.getByRole('button',{name:'Details',exact:true}).click();await page.locator('#script').fill('A draft retained when I leave this editor.');
     expect(await page.locator('#script').evaluate(el=>getComputedStyle(el).fontSize)).toBe('16px');
     await page.goBack(); await expect(editor).toHaveCount(0);
     await page.locator('.content-select').first().click();
-    await expect(page.locator('#script')).toHaveValue('A draft retained when I leave this editor.');
+    await page.getByRole('button',{name:'Details',exact:true}).click();await expect(page.locator('#script')).toHaveValue('A draft retained when I leave this editor.');
 
     // Deterministic storage failure: the UI must restore its saved card and keep the edit.
     await page.evaluate(() => {
@@ -78,7 +78,7 @@ for (const engine of [chromium, webkit]) test(`${engine.name()} phone: native na
     expect(await modal.evaluate(el=>el.getBoundingClientRect().bottom <= visualViewport!.height+1)).toBe(true);
     await page.keyboard.press('Escape');
     await page.reload(); await page.locator('.content-select').first().click();
-    await expect(page.locator('#script')).toHaveValue('A draft retained when I leave this editor.');
+    await page.getByRole('button',{name:'Details',exact:true}).click();await expect(page.locator('#script')).toHaveValue('A draft retained when I leave this editor.');
     await page.setViewportSize({width:844,height:390});
     await expect(page.getByRole('button',{name:'Save changes',exact:true})).toBeVisible();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -92,7 +92,7 @@ test('Chromium synthesized touch: sheet tracks, reverses, dismisses, restores fo
   const session = await context.newCDPSession(page);
   const touch = (type:'touchStart'|'touchMove'|'touchEnd',x:number,y:number) => session.send('Input.dispatchTouchEvent',{type,touchPoints:type==='touchEnd'?[]:[{x,y,id:1}]});
   try {
-    await page.goto(`${origin}/dev/studio/`);await page.locator('.content-select').first().click();
+    await page.goto(`${origin}/dev/studio/?view=canvas`);await page.locator('.content-select').first().click();
     const editor = page.getByRole('dialog',{name:'Content editor'});
     await expect(editor).toBeVisible();
     await expect.poll(()=>editor.evaluate(el=>Math.round(el.getBoundingClientRect().top))).toBe(0);
@@ -101,6 +101,7 @@ test('Chromium synthesized touch: sheet tracks, reverses, dismisses, restores fo
     expect(await editor.evaluate(el=>el.getBoundingClientRect().top)).toBeGreaterThan(50);
     await touch('touchMove',195,36);await touch('touchEnd',195,36);
     await expect.poll(()=>editor.evaluate(el=>Math.round(el.getBoundingClientRect().top))).toBe(0);
+    await page.getByRole('button',{name:'Details',exact:true}).click();
     // A scroll on content belongs to the browser, not the dismissal gesture.
     await touch('touchStart',180,400);
     for(let y=380;y>=180;y-=20){await touch('touchMove',180,y);await page.evaluate(()=>new Promise(requestAnimationFrame));}
@@ -127,7 +128,7 @@ test('phone loading, empty, failed workspace and expired media are explicit and 
   let release!:()=>void;
   const paused=new Promise<void>(resolve=>release=resolve);
   await page.route('**/assets/AuthApp-*.js',async route=>{await paused;await route.continue();});
-  await page.goto('/dev/studio/',{waitUntil:'domcontentloaded'});
+  await page.goto('/dev/studio/?view=canvas',{waitUntil:'domcontentloaded'});
   await expect(page.getByText('Opening your studio…')).toBeVisible();
   await page.screenshot({path:`${evidence}/loading-375.png`});
   release();await expect(page.locator('.content-card')).toHaveCount(3);
@@ -148,7 +149,7 @@ test('phone loading, empty, failed workspace and expired media are explicit and 
 });
 
 test('mobile project selection rolls back when the refreshed project is unavailable',async({page})=>{
-  await page.setViewportSize({width:390,height:844});await page.goto('/dev/studio/');
+  await page.setViewportSize({width:390,height:844});await page.goto('/dev/studio/?view=canvas');
   await expect(page.locator('.content-card')).toHaveCount(3);
   await page.evaluate(()=>{
     const key='castroom-development-v1';const state=JSON.parse(localStorage.getItem(key)!);

@@ -24,7 +24,10 @@
   -webkit-font-smoothing: antialiased;
 }
 ::selection { background: var(--highlight-soft); color: var(--ink); }
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
+:is(input,textarea,select) { outline: 1px solid transparent; outline-offset: -2px; }
+/* Focus stays inside the field: one quiet line, no expanding halo. */
+:is(input,textarea,select):is(:focus,:focus-visible) { outline: 1px solid var(--focus); outline-offset: -2px; border-color: var(--focus); box-shadow: none; }
 @layer base {
   html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
   button, a, summary, [role="button"] { touch-action: manipulation; }

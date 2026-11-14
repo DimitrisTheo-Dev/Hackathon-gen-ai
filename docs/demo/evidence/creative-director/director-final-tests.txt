@@ -1,0 +1,11 @@
+
+Running 6 tests using 1 worker
+
+  ✓  1 tests/browser/director.spec.ts:3:1 › director plan → saved canvas revision → history → undo, with honest unavailable AI (2.4s)
+  ✓  2 tests/browser/director.spec.ts:19:1 › director failed edit rolls canvas back; retry preserves intent; new revisions make old plans stale (1.2s)
+  ✓  3 tests/browser/director.spec.ts:28:1 › phone director exact-script plan preserves Details and safe focus styles (1.2s)
+  ✓  4 tests/browser/director.spec.ts:36:1 › OTP screens verify code, cooldown and failure without sending a real email (1.1s)
+  ✓  5 tests/browser/director.spec.ts:49:1 › hero rotates client marks without shifting the headline and can pause (4.5s)
+  ✓  6 tests/browser/director.spec.ts:58:1 › OTP verification opens a server-confirmed session without inventing workspace access (1.5s)
+
+  6 passed (12.5s)

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { publicDocuments, publicOrigin, publicPages } from "./documents.js";
-export { publicDocuments, publicOrigin, publicPages };
+import { publicDiscoveryLinkHeader } from "./discovery.js";
+export { publicDocuments, publicOrigin, publicPages, publicDiscoveryLinkHeader };
 
 const absoluteUrl = z.url({ protocol: /^https$/ });
 const scopeNames = ["campaign:read", "content:edit", "render:write", "schedule:prepare"] as const;
@@ -20,7 +21,7 @@ export const permissionsSchema = z.object({
   documentationUrl: absoluteUrl,
 }).strict();
 export const statusSchema = z.object({
-  product: z.literal("Castroom"),
+  product: z.literal("Faceful"),
   schemaVersion: z.literal("1.0"),
   stage: z.literal("development"),
   publicApi: z.object({ available: z.literal(true), readOnly: z.literal(true), authenticationRequired: z.literal(false) }).strict(),
@@ -38,7 +39,7 @@ export const problemSchema = z.object({
 }).strict();
 
 export const publicStatus = statusSchema.parse({
-  product: "Castroom", schemaVersion: "1.0", stage: "development",
+  product: "Faceful", schemaVersion: "1.0", stage: "development",
   publicApi: { available: true, readOnly: true, authenticationRequired: false },
   studio: { available: true, privateDataRequiresAuthentication: true, developmentFixturesAreLiveResults: false },
   engine: { campaignApi: false, agentTokenIssuance: false, mcp: false, humanlikeRendering: false, publishing: false },
@@ -64,7 +65,10 @@ function schema(value: z.ZodType) { return z.toJSONSchema(value, { target: "draf
 const versionParameter = { name: "X-API-Version", in: "header", required: false, description: "Pin public API major version 1. Omission defaults to 1; unsupported versions return 400. Breaking changes require a new version.", schema: { type: "string", enum: ["1"], default: "1" } };
 const jsonResponse = (name: string, example: unknown) => ({
   description: "Successful public read. No private workspace data or credentials are included.",
-  headers: { "X-API-Version": { description: "Public API major version served.", schema: { type: "string", const: "1" } } },
+  headers: {
+    "X-API-Version": { description: "Public API major version served.", schema: { type: "string", const: "1" } },
+    Link: { description: "RFC 8631 service description, documentation and integration status; includes the public agent index. Links describe implemented public resources, not live MCP availability.", schema: { type: "string" }, example: publicDiscoveryLinkHeader },
+  },
   content: { "application/json": { schema: { $ref: `#/components/schemas/${name}` }, example } },
 });
 const errorResponse = (description: string) => ({ description, content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } } });
@@ -80,15 +84,15 @@ const operation = (operationId: string, summary: string, description: string, re
 export const openApiDocument = {
   openapi: "3.1.1", jsonSchemaDialect: "https://json-schema.org/draft/2020-12/schema",
   info: {
-    title: "Castroom public discovery API", version: "1.0.0",
+    title: "Faceful public discovery API", version: "1.0.0",
     description: "Implemented read-only product status, proposed permission definitions and public documentation. No campaign writes, private data, rendering, token issuance or publishing are exposed by this API. The shared domain engine remains pending integration.",
-    contact: { name: "Castroom project maintainer", url: "https://github.com/DimitrisTheo-Dev" },
+    contact: { name: "Faceful project maintainer", url: "https://github.com/DimitrisTheo-Dev" },
   },
-  servers: [{ url: publicOrigin, description: "Castroom public origin" }], security: [],
-  externalDocs: { description: "Castroom API setup, limits and recovery", url: `${publicOrigin}/docs/api/` },
+  servers: [{ url: publicOrigin, description: "Faceful public origin" }], security: [],
+  externalDocs: { description: "Faceful API setup, limits and recovery", url: `${publicOrigin}/docs/api/` },
   tags: [{ name: "Public discovery", description: "Credential-free reads containing public information only." }],
   paths: {
-    "/api/public/status": { get: operation("getCastroomStatus", "Read current integration status", "Discover which Castroom surfaces are implemented, which engine capabilities remain unavailable and the next documentation link. This does not report private workspace health.", "Status", publicStatus) },
+    "/api/public/status": { get: operation("getCastroomStatus", "Read current integration status", "Discover which Faceful surfaces are implemented, which engine capabilities remain unavailable and the next documentation link. This does not report private workspace health.", "Status", publicStatus) },
     "/api/public/permissions": { get: operation("getCastroomPermissionDefinitions", "Read proposed scope definitions", "Read the four scope names currently requested by the studio setup. These are proposed definitions, not issued grants or OAuth scopes advertised by a live authorization server.", "Permissions", publicPermissions) },
     "/api/public/docs": { get: operation("listCastroomPublicDocuments", "List canonical public documentation", "Find the supported document slug and canonical URL before requesting a document. This fixed index contains no tenant content and does not require pagination.", "DocumentIndex", publicDocumentIndex) },
     "/api/public/docs/{slug}": { get: {
@@ -108,7 +112,7 @@ function respond(request: Request, body: unknown, status = 200, headers: Record<
       "X-Content-Type-Options": "nosniff",
       "X-API-Version": "1",
       Vary: "X-API-Version",
-      Link: '</openapi.json>; rel="describedby"; type="application/vnd.oai.openapi+json"',
+      Link: publicDiscoveryLinkHeader,
       ...headers,
     },
   });

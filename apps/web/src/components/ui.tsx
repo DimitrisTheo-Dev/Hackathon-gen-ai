@@ -137,7 +137,7 @@ export function Preview({
   index = 0,
   compact = false,
   passive = false,
-  brandName = "Castroom",
+  brandName = "Faceful",
 }: {
   item: ContentItem;
   index?: number;

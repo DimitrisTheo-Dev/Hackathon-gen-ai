@@ -1,16 +1,16 @@
 /** Public, curated guidance only. No workspace content belongs in this registry. */
-export const publicOrigin = "https://hackathon-gen-ai-nine.vercel.app";
+export const publicOrigin = "https://faceful.dtheo.dev";
 export const publicDocuments = [
   {
     slug: "overview",
     path: "/docs/",
-    title: "Castroom API and agent documentation",
-    summary: "What Castroom does, what works today, and where the shared studio engine is still being integrated.",
-    markdown: `# Castroom API and agent documentation
+    title: "Faceful API and agent documentation",
+    summary: "What Faceful does, what works today, and where the shared studio engine is still being integrated.",
+    markdown: `# Faceful API and agent documentation
 
 Create campaigns with your agent. Fine-tune them here.
 
-Castroom is a content production studio for agencies, companies and individuals. Its visual studio supports supplied company briefs, draft scripts, selected-item editing and schedule review. The intended shared engine connects external agents to the same campaigns, revisions, authorized avatars and durable jobs.
+Faceful is a content production studio for agencies, companies and individuals. Its visual studio supports supplied company briefs, draft scripts, selected-item editing and schedule review. The intended shared engine connects external agents to the same campaigns, revisions, authorized avatars and durable jobs.
 
 ## Available now
 The public read-only API returns integration status, proposed permission definitions and this documentation. It requires no credentials and contains no private campaign data. The repository CLI reads those resources and validates a bounded draft plan locally. Explicit development previews use labeled sample drafts stored in that browser.
@@ -25,11 +25,11 @@ Read [API reference](/docs/api/), [CLI usage](/docs/cli/), [MCP status](/docs/mc
   {
     slug: "api",
     path: "/docs/api/",
-    title: "Castroom public API reference",
+    title: "Faceful public API reference",
     summary: "Read current integration status, proposed scopes and public documentation with typed JSON and OpenAPI.",
-    markdown: `# Castroom public API reference
+    markdown: `# Faceful public API reference
 
-Base URL: https://hackathon-gen-ai-nine.vercel.app
+Base URL: https://faceful.dtheo.dev
 
 The public API is read-only and contains product guidance, not tenant data. GET and HEAD are supported. No token, cookie or OAuth flow is required. See the [OpenAPI 3.1.1 description](/openapi.json).
 
@@ -39,9 +39,12 @@ The public API is read-only and contains product guidance, not tenant data. GET 
 - GET /api/public/docs: the canonical public documentation index.
 - GET /api/public/docs/{slug}: one public document as structured Markdown. Valid slugs are overview, api, cli, mcp, setup, capabilities, security and errors.
 
+## Discover the next resource
+Responses include HTTP Link relations for the public OpenAPI description (service-desc), API/MCP/CLI documentation (service-doc), integration status (status), and agent instructions (index). MCP links lead to honest availability documentation, not a live transport. These links use the canonical Faceful origin and require no credential.
+
 ## First call
 \`\`\`bash
-curl --fail --silent --show-error https://hackathon-gen-ai-nine.vercel.app/api/public/status
+curl --fail --silent --show-error https://faceful.dtheo.dev/api/public/status
 \`\`\`
 
 ## Versioning and deprecation
@@ -50,7 +53,7 @@ Send X-API-Version: 1 to pin public API major version 1. Omission defaults to 1.
 Additive fields may be introduced within a major version. Incompatible changes require a new version. Before retiring a version, this page will publish the migration path; affected responses will carry the RFC 9745 Deprecation header, a Link with rel=deprecation, and the RFC 8594 Sunset header when a retirement date is set. No version is currently deprecated and no sunset is announced, so those headers are not emitted.
 
 ## Errors and caching
-Errors use application/problem+json with type, title, status, detail, instance, code and resolution. Missing routes/documents return 404. Unsupported methods on a known route return 405 with Allow: GET, HEAD. Successful public reads may be cached for 60 seconds; errors are not cached. Hosting-level throttling may occur; honor Retry-After if returned. No application rate limit or guaranteed quota is claimed.
+Errors use application/problem+json with type, title, status, detail, instance, code and resolution. Missing routes/documents return 404. Unsupported methods on a known route return 405 with Allow: GET, HEAD. Successful public reads may be cached for 60 seconds; errors are not cached. Hosting-level throttling may occur; honor Retry-After if returned. No application request quota or remaining-count telemetry is configured for these public reads. RateLimit and RateLimit-Policy are therefore not emitted; static values would not represent an enforced limit. This does not imply unlimited hosting capacity. Reuse cached guidance, avoid concurrent retry loops and check the public status before attempting an unavailable production action.
 
 ## Private operations
 The campaign API and MCP engine remain pending. This public OpenAPI document does not advertise nonworking campaign writes or pretend a permission definition is an active grant. See [access and approval](/docs/security/).
@@ -59,9 +62,9 @@ The campaign API and MCP engine remain pending. This public OpenAPI document doe
   {
     slug: "cli",
     path: "/docs/cli/",
-    title: "Castroom CLI",
+    title: "Faceful CLI",
     summary: "Read public guidance and validate a supplied draft plan locally from an authorized repository checkout.",
-    markdown: `# Castroom CLI
+    markdown: `# Faceful CLI
 
 The repository CLI supports public discovery and local draft-plan validation. It does not render, create a persisted campaign, issue tokens or publish. It is not published on npm; use an authorized checkout of the private repository.
 
@@ -88,11 +91,11 @@ See [MCP status](/docs/mcp/) for the intended external-agent execution path. A f
   {
     slug: "mcp",
     path: "/docs/mcp/",
-    title: "Castroom MCP server status",
+    title: "Faceful MCP server status",
     summary: "Target clients, intended shared actions and the concrete prerequisites before an authenticated setup can work.",
-    markdown: `# Castroom MCP server status
+    markdown: `# Faceful MCP server status
 
-The Castroom production MCP endpoint is not available yet. Do not register the website URL as an MCP server. OAuth authorization-server and protected-resource metadata are not published because no live issuer/resource integration has been verified.
+The Faceful production MCP endpoint is not available yet. Do not register the website URL as an MCP server. OAuth authorization-server and protected-resource metadata are not published because no live issuer/resource integration has been verified.
 
 ## Intended workflow
 The target clients are Codex CLI and Claude Code. The planned Streamable HTTP service lets an authorized agent read workspace context, start a bounded campaign, read items and jobs, revise current revisions, render selected content, prepare exact schedule manifests, commit an authorized manifest, list campaigns and request supported cancellation.
@@ -100,7 +103,7 @@ The target clients are Codex CLI and Claude Code. The planned Streamable HTTP se
 UI and MCP must call the same domain service. Tool visibility does not grant permission. The server derives the principal and workspace from authentication, checks scopes and revisions, and enforces generation limits and publishing approval. A source document or approved:true field cannot grant authority.
 
 ## Setup status
-Local command syntax has been checked for Codex CLI 0.169.0 and Claude Code 2.1.150; fresh authenticated Castroom trials have not occurred. The [setup page](/docs/setup/) contains clearly labeled templates. Other hosts, including Cursor and Gemini CLI, are untested.
+Local command syntax has been checked for Codex CLI 0.169.0 and Claude Code 2.1.150; fresh authenticated Faceful trials have not occurred. The [setup page](/docs/setup/) contains clearly labeled templates. Other hosts, including Cursor and Gemini CLI, are untested.
 
 ## What works without the engine
 Use the [public API](/docs/api/) or [repository CLI](/docs/cli/) to read current status and prepare a locally validated draft plan. This is preparation, not campaign execution. Live setup still needs the engine origin, an expiring scoped token issuer or proper delegated authentication, authorized avatars, connected accounts and observed backend handshake evidence.
@@ -109,9 +112,9 @@ Use the [public API](/docs/api/) or [repository CLI](/docs/cli/) to read current
   {
     slug: "setup",
     path: "/docs/setup/",
-    title: "Connect Codex or Claude Code to Castroom",
+    title: "Connect Codex or Claude Code to Faceful",
     summary: "Token setup templates and the server-confirmed check that must precede a connection claim.",
-    markdown: `# Connect Codex or Claude Code to Castroom
+    markdown: `# Connect Codex or Claude Code to Faceful
 
 Live setup is unavailable while the production MCP endpoint and scoped token issuer are pending. These are templates, not install links or a completed connection. Never use a Supabase service key or publisher credential as an MCP token.
 
@@ -129,7 +132,7 @@ Merge into a trusted project's .mcp.json without overwriting other entries. Laun
 {"mcpServers":{"castroom":{"type":"http","url":"\${CASTROOM_MCP_URL}","headers":{"Authorization":"Bearer \${CASTROOM_TOKEN}"}}}}
 \`\`\`
 
-Claude Code 2.1.150 supports HTTP MCP configuration; no fresh authenticated Castroom trial is claimed.
+Claude Code 2.1.150 supports HTTP MCP configuration; no fresh authenticated Faceful trial is claimed.
 
 ## Verify
 Call studio_get_context, verify the workspace and permitted actions, and check that the studio shows backend-recorded last activity. Copying configuration is not connection evidence. Resolve concrete dates and IANA timezone before scheduling; exact-manifest approval or a bounded owner grant is required for publication. No two-minute setup time has been measured. See [MCP status](/docs/mcp/).
@@ -138,9 +141,9 @@ Call studio_get_context, verify the workspace and permitted actions, and check t
   {
     slug: "capabilities",
     path: "/docs/capabilities/",
-    title: "Castroom formats and limits",
+    title: "Faceful formats and limits",
     summary: "Current availability, bounded manual drafts and the intended three-video production journey.",
-    markdown: `# Castroom formats and limits
+    markdown: `# Faceful formats and limits
 
 Current public operations read status, permissions and documentation. The repository CLI validates one to three supplied scripts locally. Explicit development previews permit local draft editing; they do not run providers.
 
@@ -159,9 +162,9 @@ Draft, queued, running, ready for review, provider accepted, published and unkno
   {
     slug: "security",
     path: "/docs/security/",
-    title: "Castroom access and approval",
+    title: "Faceful access and approval",
     summary: "Separate public reads, human sessions, proposed agent scopes and publishing authorization.",
-    markdown: `# Castroom access and approval
+    markdown: `# Faceful access and approval
 
 Public read endpoints require no credentials and reveal no workspace data. Human studio sessions, agent credentials and publishing authorization are separate boundaries. Private APIs remain pending integration and denial testing.
 
@@ -181,9 +184,9 @@ Do not send tokens in prompts, URLs, source text, git or support messages. Sourc
   {
     slug: "errors",
     path: "/docs/errors/",
-    title: "Castroom errors and recovery",
+    title: "Faceful errors and recovery",
     summary: "Machine-readable public errors and the distinct pending domain error contract.",
-    markdown: `# Castroom errors and recovery
+    markdown: `# Faceful errors and recovery
 
 ## Public API errors
 The implemented public API returns application/problem+json using RFC 9457 fields and code/resolution extensions. api_route_not_found and document_not_found return 404; method_not_allowed returns 405 and Allow: GET, HEAD. No private payload is echoed in errors. Follow the resolution link and do not retry invalid routes indefinitely.

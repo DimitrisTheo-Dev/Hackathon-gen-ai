@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { AgentIcon } from "../components/AgentIcon";
 import {
   ArrowDown,
   ArrowRight,
@@ -22,6 +23,7 @@ import {
   Plus,
   Search,
   Settings2,
+  UserRound,
   Terminal,
   Video,
   X,
@@ -58,12 +60,38 @@ const steps = [
   { label: "Approve & schedule", heading: "Know exactly what goes out.", text: "Review the final asset, copy, account and time together. Publication requires server-verified authorization and a separate receipt for each destination.", detail: "Review checklist", fields: [["Video", "Final render required"], ["Accounts", "Connect when you are ready to schedule"], ["Authorization", "Review required · no posts submitted"]] },
 ] as const;
 
+const demoSteps = [
+  { label: "Brief", heading: "One brief. Three distinct stories.", note: "Start with the company, audience and permitted source material." },
+  { label: "Avatar", heading: "Choose who tells the story.", note: "Your live workspace would show only presenters you are authorized to use." },
+  { label: "Generate", heading: "Compose the video, not just the footage.", note: "Avatar footage, captions and brand treatment become one reviewed asset." },
+  { label: "Review", heading: "Make the small change that matters.", note: "Keep the script, channel copy and final composition together for review." },
+  { label: "Schedule", heading: "Authorize the exact plan.", note: "An owner reviews the final asset, copy, accounts and requested times before submission." },
+  { label: "Receipt", heading: "Know what happened on each channel.", note: "Provider acceptance, publication and a recoverable failure are different outcomes." },
+] as const;
+
+function DemoPhase({ stage, item, selected, avatar, captionStyle, onAvatar, onCaption }: {
+  stage: number; item: typeof sampleItems[number]; selected: number; avatar: string;
+  captionStyle: "Restrained" | "Expressive"; onAvatar: (value: string) => void;
+  onCaption: (value: "Restrained" | "Expressive") => void;
+}) {
+  if (stage === 1) return <div className="landing-demo-avatars"><div className="landing-demo-choice-grid">{["Presenter A", "Presenter B"].map((name, index) => <button key={name} aria-pressed={avatar === name} aria-label={`Choose example ${name}`} onClick={() => onAvatar(name)}><span className={`landing-demo-person landing-demo-person-${index}`}><UserRound size={64} strokeWidth={1} /><span>Example avatar</span></span><strong>{name}</strong><span>{index === 0 ? "Direct & clear" : "Warm & conversational"}</span><span className="landing-demo-choice-state">{avatar === name ? <><Check size={14} />Selected for this demo</> : "Select example"}</span></button>)}</div><p className="landing-demo-disclosure">Illustrative presenters. No person, voice or avatar permission is being granted.</p></div>;
+  if (stage === 2) return <div className="landing-demo-compose"><div className="landing-demo-output"><Storyboard item={item} index={selected} small /><span>Composition storyboard</span></div><div className="landing-demo-layers"><div><UserRound size={17} /><span><strong>Avatar footage</strong><small>{avatar} · current spoken script</small></span></div><div><MessageSquareText size={17} /><span><strong>Captions</strong><small>{captionStyle} subtitle treatment</small></span></div><div><Layers size={17} /><span><strong>Brand & output</strong><small>BeWell palette · portrait 9:16</small></span></div><p>One selected revision. A real render would run independently of your browser.</p><span className="landing-demo-disclosure">Render request illustration · no job submitted</span></div></div>;
+  if (stage === 3) return <div className="landing-demo-review"><div className="landing-demo-review-copy"><span className="landing-demo-eyebrow">Selected script · example</span><blockquote>{item.script}</blockquote><div className="landing-demo-caption-choices" role="group" aria-label="Example subtitle treatment">{(["Restrained", "Expressive"] as const).map((style) => <button key={style} aria-pressed={captionStyle === style} onClick={() => onCaption(style)}>{style}</button>)}</div><p>Caption choice stays with this demonstration. Changing the composition would require a new final render and approval.</p></div><div className="landing-demo-caption-preview"><Storyboard item={item} index={selected} small /><span className={`landing-demo-caption-sample ${captionStyle === "Expressive" ? "is-expressive" : ""}`}>{item.title}</span><span className="landing-demo-disclosure">Caption layout illustration</span></div></div>;
+  if (stage === 4) return <div className="landing-demo-manifest"><div className="landing-demo-manifest-heading"><LockKeyhole size={19} /><span><strong>Owner authorization comes first</strong><small>Example manifest · {avatar} · {captionStyle.toLowerCase()} captions</small></span></div><div className="landing-demo-manifest-copy"><span>Exact copy</span><p>{item.title} — a story from the published BeWell case study.</p></div><div className="landing-demo-schedule-rows">{["Instagram Reels", "TikTok", "YouTube Shorts"].map((platform) => <div key={platform}><span><strong>{platform}</strong><small>Example company account</small></span><time>{item.date}<small>Europe/Athens · requested</small></time></div>)}</div><p className="landing-demo-disclosure">Illustration only. No accounts are connected or authorized here. A live server must verify approval before any provider submission.</p></div>;
+  if (stage === 5) return <div className="landing-demo-receipts"><div className="landing-demo-receipt-header"><FileText size={18} /><span>Illustrated provider responses</span><span>Example</span></div>{[
+    ["Instagram Reels", "Accepted", "The provider accepted the request. Delivery is still pending."],
+    ["YouTube Shorts", "Published", "A delivered post would include the provider’s post ID and URL."],
+    ["TikTok", "Needs attention", "An account reconnection would not undo the other destinations."],
+  ].map(([platform, state, detail]) => <div className="landing-demo-receipt-row" key={platform}><span><strong>{platform}</strong><small>{detail}</small></span><span className="landing-demo-receipt-state">{state}<small>example state</small></span></div>)}<p className="landing-demo-disclosure">Receipt illustration, not provider evidence. No live receipt, post ID or published URL exists in this preview.</p></div>;
+  return null;
+}
+
 function CastroomMark() {
   return <span className="landing-mark" aria-hidden="true"><i /><i /><i /></span>;
 }
 
 function Wordmark() {
-  return <a className="landing-wordmark" href="/" aria-label="Castroom home"><CastroomMark /><span>castroom</span></a>;
+  return <a className="landing-wordmark" href="/" aria-label="Faceful home"><CastroomMark /><span>faceful</span></a>;
 }
 
 function LandingNav() {
@@ -92,7 +120,7 @@ function LandingNav() {
     <div className="landing-nav-inner">
       <Wordmark />
       <nav className="landing-nav-links" aria-label="Main navigation">
-        <a href="#why-castroom">Why Castroom</a>
+        <a href="#why-castroom">Why Faceful</a>
         <a href="#features">Features</a>
         <a href="#what-works">What works today</a>
       </nav>
@@ -106,8 +134,8 @@ function LandingNav() {
       const bounds = event.currentTarget.getBoundingClientRect();
       if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeMenu();
     }}>
-      <div className="landing-mobile-menu-heading"><span id={`${menuId}-title`}>Explore Castroom</span><button className="landing-menu-toggle" aria-label="Close navigation" onClick={closeMenu}><X size={19} /></button></div>
-      <nav aria-label="Mobile navigation"><a href="#why-castroom" onClick={closeMenu}>Why Castroom <ArrowRight size={16} /></a><a href="#features" onClick={closeMenu}>Features <ArrowRight size={16} /></a><a href="#what-works" onClick={closeMenu}>What works today <ArrowRight size={16} /></a></nav>
+      <div className="landing-mobile-menu-heading"><span id={`${menuId}-title`}>Explore Faceful</span><button className="landing-menu-toggle" aria-label="Close navigation" onClick={closeMenu}><X size={19} /></button></div>
+      <nav aria-label="Mobile navigation"><a href="#why-castroom" onClick={closeMenu}>Why Faceful <ArrowRight size={16} /></a><a href="#features" onClick={closeMenu}>Features <ArrowRight size={16} /></a><a href="#what-works" onClick={closeMenu}>What works today <ArrowRight size={16} /></a></nav>
       <a className="landing-button landing-primary" href="/studio/" onClick={closeMenu}>Open studio <ArrowUpRight size={16} /></a>
     </dialog>
   </header>;
@@ -118,9 +146,9 @@ export function RotatingAgentHeadline() {
   const [selected, setSelected] = useState(0);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(true);
-  const [widths, setWidths] = useState([168, 108]);
+  const [widths, setWidths] = useState<number[] | null>(null);
   const measures = useRef<(HTMLSpanElement | null)[]>([]);
-  const names = ["Claude Code", "Codex"];
+  const agents = [{ host: "claude", name: "Claude Code" }, { host: "codex", name: "Codex" }] as const;
   useEffect(() => {
     const query = matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReduced(query.matches);
@@ -128,38 +156,44 @@ export function RotatingAgentHeadline() {
     return () => query.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    const measure = () => setWidths(measures.current.map((node) => Math.ceil(node?.getBoundingClientRect().width ?? 160)));
+    let mounted = true;
+    const measure = () => {
+      if (!mounted) return;
+      const next = measures.current.map((node) => Math.ceil(node?.getBoundingClientRect().width ?? 160));
+      setWidths((current) => current?.every((width, index) => width === next[index]) ? current : next);
+    };
     const observer = new ResizeObserver(measure);
     measures.current.forEach((node) => { if (node) observer.observe(node); });
     measure();
-    return () => observer.disconnect();
+    void document.fonts.ready.then(measure);
+    return () => { mounted = false; observer.disconnect(); };
   }, []);
   useEffect(() => {
     if (paused || reduced) return;
-    const timer = setInterval(() => setSelected((value) => (value + 1) % names.length), 4200);
+    const timer = setInterval(() => setSelected((value) => (value + 1) % agents.length), 4200);
     return () => clearInterval(timer);
   }, [paused, reduced]);
-  return <>
-    <h2 className="landing-companion-title" aria-label="What if your agent prepared your next campaign?">
-      <span aria-hidden="true">What if <span className="landing-agent-slot" style={{ "--agent-width": `${Math.max(...widths)}px`, "--active-agent-width": `${widths[selected]}px` } as CSSProperties}>
+  return <div className="landing-rotating-headline">
+    <h1 id="landing-title" className="hero-title landing-question-title" aria-label="What if your agent made your next video campaign?">
+      <span aria-hidden="true"><span className="landing-question-opening">What if <span className="landing-agent-slot" style={widths ? { "--agent-width": `${Math.max(...widths)}px`, "--active-agent-width": `${widths[selected]}px` } as CSSProperties : undefined}>
         <span className="landing-agent-slot-surface" />
-        {names.map((name, index) => <span key={name} ref={(node) => { measures.current[index] = node; }} className={`landing-agent-name ${selected === index ? "is-current" : ""}`}><Terminal size={25} strokeWidth={1.6} />{name}</span>)}
-      </span><br />prepared your next campaign?</span>
-    </h2>
-    {!reduced && <button className="landing-motion-control" onClick={() => setPaused(!paused)} aria-pressed={paused}>{paused ? <Play size={12} /> : <Pause size={12} />}{paused ? "Resume names" : "Pause names"}</button>}
-  </>;
+        {agents.map(({ host, name }, index) => <span key={host} ref={(node) => { measures.current[index] = node; }} className={`landing-agent-name ${selected === index ? "is-current" : ""}`}><span className="landing-agent-logo"><AgentIcon host={host} size={32} /></span>{name}</span>)}
+      </span></span><span className="landing-question-outcome">made your next video campaign?</span></span>
+    </h1>
+    <div className="landing-headline-controls">{!reduced && <button className="landing-motion-control" onClick={() => setPaused(!paused)} aria-pressed={paused} aria-label={paused ? "Resume agent rotation" : "Pause agent rotation"}>{paused ? <Play size={12} /> : <Pause size={12} />}{paused ? "Resume" : "Pause"}</button>}</div>
+  </div>;
 }
 
 export function AgentHero({ variant = "primary" }: { variant?: "primary" | "companion" }) {
   if (variant === "companion") return <section className="landing-companion" aria-label="Bring your agent">
-    <RotatingAgentHeadline />
-    <p>Castroom is being built for the agent you already use.<br className="landing-desktop-break" /> A shared place to turn a brief into content, with <mark>you in control.</mark></p>
-    <div className="landing-cta-row"><a className="landing-button landing-primary" href="/docs/setup/">Connect your agent <ArrowUpRight size={16} /></a><a className="landing-button landing-secondary" href="/studio/">Start in the studio <ArrowRight size={16} /></a></div>
+    <h2 className="landing-companion-title">Your next campaign starts here.</h2>
+    <p>Bring your company brief. Shape the first draft.<br className="landing-desktop-break" /> Keep every decision close to the work.</p>
+    <div className="landing-cta-row"><a className="landing-button landing-primary" href="/studio/">Start in the studio <ArrowRight size={16} /></a><a className="landing-button landing-secondary" href="/docs/setup/">Explore agent setup <ArrowUpRight size={16} /></a></div>
     <small>Codex and Claude Code setup templates are available. Live authentication is pending.</small>
   </section>;
   return <section className="landing-hero" aria-labelledby="landing-title">
-    <div className="hero-title-container"><h1 id="landing-title" className="hero-title">Your agent runs<br />your content studio.</h1></div>
-    <p className="landing-hero-description">From the company brief to the final detail.<br className="landing-desktop-break" /> Create campaigns with your agent. <mark>Fine-tune them here.</mark></p>
+    <div className="hero-title-container"><RotatingAgentHeadline /></div>
+    <p className="landing-hero-description">One company brief. Three distinct stories.<br className="landing-desktop-break" /> Plan campaigns with your agent, refine each video in the studio, and <mark>keep the final say.</mark></p>
     <div className="landing-cta-row"><a className="landing-button landing-primary" href="/studio/">Open your studio <ArrowUpRight size={16} /></a><a className="landing-button landing-secondary" href="#workflow">See how it works <ArrowDown size={16} /></a></div>
     <p className="landing-hero-status">A working studio preview. Live generation and publishing are still being connected.</p>
   </section>;
@@ -177,14 +211,46 @@ function Storyboard({ item, index, small = false }: { item: typeof sampleItems[n
 export function HeroPreviewWindow() {
   const [selected, setSelected] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [stage, setStage] = useState(0);
+  const [avatar, setAvatar] = useState("Presenter A");
+  const [captionStyle, setCaptionStyle] = useState<"Restrained" | "Expressive">("Restrained");
+  const [playing, setPlaying] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(true);
+  const [animateStage, setAnimateStage] = useState(false);
   const editorId = useId();
+  const walkthroughId = useId();
+  const stageButtons = useRef<(HTMLButtonElement | null)[]>([]);
+  const figure = useRef<HTMLElement>(null);
   const item = sampleItems[selected];
-  return <figure className="landing-demo" aria-labelledby="landing-demo-caption">
+  useEffect(() => {
+    const query = matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => { setReducedMotion(query.matches); if (query.matches) setPlaying(false); };
+    update(); query.addEventListener("change", update);
+    const pauseWhenHidden = () => { if (document.hidden) setPlaying(false); };
+    document.addEventListener("visibilitychange", pauseWhenHidden);
+    const observer = new IntersectionObserver(([entry]) => { if (!entry.isIntersecting) setPlaying(false); });
+    if (figure.current) observer.observe(figure.current);
+    return () => { query.removeEventListener("change", update); document.removeEventListener("visibilitychange", pauseWhenHidden); observer.disconnect(); };
+  }, []);
+  useEffect(() => {
+    if (!playing || reducedMotion) return;
+    if (stage === demoSteps.length - 1) { setPlaying(false); return; }
+    const timer = setTimeout(() => { setAnimateStage(true); setStage(stage + 1); }, 5000);
+    return () => clearTimeout(timer);
+  }, [playing, reducedMotion, stage]);
+  function selectStage(index: number, keyboard = false) { setPlaying(false); setAnimateStage(!keyboard); setStage(index); }
+  function navigateStage(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const next = event.key === "ArrowRight" ? (index + 1) % demoSteps.length : event.key === "ArrowLeft" ? (index + demoSteps.length - 1) % demoSteps.length : event.key === "Home" ? 0 : event.key === "End" ? demoSteps.length - 1 : null;
+    if (next !== null) { event.preventDefault(); selectStage(next, true); stageButtons.current[next]?.focus(); }
+  }
+  function stopOnInteraction(target: EventTarget | null) { if (!(target instanceof Element) || !target.closest("[data-demo-play]")) setPlaying(false); }
+  return <figure ref={figure} className="landing-demo" aria-labelledby="landing-demo-caption" onPointerDownCapture={(event) => stopOnInteraction(event.target)} onKeyDownCapture={(event) => stopOnInteraction(event.target)} onWheelCapture={() => setPlaying(false)}>
     <div className="landing-demo-frame">
-      <div className="landing-demo-titlebar"><span className="landing-window-controls" aria-hidden="true"><i /><i /><i /></span><span>Castroom · Campaign studio</span><span className="landing-demo-badge">Interactive demo</span></div>
+      <div className="landing-demo-titlebar"><span className="landing-window-controls" aria-hidden="true"><i /><i /><i /></span><span>Faceful · Campaign studio</span><span className="landing-demo-badge">Interactive demo</span></div>
+      <div className="landing-demo-walkthrough"><div className="landing-demo-walkthrough-heading"><span>From brief to publishing receipt</span><button data-demo-play className="landing-demo-play" disabled={reducedMotion} aria-pressed={playing} onClick={() => { if (stage === demoSteps.length - 1) setStage(0); setPlaying(!playing); }} aria-label={playing ? "Pause production walkthrough" : "Play production walkthrough"}>{playing ? <Pause size={13} /> : <Play size={13} />}{reducedMotion ? "Use the steps below" : playing ? "Pause demo" : "Play demo"}</button></div><div className="landing-demo-steps" role="tablist" aria-label="Production walkthrough">{demoSteps.map((step, index) => <button key={step.label} ref={(node) => { stageButtons.current[index] = node; }} id={`${walkthroughId}-step-${index}`} role="tab" aria-label={`${step.label}: demo step ${index + 1} of 6`} aria-selected={stage === index} aria-controls={`${walkthroughId}-panel`} tabIndex={stage === index ? 0 : -1} onClick={(event) => selectStage(index, event.detail === 0)} onKeyDown={(event) => navigateStage(event, index)}><span>{index + 1}</span>{step.label}</button>)}</div></div>
       <div className="landing-preview-shell">
         <aside className="landing-preview-nav" aria-label="Example workspace">
-          <span className="landing-preview-wordmark"><CastroomMark />castroom</span>
+          <span className="landing-preview-wordmark"><CastroomMark />faceful</span>
           <div className="landing-preview-search"><Search size={14} /><span>Search content</span><kbd>⌘K</kbd></div>
           <div className="landing-preview-nav-row"><Layers size={16} />Campaigns<span>1</span></div>
           <div className="landing-preview-nav-row"><Clock3 size={16} />Schedule</div>
@@ -197,13 +263,19 @@ export function HeroPreviewWindow() {
           <div className="landing-preview-breadcrumb"><span>Projects</span><span>/</span><strong>A week of BeWell</strong><PanelRight size={15} /></div>
           <div className="landing-preview-heading"><div><h2>A week of BeWell</h2><p>Three stories. One thoughtful campaign.</p></div><span className="landing-preview-view"><Grid2X2 size={14} />Canvas</span></div>
           <div className="landing-preview-board">
-            <div className="landing-preview-board-label"><span>Company brief → campaign drafts</span><span>9:16</span></div>
-            <div className="landing-preview-cards">
+            <div className="landing-preview-board-label"><span>Example workflow · step {stage + 1} of 6</span><span>9:16</span></div>
+            <div id={`${walkthroughId}-panel`} role="tabpanel" aria-labelledby={`${walkthroughId}-step-${stage}`} tabIndex={0} className="landing-demo-stage-panel">
+              <div className={`landing-demo-stage-content ${animateStage ? "is-entering" : ""}`} key={stage}>
+                <div className="landing-demo-stage-heading"><h3>{demoSteps[stage].heading}</h3><p>{demoSteps[stage].note}</p></div>
+                {stage === 0 ? <><div className="landing-demo-brief"><FileText size={16} /><p>“Create three short videos from the BeWell case study: visitor experience, engineering and design.”</p><span>Example brief</span></div><div className="landing-preview-cards">
               {sampleItems.map((entry, index) => <button key={entry.title} className={`landing-preview-card ${selected === index ? "is-selected" : ""}`} onClick={() => setSelected(index)} aria-pressed={selected === index} aria-label={`Preview ${entry.title}`}>
                 <Storyboard item={entry} index={index} />
                 <div className="landing-preview-card-info"><strong>{entry.title}</strong><span><Circle size={7} />Draft<span>v1</span></span></div>
               </button>)}
+                </div></> : <DemoPhase stage={stage} item={item} selected={selected} avatar={avatar} captionStyle={captionStyle} onAvatar={(value) => { setPlaying(false); setAvatar(value); }} onCaption={(value) => { setPlaying(false); setCaptionStyle(value); }} />}
+              </div>
             </div>
+            <div className="landing-demo-step-navigation"><span aria-live={playing ? "off" : "polite"}>{demoSteps[stage].label} · illustration</span><button onClick={(event) => selectStage(stage === demoSteps.length - 1 ? 0 : stage + 1, event.detail === 0)}>{stage === demoSteps.length - 1 ? "Back to brief" : `Next: ${demoSteps[stage + 1].label}`}<ArrowRight size={14} /></button></div>
             <div className="landing-preview-mobile-selector" aria-label="Example content">{sampleItems.map((entry, index) => <button key={entry.title} onClick={() => setSelected(index)} aria-pressed={selected === index} aria-label={`Show sample ${index + 1}: ${entry.title}`}>{index + 1}</button>)}</div>
             <button className="landing-preview-inspect" aria-controls={editorId} aria-expanded={editorOpen} onClick={() => setEditorOpen(!editorOpen)}><Settings2 size={16} />{editorOpen ? "Close draft details" : "Inspect this draft"}{editorOpen ? <Minus size={16} /> : <Plus size={16} />}</button>
             <div className="landing-preview-source"><FileText size={13} /><a href="https://www.quintessential.gr/work/bewell-festival" target="_blank" rel="noreferrer">Source: Quintessential’s published BeWell case study</a></div>
@@ -215,6 +287,7 @@ export function HeroPreviewWindow() {
           <div className="landing-preview-editor-body">
             <div className="landing-preview-mini"><Storyboard item={item} index={selected} small /></div>
             <div className="landing-preview-editor-heading"><span>Selected draft</span><h3>{item.title}</h3></div>
+            <p className="landing-demo-editor-context">{avatar} · {captionStyle.toLowerCase()} captions<br />Demo choices only</p>
             <div className="landing-preview-editor-tabs"><span>Script</span><span>Avatar</span><span>Channels</span></div>
             <label className="landing-preview-script-label" htmlFor="sample-script">What your presenter says</label>
             <textarea id="sample-script" className="landing-preview-script" value={item.script} readOnly rows={5} aria-describedby="sample-script-help" />
@@ -224,7 +297,7 @@ export function HeroPreviewWindow() {
         </aside>
       </div>
     </div>
-    <figcaption id="landing-demo-caption"><span>Select a card to explore the editor.</span> Representative storyboards, not generated videos. Nothing is being published.</figcaption>
+    <figcaption id="landing-demo-caption"><span>Explore the six steps, or play the illustrative walkthrough.</span> Representative storyboards, avatar choices and receipt examples—not generated videos or live provider results. Nothing is submitted or published.</figcaption>
   </figure>;
 }
 
@@ -277,7 +350,7 @@ function CurrentStatus() {
 
 const questions = [
   ["Do I need an agent to use the studio?", "No. You can start with a company brief and explicit scripts in the studio. The development preview saves those drafts in your browser. Connected, shared workspace execution is pending the backend integration."],
-  ["What do Codex and Claude Code do?", "They are the first target clients for planning and producing campaigns through Castroom’s MCP interface. Setup templates are documented; authenticated connections and real client trials are not available yet."],
+  ["What do Codex and Claude Code do?", "They are the first target clients for planning and producing campaigns through Faceful’s MCP interface. Setup templates are documented; authenticated connections and real client trials are not available yet."],
   ["Will content publish without my review?", "Review-first is the default design. Publication needs a server-verified approval for the exact final manifest, or a deliberate, bounded owner grant. The current preview cannot approve or publish anything."],
   ["Are these real generated videos?", "The landing preview contains original sample storyboards. It demonstrates selection and the editor layout. Humanlike video output, audio and final composition are not connected yet, so no generated-video result is claimed."],
 ] as const;
@@ -290,10 +363,10 @@ export function LandingPage() {
       <AgentHero />
       <div className="landing-wide"><HeroPreviewWindow /></div>
       <section id="why-castroom" className="landing-intro landing-section" aria-labelledby="why-heading">
-        <div className="landing-integration-strip" aria-label="Planned integrations"><span><Terminal size={18} />Codex</span><span><Terminal size={18} />Claude Code</span><span><Layers size={18} />MCP</span><span><Video size={18} />Humanlike</span></div>
+        <div className="landing-integration-strip" aria-label="Planned integrations"><span><AgentIcon host="codex" size={22} />Codex</span><span><AgentIcon host="claude" size={22} />Claude Code</span><span><Layers size={18} />MCP</span><span><Video size={18} />Humanlike</span></div>
         <p className="landing-integration-note">Target clients and rendering integration. Live connections are pending.</p>
         <h2 id="why-heading">Your agent knows the brief.<br />Now give the work a home.</h2>
-        <p>Content production needs more than a prompt. It needs brand context, permitted assets, revisions and a clear decision before anything goes out. Castroom brings that work into one shared studio.</p>
+        <p>Content production needs more than a prompt. It needs brand context, permitted assets, revisions and a clear decision before anything goes out. Faceful brings that work into one shared studio.</p>
       </section>
       <Workflow />
       <Features />
@@ -301,6 +374,6 @@ export function LandingPage() {
       <section className="landing-faq landing-section" aria-labelledby="faq-heading"><h2 id="faq-heading">A few useful answers.</h2><div>{questions.map(([question, answer]) => <details key={question}><summary>{question}<Plus className="landing-faq-plus" size={18} /><Minus className="landing-faq-minus" size={18} /></summary><p>{answer}</p></details>)}</div></section>
       <AgentHero variant="companion" />
     </main>
-    <footer className="landing-footer"><div className="landing-footer-top"><Wordmark /><p>A shared place for content.<br />A clear place for decisions.</p><a href="/studio/">Open studio <ArrowUpRight size={15} /></a></div><div className="landing-footer-links"><nav aria-label="Product resources"><a href="/docs/">Documentation</a><a href="/docs/setup/">Agent setup</a><a href="/docs/api/">API</a><a href="/openapi.json">OpenAPI</a><a href="/llms.txt">For agents</a></nav><nav aria-label="About Castroom"><a href="/about/">About</a><a href="/contact/">Contact</a><a href="/privacy/">Privacy</a><a href="https://github.com/DimitrisTheo-Dev" target="_blank" rel="noreferrer">GitHub <ArrowUpRight size={12} /></a></nav></div><div className="landing-footer-note"><span>Castroom · In development</span><span>Original studio. Inspired by thoughtful tools.</span></div></footer>
+    <footer className="landing-footer"><div className="landing-footer-top"><Wordmark /><p>A shared place for content.<br />A clear place for decisions.</p><a href="/studio/">Open studio <ArrowUpRight size={15} /></a></div><div className="landing-footer-links"><nav aria-label="Product resources"><a href="/docs/">Documentation</a><a href="/docs/setup/">Agent setup</a><a href="/docs/api/">API</a><a href="/openapi.json">OpenAPI</a><a href="/llms.txt">For agents</a></nav><nav aria-label="About Faceful"><a href="/about/">About</a><a href="/contact/">Contact</a><a href="/privacy/">Privacy</a><a href="https://github.com/DimitrisTheo-Dev" target="_blank" rel="noreferrer">GitHub <ArrowUpRight size={12} /></a></nav></div><div className="landing-footer-note"><span>Faceful · In development</span><span>Original studio. Inspired by thoughtful tools.</span></div></footer>
   </div>;
 }

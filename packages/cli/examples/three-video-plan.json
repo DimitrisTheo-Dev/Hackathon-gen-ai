@@ -3,7 +3,7 @@
   "title": "Example: three product stories",
   "companyContext": {
     "name": "Example Company",
-    "description": "A fictional company used only to validate the Castroom draft format.",
+    "description": "A fictional company used only to validate the Faceful draft format.",
     "audience": "Prospective product users",
     "tone": "Clear and conversational; avoid unsupported performance claims.",
     "sourceText": "User-supplied example brief. The product helps a team organize its drafts and review changes.",
