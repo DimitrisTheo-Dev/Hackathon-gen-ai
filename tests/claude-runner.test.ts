@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AddressInfo } from "node:net";
-import { buildRunArgs, corsHeaders, createRunner, extractLoginUrl, isSubscriptionToken, keyMatches, parseRunRequest, summarizeAuth, type RunnerConfig } from "../apps/claude-runner/server";
+import { createServer as createNetServer, type AddressInfo } from "node:net";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { mintToken } from "../apps/workspace-store/src/index";
+import { memoryBucket, serveStore } from "./support/memory-bucket";
+import { buildRunArgs, corsHeaders, createRunner, extractLoginUrl, isSubscriptionToken, keyMatches, parseRunRequest, restoreHome, summarizeAuth, type RunnerConfig } from "../apps/claude-runner/server";
 
 const KEY = "k".repeat(48);
 const ORIGIN = "http://127.0.0.1:5173";
@@ -13,7 +17,7 @@ const ORIGIN = "http://127.0.0.1:5173";
 const FAKE_CLAUDE = `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
-const state = process.env.HOME + "/fake-signed-in";
+const state = process.env.HOME + "/.claude/.credentials.json";
 const out = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
 if (args[0] === "--version") console.log("9.9.9 (Claude Code)");
 else if (args[0] === "auth" && args[1] === "status") {
@@ -27,7 +31,7 @@ else if (args[0] === "auth" && args[1] === "login") {
   process.stdin.on("data", (chunk) => {
     input += chunk;
     if (!input.includes("\\n")) return;
-    if (input.trim() === "good-code-123#abc") { fs.writeFileSync(state, "1"); console.log("Login successful."); process.exit(0); }
+    if (input.trim() === "good-code-123#abc") { fs.mkdirSync(process.env.HOME + "/.claude", { recursive: true }); fs.writeFileSync(state, "{}"); console.log("Login successful."); process.exit(0); }
     console.log("OAuth error: invalid code"); process.exit(1);
   });
 } else if (args[0] === "-p") {
@@ -36,8 +40,9 @@ else if (args[0] === "auth" && args[1] === "login") {
   process.stdin.on("end", () => {
     const at = args.indexOf("--resume");
     const sid = at >= 0 ? args[at + 1] : "11111111-2222-3333-4444-555555555555";
-    out({ type: "system", subtype: "init", session_id: sid, model: "claude-test", permissionMode: args[args.indexOf("--permission-mode") + 1], cwd: process.cwd(), apiKeySeen: Boolean(process.env.ANTHROPIC_API_KEY), runnerKeySeen: Boolean(process.env.RUNNER_ACCESS_KEY), tokenSeen: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN) });
+    out({ type: "system", subtype: "init", session_id: sid, model: "claude-test", permissionMode: args[args.indexOf("--permission-mode") + 1], cwd: process.cwd(), apiKeySeen: Boolean(process.env.ANTHROPIC_API_KEY), runnerKeySeen: Boolean(process.env.RUNNER_ACCESS_KEY), tokenSeen: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN), storeSeen: Boolean(process.env.FACEFUL_STORE_URL && process.env.FACEFUL_STORE_TOKEN) });
     if (prompt === "wait") { setTimeout(() => {}, 20000); return; }
+    if (prompt.startsWith("write ")) { const [, name, ...rest] = prompt.split(" "); fs.writeFileSync(name, rest.join(" ")); }
     out({ type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text: "Echo" } } });
     out({ type: "assistant", message: { id: "msg_1", content: [{ type: "text", text: "Echo: " + prompt }] } });
     out({ type: "result", subtype: "success", is_error: false, result: "Echo: " + prompt, duration_ms: 5, num_turns: 1, session_id: sid });
@@ -45,12 +50,13 @@ else if (args[0] === "auth" && args[1] === "login") {
 }
 `;
 
-async function startRunner() {
+async function startRunner(store: { url: string; token: string } | null = null) {
   const home = await mkdtemp(join(tmpdir(), "claude-runner-"));
   const bin = join(home, "fake-claude");
   await writeFile(bin, FAKE_CLAUDE);
   await chmod(bin, 0o755);
-  const config: RunnerConfig = { port: 0, host: "127.0.0.1", accessKey: KEY, allowedOrigins: [ORIGIN], claudeBin: bin, homeDir: home, workspaceDir: home, dataDir: join(home, ".claude-runner"), maxRunMinutes: 1 };
+  const config: RunnerConfig = { port: 0, host: "127.0.0.1", accessKey: KEY, allowedOrigins: [ORIGIN], claudeBin: bin, homeDir: home, workspaceDir: join(home, "work"), dataDir: join(home, ".claude-runner"), maxRunMinutes: 1, storeUrl: store?.url ?? null, storeToken: store?.token ?? null };
+  await mkdir(config.workspaceDir, { recursive: true });
   const server = createRunner(config);
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -91,6 +97,9 @@ test("validates run requests and keeps the prompt out of the arguments", () => {
   assert.deepEqual(args.slice(args.indexOf("--permission-mode"), args.indexOf("--permission-mode") + 2), ["--permission-mode", "plan"]);
   assert.ok(args.includes("--resume") && args.includes("sonnet"));
   assert.equal(parseRunRequest({ prompt: "x" }).permissionMode, "acceptEdits");
+  assert.equal(parseRunRequest({ prompt: "x" }).project, "default");
+  assert.equal(parseRunRequest({ prompt: "x", project: "3f2c1d7e-aaaa-4bbb-8ccc-000000000001" }).project, "3f2c1d7e-aaaa-4bbb-8ccc-000000000001");
+  assert.throws(() => parseRunRequest({ prompt: "x", project: "../etc" }), /Project names/);
   assert.throws(() => parseRunRequest({ prompt: " " }), /prompt/);
   assert.throws(() => parseRunRequest({ prompt: "x", model: "gpt" }), /Model/);
   assert.throws(() => parseRunRequest({ prompt: "x", permissionMode: "yolo" }), /Permission/);
@@ -190,5 +199,134 @@ test("one run at a time, and stop ends it", async () => {
     const exit = text.trim().split("\n").map((line) => JSON.parse(line)).at(-1);
     assert.equal(exit.event, "exit");
     assert.equal(exit.signal, "SIGTERM");
+  } finally { await runner.close(); }
+});
+
+test("a stop signal ends the run and the runner exits cleanly, as a container's first process must", async () => {
+  const home = await mkdtemp(join(tmpdir(), "claude-runner-"));
+  const bin = join(home, "fake-claude");
+  await writeFile(bin, FAKE_CLAUDE);
+  await chmod(bin, 0o755);
+  const port = await new Promise<number>((done) => { const probe = createNetServer(); probe.listen(0, "127.0.0.1", () => { const { port } = probe.address() as AddressInfo; probe.close(() => done(port)); }); });
+  const child = spawn(process.execPath, ["--import", "tsx", fileURLToPath(new URL("../apps/claude-runner/server.ts", import.meta.url))], {
+    env: { PATH: process.env.PATH, HOME: home, HOST: "127.0.0.1", PORT: String(port), RUNNER_ACCESS_KEY: KEY, RUNNER_ALLOWED_ORIGINS: ORIGIN, CLAUDE_BIN: bin },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((done) => child.on("exit", (code, signal) => done({ code, signal })));
+  try {
+    await new Promise<void>((done, fail) => {
+      let output = "";
+      child.stdout.on("data", (chunk: Buffer) => { output += chunk.toString("utf8"); if (output.includes("listening")) done(); });
+      child.on("exit", () => fail(new Error("the runner exited before listening")));
+    });
+    const response = await fetch(`http://127.0.0.1:${port}/v1/run`, { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ prompt: "wait" }) });
+    const reader = response.body!.getReader();
+    await reader.read(); // started
+    child.kill("SIGTERM");
+    let text = "";
+    for (;;) { const { value, done } = await reader.read(); if (done) break; text += new TextDecoder().decode(value); }
+    assert.equal(text.trim().split("\n").map((line) => JSON.parse(line)).at(-1).signal, "SIGTERM");
+    assert.deepEqual(await exited, { code: 0, signal: null });
+  } finally {
+    child.kill("SIGKILL");
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+async function cloud(uid = "minas") {
+  const secret = "w".repeat(64);
+  const { bucket, objects } = memoryBucket();
+  const store = await serveStore({ BUCKET: bucket, STORE_SIGNING_KEY: secret });
+  return { objects, store: { url: store.url, token: await mintToken(secret, uid) }, close: async () => { store.server.closeAllConnections(); await new Promise((done) => store.server.close(done)); } };
+}
+const label = (event: Record<string, unknown>) => (typeof event.event === "string" ? event.event : event.type);
+const runProject = async (runner: Awaited<ReturnType<typeof startRunner>>, project: string, prompt: string) => lines(await runner.call("/v1/run", { method: "POST", body: JSON.stringify({ prompt, project }) }));
+
+test("every run autosaves its project, and a fresh machine gets files and sign-in back", async (t) => {
+  const storage = await cloud();
+  t.after(() => storage.close());
+  const first = await startRunner(storage.store);
+  try {
+    await first.call("/v1/login/start", { method: "POST" });
+    assert.equal((await (await first.call("/v1/login/finish", { method: "POST", body: JSON.stringify({ code: "good-code-123#abc" }) })).json()).auth.loggedIn, true);
+    assert.ok(storage.objects.has("users/minas/private/claude-home.tar.gz"), "sign-in is saved right after login");
+
+    const events = await runProject(first, "demo", "write app.ts export const answer = 42;");
+    assert.deepEqual(events.map(label), ["started", "system", "stream_event", "assistant", "result", "exit", "saved"]);
+    assert.deepEqual([events[0].project, events[0].restored], ["demo", false]);
+    const save = events.at(-1)!.save as { key: string; kind: string; files: number; project: string };
+    assert.deepEqual([save.key, save.kind, save.files, save.project], ["projects/demo/autosave.tar.gz", "auto", 1, "demo"]);
+    assert.equal(storage.objects.get("users/minas/projects/demo/autosave.tar.gz")?.customMetadata?.kind, "auto");
+    assert.equal(await readFile(join(first.config.workspaceDir, "demo", "app.ts"), "utf8"), "export const answer = 42;");
+  } finally { await first.close(); }
+
+  // The first machine's disk is gone. A new one starts empty, with only the user's cloud folder.
+  const second = await startRunner(storage.store);
+  try {
+    assert.equal((await (await second.call("/v1/status")).json()).auth.loggedIn, false);
+    assert.equal(await restoreHome(second.config), true);
+    assert.equal((await (await second.call("/v1/status")).json()).auth.loggedIn, true);
+    const events = await runProject(second, "demo", "hi");
+    assert.equal(events[0].restored, true);
+    assert.equal(await readFile(join(second.config.workspaceDir, "demo", "app.ts"), "utf8"), "export const answer = 42;");
+    assert.equal((await runProject(second, "other", "hi"))[0].restored, false);
+    assert.deepEqual(await readdir(join(second.config.workspaceDir, "other")), []);
+
+    const signedOut = await (await second.call("/v1/auth", { method: "DELETE" })).json();
+    assert.equal(signedOut.auth.loggedIn, false);
+  } finally { await second.close(); }
+
+  const third = await startRunner(storage.store);
+  try {
+    await restoreHome(third.config);
+    assert.equal((await (await third.call("/v1/status")).json()).auth.loggedIn, false, "a signed-out account stays signed out on the next machine");
+  } finally { await third.close(); }
+});
+
+test("manual saves are versioned, and restore swaps files but keeps a backup", async () => {
+  const storage = await cloud();
+  const runner = await startRunner(storage.store);
+  try {
+    await runProject(runner, "p1", "write a.txt one");
+    const saved = await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "p1" }) });
+    assert.equal(saved.status, 201);
+    const { save } = await saved.json();
+    assert.match(save.key, /^projects\/p1\/saves\/[0-9TZ-]+\.tar\.gz$/);
+    assert.equal(save.kind, "manual");
+
+    await runProject(runner, "p1", "write b.txt two");
+    assert.deepEqual((await readdir(join(runner.config.workspaceDir, "p1"))).sort(), ["a.txt", "b.txt"]);
+
+    const restored = await runner.call("/v1/workspace/restore", { method: "POST", body: JSON.stringify({ project: "p1", key: save.key }) });
+    assert.equal(restored.status, 200);
+    const body = (await restored.json()).restored;
+    assert.match(body.backupKey, /^projects\/p1\/saves\//);
+    assert.deepEqual(await readdir(join(runner.config.workspaceDir, "p1")), ["a.txt"]);
+
+    const listed = await (await runner.call("/v1/workspace?project=p1")).json();
+    assert.equal(listed.configured, true);
+    assert.equal(listed.saves.length, 2);
+    assert.equal(listed.autosave.files, 1);
+
+    assert.equal((await runner.call("/v1/workspace/restore", { method: "POST", body: JSON.stringify({ project: "p1", key: "projects/other/saves/2026.tar.gz" }) })).status, 400);
+    assert.equal((await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "../x" }) })).status, 400);
+    assert.equal((await runner.call("/v1/workspace/restore", { method: "POST", body: JSON.stringify({ project: "empty" }) })).status, 404);
+
+    const synced = await (await runner.call("/v1/sync", { method: "POST" })).json();
+    assert.equal(synced.configured, true);
+    assert.deepEqual(synced.projects.map((item: { project: string }) => item.project), ["p1"]);
+    assert.ok([...storage.objects.keys()].every((key) => key.startsWith("users/minas/")));
+  } finally { await runner.close(); await storage.close(); }
+});
+
+test("without a store nothing is saved and the endpoints say so", async () => {
+  const runner = await startRunner();
+  try {
+    assert.deepEqual(await (await runner.call("/v1/workspace")).json(), { configured: false, project: "default", autosave: null, saves: [] });
+    const save = await runner.call("/v1/workspace/save", { method: "POST", body: "{}" });
+    assert.equal(save.status, 409);
+    assert.equal((await save.json()).error.code, "store_not_configured");
+    assert.deepEqual((await runProject(runner, "demo", "hi")).map(label), ["started", "system", "stream_event", "assistant", "result", "exit"]);
+    assert.equal((await (await runner.call("/v1/sync", { method: "POST" })).json()).configured, false);
   } finally { await runner.close(); }
 });

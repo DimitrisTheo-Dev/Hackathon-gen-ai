@@ -65,3 +65,14 @@ test("tool summaries prefer the meaningful field", () => {
   assert.equal(summarizeToolInput("TodoWrite", { todos: [1, 2] }), "2 tasks");
   assert.equal(summarizeToolInput("Other", {}), "");
 });
+
+test("cloud saves and restores show up as quiet notes", () => {
+  let state = applyEvent(emptyTranscript(), { type: "runner", event: "started", project: "demo", restored: true });
+  assert.ok(state.items[0].kind === "notice" && !state.items[0].error && state.items[0].text.includes("back from your cloud folder"));
+  state = applyEvent(emptyTranscript(), { type: "runner", event: "started", project: "demo", restored: false });
+  assert.equal(state.items.length, 0);
+  state = applyEvent(emptyTranscript(), { type: "runner", event: "saved", save: { key: "projects/demo/autosave.tar.gz", files: 1 } });
+  assert.ok(state.items[0].kind === "notice" && !state.items[0].error && state.items[0].text === "Saved to your cloud folder · 1 file.");
+  state = applyEvent(emptyTranscript(), { type: "runner", event: "save_failed", message: "Cloud storage answered 500." });
+  assert.ok(state.items[0].kind === "notice" && state.items[0].error && state.items[0].text === "Cloud storage answered 500.");
+});
