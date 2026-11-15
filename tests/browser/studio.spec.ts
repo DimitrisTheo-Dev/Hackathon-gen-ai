@@ -38,7 +38,7 @@ test('draft edits survive item switches, save and reload; palette and filters us
 });
 
 test('manual campaign saves supplied context and approval never implies publication in fixture mode',async({page})=>{
-  await page.goto('/dev/studio/?view=canvas');await page.getByRole('button',{name:'Create a campaign',exact:true}).click();
+  await page.goto('/dev/studio/');await page.getByRole('button',{name:'Create with my own script'}).click();
   await page.locator('#company-name').fill('Olive Works');await page.locator('#campaign-name').fill('A useful first week');await page.locator('#company-does').fill('We make reusable lunch containers.');
   await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.locator('#draft-title-0').fill('Meet the reusable lunch box');await page.locator('#draft-script-0').fill('Make room for a reusable lunch box in your everyday bag.');

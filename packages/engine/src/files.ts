@@ -74,12 +74,12 @@ export async function fileContract(deps: EngineDeps, row: Row): Promise<DraftFil
   });
 }
 
-async function nextVersion(deps: EngineDeps, ctx: Ctx, projectId: string, itemId: string | null, name: string) {
+export async function nextVersion(deps: EngineDeps, ctx: Ctx, projectId: string, itemId: string | null, name: string) {
   const rows = await deps.store.select(FILES_TABLE, { org_id: ctx.org.id, project_id: projectId, item_id: itemId, name }, { order: ["version", "desc"], limit: 1 });
   return (rows[0]?.version ?? 0) + 1;
 }
 
-async function scope(deps: EngineDeps, ctx: Ctx, campaignId: string, itemId: string | null) {
+export async function fileScope(deps: EngineDeps, ctx: Ctx, campaignId: string, itemId: string | null) {
   const project = await loadProject(deps, ctx, campaignId);
   if (itemId) {
     const item = await loadItem(deps, ctx, itemId);
@@ -135,7 +135,7 @@ export async function requestUpload(deps: EngineDeps, ctx: Ctx, raw: unknown): P
   const input = parse(requestUploadInputSchema, raw);
   return idempotent(deps, ctx, "request_file_upload", input.operationKey, input, async () => {
     const files = filesOf(deps);
-    const project = await scope(deps, ctx, input.campaignId, input.itemId);
+    const project = await fileScope(deps, ctx, input.campaignId, input.itemId);
     const key = fileKey(ctx.org.id, project.id, input.sha256, input.mime);
     const existing = await files.head(key);
     // Identical bytes already stored for this project: record the new draft without a second upload.
@@ -193,7 +193,7 @@ export async function saveTextFile(deps: EngineDeps, ctx: Ctx, raw: unknown): Pr
   requireScope(ctx, "content:edit");
   const input = parse(saveTextFileInputSchema, raw);
   return idempotent(deps, ctx, "save_text_file", input.operationKey, input, async () => {
-    const project = await scope(deps, ctx, input.campaignId, input.itemId);
+    const project = await fileScope(deps, ctx, input.campaignId, input.itemId);
     if (input.mime === "application/json") {
       try {
         JSON.parse(input.text);

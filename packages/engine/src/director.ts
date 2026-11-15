@@ -83,7 +83,7 @@ function systemPrompt() {
 A person describes what they want in plain language. You decide which kind of request it is and return a structured proposal. The studio then saves drafts or shows your proposal for the person to review; you never act on the world yourself.
 
 What you can do:
-- create: write a new project with one to three short video drafts (title, the exact words the presenter says, a caption). Write real, usable scripts in the language the person asks for. A spoken script runs at about 2.5 words per second, so a 15-second video is roughly 35–40 words.
+- create: write a new project with one to three short video drafts (title, the exact words the presenter says, a caption). Write real, usable scripts in the language the person asks for. When they ask for one version each in several languages, write one draft per language (at most three), each fully in its language, with its language code. A spoken script runs at about 2.5 words per second, so a 15-second video is roughly 35–40 words.
 - edit: change existing items. Return the complete new script when the script changes, and keep everything the person asked to keep (for example, an unchanged outro) word for word.
 - schedule: propose posting times for existing items as local times in the workspace timezone. Morning means around 09:00 unless they say otherwise.
 - render, review_schedule, find, billing: identify the request and the items involved; the studio does the rest and reports real status.
@@ -172,7 +172,7 @@ async function toResult(deps: EngineDeps, ctx: Ctx, output: PlannerOutput, state
       items: drafts.map((entry) => ({
         title: entry.title.trim(),
         script: entry.script.trim(),
-        language: project.language.trim().toLowerCase().slice(0, 12) || "en",
+        language: (entry.language?.trim() || project.language.trim()).toLowerCase().slice(0, 12) || "en",
         avatarId: entry.avatarId,
         captions: { instagram: entry.caption, tiktok: entry.caption, youtube: entry.caption },
         targets: targetsFrom(entry.schedule, ctx.org.timezone),

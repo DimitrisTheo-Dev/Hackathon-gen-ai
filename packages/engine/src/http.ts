@@ -7,6 +7,8 @@ import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.
 import { getComposition, saveComposition } from "./composition.js";
 import { directorTurn } from "./director.js";
 import { archiveFile, completeUpload, listFiles, requestUpload, saveTextFile } from "./files.js";
+import { draftScript } from "./script.js";
+import { abortTake, completeTake, startTake, takePartUrl } from "./takes.js";
 import { authenticateReelWorker, cancelRender, listRenders, queueRender, reelWorker } from "./reel-render.js";
 import { EngineError } from "./errors.js";
 import { likenessLiveToken, likenessUploadUrl, revokeLikenessConsent, saveLikenessConsent } from "./likeness.js";
@@ -137,6 +139,11 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   complete_file_upload: completeUpload,
   save_text_file: saveTextFile,
   archive_file: archiveFile,
+  // Recorded takes from the New project flow (takes.ts): streamed to storage in parts while recording.
+  start_take_upload: startTake,
+  take_part_url: takePartUrl,
+  complete_take_upload: completeTake,
+  abort_take_upload: abortTake,
   queue_reel_render: queueRender,
   cancel_reel_render: cancelRender,
   create_run_grant: async () => {
@@ -144,7 +151,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   },
 } satisfies Record<string, OperationHandler>));
 /** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
-export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content", "request_file_upload", "persona_image_upload_url", "product_image_upload_url", "draft_brand_from_website"]);
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content", "request_file_upload", "start_take_upload", "persona_image_upload_url", "product_image_upload_url", "draft_brand_from_website"]);
 
 async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
   const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
@@ -196,6 +203,11 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     // A model-backed turn costs money: a stricter burst limit sits in front of the per-workspace daily cap.
     await limits.enforce(policies.director, subject);
     return json(await directorTurn(deps, ctx, await body(request), deps.planner));
+  }
+  if (post && path === "/script/draft") {
+    // The New project flow's script step: a model call like a director turn, under the same limits.
+    await limits.enforce(policies.director, subject);
+    return json(await draftScript(deps, ctx, await body(request), deps.planner));
   }
   // Likeness capture ("Scan my face"). Signed-in people only; see likeness.ts.
   if (post && path === "/likeness/upload-url") {

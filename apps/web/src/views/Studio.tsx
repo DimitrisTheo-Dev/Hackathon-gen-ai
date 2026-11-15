@@ -65,6 +65,7 @@ import { rememberPanel } from "../components/ShellSkeleton";
 import "../studio.css";
 import "../channels.css";
 import { TemplatesSkeleton } from "./page-skeletons";
+import type { ProjectStart } from "../create/settings";
 
 // Views a person opens occasionally load on demand, then stay cached. They are warmed when the browser is idle.
 const loadConnect = () => import("./Connect");
@@ -76,6 +77,8 @@ const Connect = lazy(() => loadConnect().then((m) => ({ default: m.Connect })));
 const Review = lazy(() => loadReview().then((m) => ({ default: m.Review })));
 const Grant = lazy(() => loadReview().then((m) => ({ default: m.Grant })));
 const CreateCampaign = lazy(() => loadCreate().then((m) => ({ default: m.CreateCampaign })));
+const loadNewProject = () => import("../create/NewProject");
+const NewProject = lazy(() => loadNewProject().then((m) => ({ default: m.NewProject })));
 const Billing = lazy(() => loadBilling().then((m) => ({ default: m.Billing })));
 const Templates = lazy(() => loadTemplates().then((m) => ({ default: m.Templates })));
 const loadLibrary = () => import("./TemplateLibrary");
@@ -210,6 +213,10 @@ export function Studio({
     return value==="success"||value==="cancelled"?value:null;
   });
   const [creating, setCreating] = useState(false);
+  /** The full-screen New project flow, with the brief it starts from. */
+  const [newProject, setNewProject] = useState<ProjectStart | null>(null);
+  /** Opens the New project flow; from the home composer it arrives with the settings already picked there. */
+  const startNewProject = (brief = "", start: Omit<ProjectStart, "brief"> = {}) => { setSidebar(false); setNewProject({ ...start, brief }); };
   const [commandOpen, setCommandOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [sort, setSort] = useState("campaign");
@@ -830,7 +837,7 @@ export function Studio({
           </nav>
           <div className="projects-heading">
             <span>Projects</span>
-            <button className="icon-button" aria-label="Create a campaign" title="New project" onClick={() => setCreating(true)}><Plus size={14} /></button>
+            <button className="icon-button" aria-label="Create a campaign" title="New project" onMouseEnter={() => void loadNewProject()} onClick={() => startNewProject()}><Plus size={14} /></button>
           </div>
           <nav className="project-list" aria-label="Projects">
             {campaigns.length === 0 && <p className="project-empty">Your projects will appear here.</p>}
@@ -948,7 +955,7 @@ export function Studio({
               </div>
               {!!homeTurn?.suggestions.length&&!homeBusy&&<div className="director-suggestions home-suggestions" aria-label="Suggested next steps">{homeTurn.suggestions.filter(prompt=>prompt!=="Show my content").map(prompt=><button key={prompt} onClick={()=>homeSuggestion(prompt)}>{prompt}</button>)}</div>}
               <div className="home-starters" aria-label="Ways to start">
-                <button disabled={homeBusy} onClick={()=>homeSuggestion("Create a 15-second avatar video about ")}><Video size={16} aria-hidden="true"/><span>Create avatar video</span></button>
+                <button disabled={homeBusy} onMouseEnter={()=>void loadNewProject()} onClick={()=>startNewProject(homeIdea)}><Video size={16} aria-hidden="true"/><span>Create a video, step by step</span></button>
                 {!fixture&&!homeTurn?.suggestions.includes("Choose a template")&&<button disabled={busy||homeBusy} onClick={()=>setTemplatesOpen(true)}><LayoutTemplate size={16} aria-hidden="true"/><span>Choose a template</span></button>}
                 <button disabled={homeBusy} onClick={()=>homeSuggestion("Plan three short videos for next week about ")}><CalendarDays size={16} aria-hidden="true"/><span>Plan a campaign</span></button>
                 {!fixture&&<button disabled={busy||homeBusy} onClick={startSample}><Sparkles size={16} aria-hidden="true"/><span>Try the BeWell sample</span></button>}
@@ -984,7 +991,7 @@ export function Studio({
                 client={client}
                 refresh={refreshContext}
                 onContinue={() => go("canvas")}
-                onCreateCampaign={() => setCreating(true)}
+                onCreateCampaign={() => startNewProject()}
               /></Suspense>
             ) : view === "brand" ? (
               <Suspense fallback={<ViewSkeleton />}><Brand
@@ -1031,7 +1038,7 @@ export function Studio({
                 </p>
                 <button
                   className="button primary"
-                  onClick={() => setCreating(true)}
+                  onClick={() => startNewProject()}
                 >
                   Create a campaign
                 </button>
@@ -1263,7 +1270,7 @@ export function Studio({
             <button aria-current={view === "canvas" ? "page" : undefined} onClick={() => go("canvas")}><Grid2X2 size={20}/><span>Canvas</span></button>
             <button aria-current={view === "video" ? "page" : undefined} onClick={() => go("video")}><Film size={20}/><span>Video</span></button>
             <button aria-current={view === "schedule" ? "page" : undefined} onClick={() => go("schedule")}><CalendarDays size={20}/><span>Schedule</span></button>
-            <button onClick={() => {if(view==="home")setCreating(true);else if(!campaign)go("home");else {setSelected(current=>current??campaign?.items[0]?.id??null);setMobileChatOpen(true);}}}>{view==="home"?<Plus size={21}/>:<Sparkles size={20}/>}<span>{view==="home"?"Create":"Chat"}</span></button>
+            <button onClick={() => {if(view==="home")startNewProject(homeIdea);else if(!campaign)go("home");else {setSelected(current=>current??campaign?.items[0]?.id??null);setMobileChatOpen(true);}}}>{view==="home"?<Plus size={21}/>:<Sparkles size={20}/>}<span>{view==="home"?"Create":"Chat"}</span></button>
           </nav>
         </div>
         {item && draft && (view === "canvas" || view === "home") && (
@@ -1274,6 +1281,7 @@ export function Studio({
             onStart={()=>{setView("canvas");setMobileChatOpen(true);}}
             onShowContent={()=>{setView("canvas");setMobileChatOpen(false);}}
             onCreate={()=>setCreating(true)}
+            onNewProject={(start)=>startNewProject(start.brief,start)}
             key={item.id}
             campaign={campaign!}
             director={director}
@@ -1332,7 +1340,7 @@ export function Studio({
           {campaigns.map(c => <button key={c.id} aria-current={campaign?.id === c.id ? "page" : undefined} onClick={() => openCampaign(c.id)}>
             <span className="project-thumbnail" aria-hidden="true"><Folder size={20}/></span><span><strong>{shownTitle(c)}</strong><small>{c.items.length} content items{c.origin === "sample" ? " · Sample" : ""}</small></span>{campaign?.id === c.id && <Check size={17}/>}</button>)}
         </nav>
-        <button className="button primary project-create" onClick={() => { setSidebar(false); setCreating(true); }}><Plus size={17}/>New campaign</button>
+        <button className="button primary project-create" onClick={() => startNewProject()}><Plus size={17}/>New project</button>
         <nav className="project-quick-links" aria-label="Workspace">
           {!fixture && <button onClick={() => go("templates")}><LayoutTemplate size={18}/>Templates<ChevronRight size={16}/></button>}
           {!fixture && <button onClick={() => go("personas")}><UserRound size={18}/>Personas<ChevronRight size={16}/></button>}
@@ -1347,6 +1355,25 @@ export function Studio({
         {fixture && <p className="project-fixture-note">Local workspace. Drafts stay on this device; rendering and publishing require connected services.</p>}
       </Modal>}
       <Suspense fallback={null}>
+      {newProject && (
+        <NewProject
+          client={client}
+          context={context}
+          initialBrief={newProject.brief}
+          initialSettings={newProject.settings}
+          initialTemplateId={newProject.templateId}
+          onClose={(saved) => {
+            setNewProject(null);
+            if (saved) adoptCampaign(saved, "Your project is saved as a draft. Nothing has been rendered.");
+          }}
+          onDone={(saved, openVideo) => {
+            setNewProject(null);
+            setHomeIdea("");
+            adoptCampaign(saved, openVideo ? "Project saved. Adjust the timeline here, then render when it looks right." : "Project saved as a draft. Nothing has been rendered.");
+            if (openVideo) setView("video");
+          }}
+        />
+      )}
       {creating && (
         <CreateCampaign
           initialBrief={homeIdea}
@@ -1436,7 +1463,7 @@ export function Studio({
           )}
         </Modal>
       )}
-      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => setCreating(true)} onConnect={() => go("connect")} onBrand={() => go("brand")} onSettings={fixture ? undefined : () => go("settings")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
+      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => { setCommandOpen(false); startNewProject(); }} onConnect={() => go("connect")} onBrand={() => go("brand")} onSettings={fixture ? undefined : () => go("settings")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
     </div>
   );
 }

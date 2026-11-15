@@ -94,6 +94,17 @@ export interface EngineConfig {
      */
     instagramLogin: { appId: string; appSecret: string; scopes: string[] } | null;
     /**
+     * This deployment's partner login at Humanlike (socials-humanlike.ts), from Humanlike's Admin > Partners, and the
+     * mail domain its per-workspace Humanlike workspaces are named under. Null: Humanlike is connected with a pasted
+     * workspace key only.
+     */
+    humanlikePartner: { clientId: string; clientSecret: string; tenantEmailDomain: string } | null;
+    /**
+     * The TikTok app people sign in to TikTok with (socials-tiktok.ts, Login Kit + Content Posting API): its client key
+     * and secret from the TikTok developer portal. Null: TikTok accounts cannot be connected directly.
+     */
+    tiktokLogin: { clientKey: string; clientSecret: string; scopes: string[] } | null;
+    /**
      * Each platform's own webhook credentials, from the app registered with that platform (socials-webhooks.ts).
      * Null: that platform's address takes the generic format only.
      */
@@ -262,12 +273,17 @@ function socialsFrom(env: Record<string, string | undefined>): EngineConfig["soc
   const tiktok = value("TIKTOK_CLIENT_SECRET");
   const linkedin = value("LINKEDIN_CLIENT_SECRET");
   const youtube = value("YOUTUBE_WEBHOOK_SECRET", 32);
+  const tiktokKey = value("TIKTOK_CLIENT_KEY", 4);
+  // Posting needs `video.publish`; `user.info.basic` names the account. Add `user.info.profile` for its @name and links.
+  const tiktokScopes = (env.TIKTOK_LOGIN_SCOPES ?? "user.info.basic,video.publish").split(",").map((scope) => scope.trim()).filter((scope) => /^[a-z_.]{3,80}$/.test(scope));
   const loginId = value("INSTAGRAM_LOGIN_APP_ID", 1);
   const loginSecret = value("INSTAGRAM_LOGIN_APP_SECRET");
   // What the person is asked to allow. Posting needs the first two; comments and messages are for the account's activity.
   const scopes = (env.INSTAGRAM_LOGIN_SCOPES ?? "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_messages").split(",").map((scope) => scope.trim()).filter((scope) => /^[a-z_]{3,80}$/.test(scope));
   return {
     credentialKey: key?.length === 32 ? key : null,
+    humanlikePartner: humanlikePartnerFrom(env),
+    tiktokLogin: tiktokKey && tiktok && /^[A-Za-z0-9_-]{4,64}$/.test(tiktokKey) ? { clientKey: tiktokKey, clientSecret: tiktok, scopes: tiktokScopes } : null,
     webhookSecret: secret && secret.length >= 32 ? secret : null,
     instagramLogin: loginId && /^\d{1,32}$/.test(loginId) && loginSecret ? { appId: loginId, appSecret: loginSecret, scopes } : null,
     native: {
@@ -278,6 +294,33 @@ function socialsFrom(env: Record<string, string | undefined>): EngineConfig["soc
       youtube: youtube ? { hubSecret: youtube } : null,
     },
   };
+}
+
+/** A host name with a dot in it, as an e-mail domain; null for anything else (localhost, an IP, junk). */
+function mailDomain(value: string | undefined): string | null {
+  const raw = value?.trim().toLowerCase() ?? "";
+  if (!raw) return null;
+  let host = raw;
+  try {
+    host = raw.includes("://") ? new URL(raw).hostname : raw;
+  } catch {
+    return null;
+  }
+  return /^(?=.{4,200}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(host) ? host : null;
+}
+
+function humanlikePartnerFrom(env: Record<string, string | undefined>): EngineConfig["socials"]["humanlikePartner"] {
+  const clientId = env.HUMANLIKE_PARTNER_CLIENT_ID?.trim() ?? "";
+  const clientSecret = env.HUMANLIKE_PARTNER_CLIENT_SECRET?.trim() ?? "";
+  if (!clientId && !clientSecret) return null;
+  // The Humanlike workspaces are named under this domain; by default the app's own host.
+  const domain = mailDomain(env.HUMANLIKE_TENANT_EMAIL_DOMAIN) ?? mailDomain(env.APP_BASE_URL ?? (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : ""));
+  const wrong = !/^hlpc_[a-f0-9]{24}$/.test(clientId) ? "HUMANLIKE_PARTNER_CLIENT_ID" : !/^hlps_[A-Za-z0-9_-]{43}$/.test(clientSecret) ? "HUMANLIKE_PARTNER_CLIENT_SECRET" : domain === null ? "HUMANLIKE_TENANT_EMAIL_DOMAIN" : null;
+  if (wrong || !domain) {
+    console.error(JSON.stringify({ level: "error", event: "config_invalid", key: wrong }));
+    return null;
+  }
+  return { clientId, clientSecret, tenantEmailDomain: domain };
 }
 
 function machinesFrom(env: Record<string, string | undefined>): EngineConfig["machines"] {

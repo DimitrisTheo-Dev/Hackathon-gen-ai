@@ -84,39 +84,44 @@ test('keyboard only: create a draft, edit it, save, and reach the guarded review
     }
     throw new Error(`Tab never reached ${name}`);
   };
-  // Create: the new-project button (back from the open editor into the sidebar), then the three steps.
+  // Create: the new-project button (back from the open editor into the sidebar), then the guided steps by keyboard.
   await tabTo('Create a campaign', true);
   await page.keyboard.press('Enter');
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator(':focus')).toHaveCount(1);
-  await page.keyboard.type('Olive Works');
-  await page.locator('#campaign-name').focus();
+  await expect(page.getByRole('dialog', { name: 'What is this video about?' })).toBeVisible();
+  await expect(page.locator('#np-brief')).toBeFocused();
+  await page.keyboard.type('Make room for a reusable lunch box in your everyday bag. It keeps food fresh until lunch.');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.getByRole('heading', { name: 'Who appears in the video?' })).toBeVisible();
+  await page.getByRole('radio', { name: /No face/ }).focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.getByRole('heading', { name: 'How should it be made?' })).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.np-beat-text').first()).toHaveValue(/reusable lunch box/);
+  await page.locator('#np-title-input').focus();
+  await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('Keyboard week');
-  await page.locator('#company-does').focus();
-  await page.keyboard.type('We make reusable lunch containers.');
-  await dialog.getByRole('button', { name: 'Continue', exact: true }).focus();
+  await page.keyboard.press('ControlOrMeta+Enter');
+  // The development studio cannot make videos, so the last step says the draft is saved instead of promising one.
+  await expect(page.getByRole('heading', { name: 'Your draft is saved' })).toBeVisible();
+  await page.getByRole('button', { name: 'Finish later', exact: true }).focus();
   await page.keyboard.press('Enter');
-  await dialog.getByRole('button', { name: 'Continue', exact: true }).focus();
-  await page.keyboard.press('Enter');
-  await page.locator('#draft-title-0').focus();
-  await page.keyboard.type('Meet the reusable lunch box');
-  await page.locator('#draft-script-0').focus();
-  await page.keyboard.type('Make room for a reusable lunch box in your everyday bag.');
-  await dialog.getByRole('button', { name: 'Create draft', exact: true }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Keyboard week', exact: true })).toBeVisible();
+  // The project and its first video share the title the person typed: the page heading is the project's.
+  await expect(page.getByRole('heading', { level: 1, name: 'Keyboard week', exact: true })).toBeVisible();
   // Edit: open the draft, switch to Details and change the title with keys alone.
   await page.locator('.content-select').first().focus();
   await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Details', exact: true }).focus();
   await page.keyboard.press('Enter');
+  // The flow may already have saved the video's language and colour, so the edit is one version past whatever is shown.
+  await expect(page.locator('.save-state')).toContainText(/version \d+/);
+  const before = Number((await page.locator('.save-state').innerText()).match(/version (\d+)/)![1]);
   await page.locator('#item-title').focus();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('Typed without a mouse');
   await page.getByRole('button', { name: 'Save changes', exact: true }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('.save-state')).toContainText('version 2');
+  await expect(page.locator('.save-state')).toContainText(`version ${before + 1}`);
   // Review: the schedule review opens from the keyboard, holds focus inside, and Escape returns it.
   const review = page.getByRole('button', { name: 'Review schedule', exact: true });
   await review.focus();

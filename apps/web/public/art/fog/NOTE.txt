@@ -1,0 +1,5 @@
+White-blue fog art for the New project flow (Look and Make steps), generated on 15 November 2026 with
+Gemini 2.5 Flash Image on Vertex AI for this application. Not third-party.
+
+sample/: fictional presenters, generated for the local preview's sample personas only (?faces=sample).
+They are not real people and carry no consent; never use them as a presenter in a rendered video.

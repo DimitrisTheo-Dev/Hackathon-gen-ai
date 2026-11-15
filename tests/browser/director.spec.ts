@@ -133,17 +133,49 @@ test('without a model, a writing request hands off to the person’s own agent w
  // An exact edit is not a writing request: no hand-off for it.
  await page.getByLabel('Direction for your content').fill('Set title: Exact words');await page.getByRole('button',{name:'Prepare action plan'}).click();await expect(page.locator('.director-turn').last().locator('.agent-handoff')).toHaveCount(0);
 });
-test('home composer: preference pills feed the request as plain words; an exact instruction is sent untouched',async({page})=>{
+test('home composer: the New project settings menus carry into the flow; other requests reach the Director with the settings as words',async({page})=>{
  await page.goto('/dev/studio/');const input=page.getByLabel('Direction for your content');await expect(page.getByRole('heading',{name:'What will we create today?'})).toBeVisible();
  await expect(page.locator('.director-availability')).toHaveCount(0);await expect(page.locator('.home-meta .director-status')).toContainText('AI writing isn’t connected');
  await expect(page.locator('.home-chips').getByRole('button')).toHaveText(['Create a video','Choose an avatar','Plan a campaign','Show my content']);
- await page.getByLabel('Format').selectOption('reel');await page.getByLabel('Length').selectOption('15');await page.getByLabel('Language').selectOption('el');
- await expect(page.locator('.home-token[data-set]')).toHaveCount(3);
+ const settings=page.getByRole('group',{name:'Video settings'});
+ const pick=async()=>{
+  await settings.getByRole('button',{name:/^Length/}).click();await page.getByRole('option',{name:/About 15 seconds/}).click();
+  await settings.getByRole('button',{name:/^Format/}).click();await page.getByRole('option',{name:/Instagram Reel/}).click();
+  await settings.getByRole('button',{name:/^Language/}).click();await page.getByPlaceholder('Search languages').fill('greek');await page.getByRole('option',{name:/Ελληνικά/}).click();
+  // Copies is the flow's multi-select: it stays open while languages are added, up to two.
+  await settings.getByRole('button',{name:/^Copies/}).click();await page.getByRole('option',{name:/Español\b(?! \(L)/}).click();await page.getByRole('option',{name:/Français/}).click();
+  await expect(page.getByRole('option',{name:/Deutsch/})).toBeDisabled();await page.keyboard.press('Escape');
+  await expect(settings.getByRole('button',{name:/^Length/})).toHaveText(/≈ 15s/);await expect(settings.getByRole('button',{name:/^Format/})).toHaveText(/Instagram Reel/);
+  await expect(settings.getByRole('button',{name:/^Language/})).toHaveText(/Ελληνικά/);await expect(settings.getByRole('button',{name:/^Copies/})).toContainText('Spanish, French');
+ };
+ await pick();
+ // An exact instruction goes to the Director word for word.
  await input.fill('Set title: Exactly this');await input.press('Enter');await expect(page.locator('.director-plan')).toContainText('Exactly this');await expect(page.locator('.director-user').last()).toHaveText('Set title: Exactly this');
- await page.goto('/dev/studio/');await page.getByLabel('Format').selectOption('reel');await page.getByLabel('Length').selectOption('15');await page.getByLabel('Language').selectOption('el');
- await page.getByLabel('Direction for your content').fill('A launch video for our lunch box');await page.getByLabel('Direction for your content').press('Enter');
- await expect(page.locator('.director-user').last()).toHaveText('A launch video for our lunch box — an Instagram Reel, 15 seconds, in Greek');
- await expect(page.locator('.director-turn').last().locator('.agent-handoff')).toContainText('create a project for this request: A launch video for our lunch box — an Instagram Reel, 15 seconds, in Greek.');
+ // A campaign of several videos is the Director's too, with the settings written in as words.
+ await page.goto('/dev/studio/');await pick();
+ await input.fill('Plan three videos for next week about our lunch box');await input.press('Enter');
+ await expect(page.locator('.director-user').last()).toHaveText('Plan three videos for next week about our lunch box — an Instagram Reel, 15 seconds, one version each in Greek, Spanish and French');
+ // One new video opens the New project flow already set up the same way.
+ await page.goto('/dev/studio/');await pick();
+ await input.fill('A launch video for our lunch box');await input.press('Enter');
+ const flow=page.getByRole('dialog',{name:'What is this video about?'});await expect(flow).toBeVisible();
+ await expect(flow.locator('#np-brief')).toHaveValue('A launch video for our lunch box');
+ await expect(flow.getByRole('button',{name:/^Length/})).toHaveText(/≈ 15s/);await expect(flow.getByRole('button',{name:/^Format/})).toHaveText(/Instagram Reel/);
+ await expect(flow.getByRole('button',{name:/^Language/})).toHaveText(/Ελληνικά/);await expect(flow.getByRole('button',{name:/^Copies/})).toContainText('Spanish, French');
+});
+test('settings menus: a custom length up to three minutes, and frame shapes where only vertical can be made',async({page})=>{
+ await page.goto('/dev/studio/');const settings=page.getByRole('group',{name:'Video settings'});
+ await settings.getByRole('button',{name:/^Length/}).click();await page.getByRole('option',{name:/Custom/}).click();
+ const minutes=page.getByLabel('Minutes'),seconds=page.getByLabel('Seconds'),custom=page.getByRole('group',{name:'Custom length'});await expect(minutes).toBeFocused();
+ await minutes.fill('4');await seconds.fill('00');await expect(custom.getByRole('button',{name:'Set',exact:true})).toBeDisabled();await expect(custom).toContainText('Longer videos can’t be rendered yet');
+ await minutes.fill('2');await seconds.fill('30');await expect(custom).toContainText('≈ 375 words');await seconds.press('Enter');
+ await expect(settings.getByRole('button',{name:/^Length/})).toHaveText(/≈ 2:30/);await expect(page.locator('.director-turn')).toHaveCount(0);
+ await settings.getByRole('button',{name:/^Aspect/}).click();
+ await expect(page.getByRole('option',{name:/Vertical/})).toHaveAttribute('aria-selected','true');
+ for(const shape of ['Portrait','Square','Horizontal'])await expect(page.getByRole('option',{name:new RegExp(shape)})).toBeDisabled();
+ await page.keyboard.press('Escape');await expect(settings.getByRole('button',{name:/^Aspect/})).toBeFocused();
+ const input=page.getByLabel('Direction for your content');await input.fill('A walkthrough of our booking app');await input.press('Enter');
+ const flow=page.getByRole('dialog',{name:'What is this video about?'});await expect(flow.getByRole('button',{name:/^Length/})).toHaveText(/≈ 2:30/);await expect(flow.getByRole('button',{name:/^Aspect/})).toHaveText(/Vertical\s*9:16/);
 });
 for(const width of [390,320])test(`home, sources and review fit at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:844});const fits=()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);

@@ -1,0 +1,138 @@
+/* Look step ("Who appears in the video?") and the fog art for New project. Tokens come from public/design.css; the fog
+   tints below sit between the app's warm off-white and --art-sky, so generated pictures and empty frames read as one. */
+.lk { --lk-fog: linear-gradient(180deg, #F3F6F8, #D9E5EC); }
+
+/* ───────── fog art ───────── */
+.lk-fog { display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; }
+/* The camera and the microphone stand on the lower half of their pictures; wide frames keep them whole. */
+.lk-fog:is([data-art="camera"], [data-art="voice"]) { object-position: center 82%; }
+.np-make-art:has(> .lk-fog, > .lk-fog-presenter) { background: #E6EEF2; }
+.lk-fog-presenter { position: relative; display: block; width: 100%; height: 100%; }
+.lk-fog-presenter > .lk-fog { position: absolute; inset: 0; }
+.lk-fog-face {
+  position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 58%; aspect-ratio: 4 / 5;
+  overflow: hidden; transform: translate(-50%, -50%); border-radius: 14px; background: #E6EEF2; color: rgba(42, 42, 39, .45);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .92), 0 10px 30px rgba(62, 92, 112, .18);
+}
+.lk-fog-face img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ───────── presenter or no face ───────── */
+.lk-paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.lk-path {
+  position: relative; display: flex; flex-direction: column; gap: 14px; padding: 10px 10px 18px; border: 0; border-radius: 22px;
+  background: var(--surface); box-shadow: var(--elev-1); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-press) var(--ease-out);
+}
+.lk-path:active { transform: scale(.985); }
+.lk-path[aria-checked="true"] { box-shadow: 0 0 0 2px var(--ink), var(--elev-2); }
+.lk-path-art { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 15px; background: #E6EEF2; }
+.lk-path-art > .lk-fog { position: absolute; inset: 0; }
+.lk-path-ghost { opacity: .9; }
+.lk-faces { position: relative; z-index: 1; display: flex; align-items: center; }
+.lk-faces img {
+  width: clamp(56px, 8.5vw, 112px); aspect-ratio: 4 / 5; object-fit: cover; border-radius: 12px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .92), 0 10px 24px rgba(62, 92, 112, .2);
+}
+.lk-faces img + img { margin-left: -12px; }
+.lk-faces img:first-child:not(:only-child) { transform: rotate(-6deg) translateY(4px); }
+.lk-faces img:nth-child(3) { transform: rotate(6deg) translateY(4px); }
+.lk-faces img:nth-child(2) { position: relative; z-index: 1; }
+.lk-path-copy { display: flex; flex-direction: column; gap: 4px; padding: 0 8px; }
+.lk-path-copy strong { font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.lk-path-copy span { font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); }
+.lk-check {
+  position: absolute; top: 20px; right: 20px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(255, 255, 255, .92); box-shadow: inset 0 0 0 1.5px var(--border); color: transparent;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.lk-path[aria-checked="true"] > .lk-check { background: var(--ink); color: #fff; box-shadow: none; }
+@media (hover: hover) and (pointer: fine) {
+  .lk-path:hover { box-shadow: var(--elev-2); }
+  .lk-path[aria-checked="true"]:hover { box-shadow: 0 0 0 2px var(--ink), var(--elev-2); }
+}
+
+/* ───────── avatars ───────── */
+.lk-people-section { margin-top: 6px; animation: np-step var(--dur-base) var(--ease-out); }
+/* A grid that wraps, so Create avatar is always in view; 4px of room for the selection and focus rings. */
+.lk-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 20px 16px; padding: 4px; margin: -4px; }
+.lk-contents { display: contents; }
+.lk-note { margin: 12px 0 0; font-size: 13.5px; color: var(--text-secondary); }
+
+/* An avatar: a 4:5 picture with its name under it. The picture carries the selection ring. */
+.lk-tile {
+  position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 0; border: 0; border-radius: 18px;
+  background: transparent; color: var(--ink); font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+.lk-tile:active:not(:disabled) { transform: scale(.98); }
+.lk-tile-art {
+  position: relative; display: grid; place-items: center; aspect-ratio: 4 / 5; overflow: hidden; border-radius: 18px;
+  background: var(--lk-fog); color: rgba(42, 42, 39, .4); box-shadow: var(--elev-1);
+  transition: box-shadow var(--dur-base) var(--ease-out);
+}
+.lk-tile-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 700ms var(--ease-out); }
+.lk-tile[aria-checked="true"] .lk-tile-art { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ink), var(--elev-2); }
+.lk-tick {
+  position: absolute; top: 10px; right: 10px; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--ink); color: #fff; opacity: 0; transform: scale(.6);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.lk-tile[aria-checked="true"] .lk-tick { opacity: 1; transform: none; }
+.lk-tile-copy { display: flex; flex-direction: column; gap: 2px; padding: 0 4px; min-width: 0; }
+.lk-tile-copy strong { font-size: 14.5px; font-weight: 600; letter-spacing: -.01em; }
+.lk-tile-copy span { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; line-height: 1.35; color: var(--text-secondary); }
+.lk-tile:disabled { cursor: not-allowed; }
+.lk-tile:disabled .lk-tile-art > img { filter: grayscale(1); opacity: .45; }
+.lk-tile:disabled .lk-tile-copy strong { color: var(--text-secondary); }
+.lk-tile-create .lk-tile-art { box-shadow: inset 0 0 0 1px rgba(42, 42, 39, .08); }
+.lk-plus {
+  position: relative; z-index: 1; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%;
+  background: rgba(255, 255, 255, .9); color: var(--ink); box-shadow: 0 6px 18px rgba(62, 92, 112, .18);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.lk-tile.is-loading .lk-tile-art { animation: lk-pulse 1.2s ease-in-out infinite alternate; }
+@keyframes lk-pulse { to { opacity: .5; } }
+@media (hover: hover) and (pointer: fine) {
+  .lk-tile:not(:disabled):hover .lk-tile-art { box-shadow: var(--elev-2); }
+  .lk-tile[aria-checked="true"]:hover .lk-tile-art { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ink), var(--elev-2); }
+  .lk-tile:not(:disabled):hover .lk-tile-art > img { transform: scale(1.035); }
+  .lk-tile-create:hover .lk-plus { transform: scale(1.08); }
+}
+
+/* ───────── looks: small 4:5 portraits in a row that scrolls, with room for the rings ───────── */
+.lk-looks { margin-top: 8px; }
+.lk-strip { display: flex; gap: 12px; overflow-x: auto; padding: 4px; margin: -4px; scrollbar-width: thin; }
+.lk-look {
+  display: flex; flex: none; flex-direction: column; gap: 7px; width: 104px; padding: 0; border: 0; border-radius: 12px;
+  background: transparent; color: var(--ink); font: 500 12.5px/1.25 var(--font-inter); text-align: center; cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+.lk-look:active { transform: scale(.97); }
+.lk-look-art {
+  display: grid; place-items: center; aspect-ratio: 4 / 5; overflow: hidden; border-radius: 12px; background: var(--lk-fog);
+  color: rgba(42, 42, 39, .4); box-shadow: var(--elev-1); transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.lk-look-art img { width: 100%; height: 100%; object-fit: cover; }
+.lk-look[aria-checked="true"] .lk-look-art { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ink); }
+.lk-look[aria-checked="true"] { font-weight: 600; }
+
+/* ───────── phones ───────── */
+@media (max-width: 760px) {
+  .lk-paths { gap: 10px; }
+  .lk-path { gap: 10px; padding: 8px 8px 14px; border-radius: 20px; }
+  .lk-path-art { aspect-ratio: 1; border-radius: 14px; }
+  .lk-path-copy { padding: 0 4px; }
+  .lk-path-copy strong { font-size: 15px; }
+  .lk-path-copy span { font-size: 12.5px; }
+  .lk-check { top: 16px; right: 16px; }
+  .lk-faces img { width: 52px; }
+  .lk-people { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; }
+  .lk-tile-art { border-radius: 14px; }
+  .lk-tile-copy strong { font-size: 14px; }
+  .lk-tile-copy span { font-size: 12px; }
+  .lk-plus { width: 40px; height: 40px; }
+  .lk-look { width: 96px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lk-people-section, .lk-tile-art > img { animation: none; transition: none; }
+}

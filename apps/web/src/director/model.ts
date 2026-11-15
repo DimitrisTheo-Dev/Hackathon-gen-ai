@@ -1,6 +1,9 @@
 import { z } from 'zod';
-import { directorActionSchema, directorAssetSchema, directorPlanSchema, idSchema, patchSchema, type Campaign, type ContentItem, type DirectorAction, type DirectorPlan, type StudioContext } from '@castroom/contracts';
+import { directorActionSchema, directorAssetSchema, directorPlanSchema, idSchema, patchSchema, type Campaign, type ContentItem, type DirectorAction, type DirectorPlan, type Platform, type StudioContext } from '@castroom/contracts';
 import { contentPatch } from '../views/editor/model';
+import { defaultLanguage, languageOf } from '../create/languages';
+import { MAX_COPIES } from '../create/model';
+import { lengthWords, type VideoSettings } from '../create/settings';
 
 // One definition, shared with the engine and MCP: see packages/contracts.
 export { directorActionSchema, directorPlanSchema };
@@ -124,35 +127,33 @@ export function mergeDirectorEntry(old:DirectorEntry|undefined,next:DirectorEntr
 }
 
 /* ───────────── Home composer preferences ───────────── */
-export type PromptPreferences = { format?: string; length?: string; language?: string; presenter?: string };
-export const FORMAT_OPTIONS = [
-  { value: 'reel', label: 'Reel', words: 'an Instagram Reel' },
-  { value: 'short', label: 'Short', words: 'a YouTube Short' },
-  { value: 'tiktok', label: 'TikTok', words: 'a TikTok' },
-] as const;
-export const LENGTH_OPTIONS = [
-  { value: '15', label: '15s', words: '15 seconds' },
-  { value: '30', label: '30s', words: '30 seconds' },
-  { value: '60', label: '60s', words: '60 seconds' },
-] as const;
-export const LANGUAGE_OPTIONS = [
-  { value: 'en', label: 'English', words: 'in English' },
-  { value: 'el', label: 'Greek', words: 'in Greek' },
-] as const;
+/** The New project settings the person changed in the home composer; anything left alone is not sent. */
+export type PromptPreferences = Partial<VideoSettings>;
+const PLATFORM_WORDS: Record<Platform, string> = { instagram: 'an Instagram Reel', tiktok: 'a TikTok', youtube: 'a YouTube Short' };
+/** The video's language and its copies: one version each, as the New project flow makes them. */
+const MAX_LANGUAGES = 1 + MAX_COPIES;
+/** "in Greek"; several languages ask for one version each: "one version each in English, Greek and Spanish". */
+function languageWords(codes: readonly string[]): string | undefined {
+  const names=[...new Set(codes)].slice(0,MAX_LANGUAGES).map(code=>languageOf(code).name);
+  if(!names.length)return undefined;
+  if(names.length===1)return `in ${names[0]}`;
+  return `one version each in ${names.slice(0,-1).join(', ')} and ${names.at(-1)}`;
+}
 /** Exact instructions are planned word for word, so preferences never change their meaning. */
 const EXACT=/^(set\s+(script|title|instagram caption|tiktok caption|youtube caption)\s*:|use avatar\s*:|(enable|disable|show|hide)( burned-in)? captions$|regenerate\b|review schedule$|show (my )?(content|videos)$|list assets$|show (the )?previous version$|play (the )?(latest|selected))/i;
+export const isExactInstruction=(text:string)=>EXACT.test(text.trim());
 /**
- * What is actually sent: the person's words, followed by the preferences they picked as plain words
+ * What the Director is sent from home: the person's words, followed by the settings they changed as plain words
  * ("— an Instagram Reel, 15 seconds, in Greek"). The conversation shows exactly this text.
  */
-export function withPreferences(text: string, prefs: PromptPreferences, presenterName = ''): string {
+export function withPreferences(text: string, prefs: PromptPreferences): string {
   const trimmed=text.trim();
   if(!trimmed||EXACT.test(trimmed))return trimmed;
+  const languages=prefs.language||prefs.copies?.length?[prefs.language??defaultLanguage(),...(prefs.copies??[])]:[];
   const parts=[
-    FORMAT_OPTIONS.find(option=>option.value===prefs.format)?.words,
-    LENGTH_OPTIONS.find(option=>option.value===prefs.length)?.words,
-    LANGUAGE_OPTIONS.find(option=>option.value===prefs.language)?.words,
-    prefs.presenter&&presenterName?`presented by ${presenterName}`:undefined,
+    prefs.platform?PLATFORM_WORDS[prefs.platform]:undefined,
+    prefs.seconds?lengthWords(prefs.seconds):undefined,
+    languageWords(languages),
   ].filter(Boolean);
   return parts.length?`${trimmed} — ${parts.join(', ')}`.slice(0,5000):trimmed;
 }

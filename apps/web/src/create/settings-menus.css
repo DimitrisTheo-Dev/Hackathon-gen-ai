@@ -1,0 +1,26 @@
+/* Settings menus (SettingsMenus.tsx): the ratio beside each frame shape, and the custom length row. */
+.np-ratio { font-weight: 300; color: var(--text-secondary); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.np-option[aria-selected="true"] .np-ratio { font-weight: 300; }
+
+.np-custom-length { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 0; padding: 10px 8px 4px; border-top: 1px solid var(--border); }
+.np-custom-length label { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 13px; }
+.np-custom-length input {
+  inline-size: 3.2em; block-size: 36px; padding: 0 6px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--ink); font: 500 15px/1 var(--font-inter); font-variant-numeric: tabular-nums; text-align: center;
+}
+.np-custom-set {
+  block-size: 36px; margin-inline-start: auto; padding: 0 16px; border: 0; border-radius: 999px;
+  background: var(--ink); color: var(--surface); font: 550 13.5px/1 var(--font-inter); cursor: pointer;
+}
+.np-custom-set:disabled { opacity: .4; cursor: default; }
+.np-custom-length small { flex-basis: 100%; color: var(--text-secondary); font-size: 12.5px; line-height: 1.4; }
+.np-custom-length small.is-error { color: var(--danger); }
+
+/* Aspect: a solid box in each frame's shape leads the option, and the text stays small. */
+.np-frame { flex: none; align-self: center; color: var(--ink); }
+.np-select-value .np-frame { margin-inline-end: 1px; }
+.np-aspects .np-option { padding-block: 7px; font-size: 13px; }
+.np-aspects .np-option-body { align-items: center; gap: 7px; }
+.np-aspects .np-ratio { font-size: 12px; }
+.np-aspects .np-option:disabled { opacity: .5; }
+.np-aspects-note { margin: 6px 10px 4px; font-size: 11.5px; }

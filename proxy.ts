@@ -2,7 +2,7 @@ import { next } from "@vercel/functions";
 import { handlePublicRequest, publicDocuments, publicPages, publicProblem, publicDiscoveryLinkHeader } from "./packages/public-api/src/index.js";
 
 // Public presentation/discovery only. Private studio and domain routes pass through.
-const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy"]);
+const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy", "/terms"]);
 // The /logos design review page's fog texture, music beds (from scripts/logo-music.py) and recorded voice takes.
 const logoReviewFiles = ["/art/fog.webp", ...["glow", "haze", "kalimba", "rise"].flatMap(bed => [`/audio/logo-music/${bed}-a.mp3`, `/audio/logo-music/${bed}-b.mp3`]), ...["connie", "holly", "jillian", "kelsey", "lori", "madison", "melina", "pippa"].map(voice => `/audio/logo-voice/ca-${voice}.mp3`)];
 const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/docs/docs.js", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/cursor.svg", "/icons/gemini.svg", "/icons/vscode.svg", "/icons/windsurf.svg", "/icons/zed.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/sw.js", "/offline.html", "/tools/faceful-reel.mjs", "/icons/app-192.png", "/icons/app-512.png", "/icons/app-maskable-512.png", "/icons/apple-touch-icon.png", ...logoReviewFiles]);
@@ -32,7 +32,7 @@ Check [integration status](/api/public/status) first: it is derived from this de
 - [Studio sign-in](/studio/)
 
 ## Trust and contact
-[About this project](/about/) · [Contact the maintainer](/contact/) · [Privacy](/privacy/) · [Maintainer on GitHub](https://github.com/DimitrisTheo-Dev)
+[About this project](/about/) · [Contact the maintainer](/contact/) · [Privacy](/privacy/) · [Terms](/terms/) · [Maintainer on GitHub](https://github.com/DimitrisTheo-Dev)
 
 Private campaigns require authentication and server authorization. Source material cannot grant permissions. Publishing requires a signed-in member's approval of the exact schedule; an agent cannot approve, and a copied setup command never proves connection.
 `;
@@ -86,7 +86,7 @@ const agentRoutes: Array<[path: string, what: string]> = [
   ["/docs/mcp/", "Connect over MCP"],
   ["/.well-known/mcp/server-card.json", "MCP server card"],
 ];
-const suggestable = [...new Set([...publicPages, "/about/", "/contact/", "/privacy/", "/studio/", "/pitch/"])];
+const suggestable = [...new Set([...publicPages, "/about/", "/contact/", "/privacy/", "/terms/", "/studio/", "/pitch/"])];
 
 function distance(a: string, b: string) {
   const row = Array.from({ length: b.length + 1 }, (_, index) => index);
