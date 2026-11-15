@@ -240,6 +240,7 @@ export async function completeReelRender(deps: EngineDeps, jobId: string, raw: u
   });
   const [done] = await deps.store.update(RENDERS_TABLE, { id: job.id, worker_id: input.workerId, state: "rendering" }, { state: "succeeded", progress: 1, output_file_id: file.id, lease_expires_at: null, updated_at: now });
   if (!done) throw new EngineError("revision_conflict", "This render is no longer running.");
+  if (item) await attachForPublishing(deps, job, item, { key, sha256: input.sha256, bytes: input.bytes, durationSeconds: input.durationSeconds, now });
   await deps.store.insert("audit_events", {
     id: crypto.randomUUID(),
     org_id: job.org_id,
@@ -275,4 +276,43 @@ export async function reelWorker(deps: EngineDeps, request: Request, path: strin
   if (action === "upload-url") return reelRenderUploadUrl(deps, jobId, payload);
   if (action === "complete") return completeReelRender(deps, jobId, payload);
   return failReelRender(deps, jobId, payload);
+}
+
+
+/**
+ * Makes a finished reel render the item's publishable video: copies the MP4 from draft-file storage into media storage
+ * (where review and publishing read it) and points the item at it. A failure here never undoes the render itself.
+ */
+async function attachForPublishing(deps: EngineDeps, job: Row, item: Row, out: { key: string; sha256: string; bytes: number; durationSeconds: number; now: string }) {
+  try {
+    const url = await filesOf(deps).downloadUrl(out.key, 600);
+    const response = await fetch(url);
+    if (!response.ok) return;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength !== out.bytes) return;
+    const path = `${job.org_id}/${job.item_id}/reel-${job.id}.mp4`;
+    if (!(await deps.store.media.stat(path))) await deps.store.media.put(path, bytes, "video/mp4");
+    const assetId = crypto.randomUUID();
+    await deps.store.insert("media_assets", {
+      id: assetId,
+      org_id: job.org_id,
+      item_id: item.id,
+      revision: item.revision,
+      storage_path: path,
+      mime: "video/mp4",
+      bytes: out.bytes,
+      sha256: out.sha256,
+      duration_seconds: out.durationSeconds,
+      has_audio: true,
+      width: 1080,
+      height: 1920,
+      origin: "worker_upload",
+      provider: "remotion",
+      render_job_id: null,
+      created_at: out.now,
+    });
+    await deps.store.update("content_items", { id: item.id, org_id: job.org_id }, { media_asset_id: assetId, render_revision: item.revision, status: "ready", updated_at: out.now });
+  } catch (error) {
+    console.warn("reel render could not be attached for publishing", error instanceof Error ? error.message : error);
+  }
 }
