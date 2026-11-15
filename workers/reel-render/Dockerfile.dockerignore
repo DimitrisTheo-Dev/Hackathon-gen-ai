@@ -1,0 +1,8 @@
+# The image needs only these; everything else in the repository (node_modules, research, renders) stays out of the build context.
+*
+!workers/reel-render/package.json
+!workers/reel-render/package-lock.json
+!workers/reel-render/src
+!apps/web/src/video
+!apps/web/public/fonts/InterVariable.woff2
+!packages/engine/src/voice-providers.ts

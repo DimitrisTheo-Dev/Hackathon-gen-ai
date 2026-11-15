@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createFixtureClient} from '../apps/web/src/data/fixture';
 import {localDirectorPlan,validateDirectorPlan,restorePatch,directorPlanSchema,directorOperationKey,mergeDirectorEntry,changedFields,postingChanges} from '../apps/web/src/director/model';
-import {renderBlockReason,saveHint,countLabel} from '../apps/web/src/views/editor/model';
+import {renderBlockReason,renderRoute,saveHint,countLabel} from '../apps/web/src/views/editor/model';
 import {withPreferences,writingDeclined,handoffPrompt,agentSeenRecently,requestsNewContent} from '../apps/web/src/director/model';
 import {blockerStep,reviewSteps,reviewState,approvalBlock,blockerScope} from '../apps/web/src/views/editor/review';
 import {routeHomeRequest} from '../apps/web/src/director/home-route';
@@ -84,6 +84,12 @@ test('the render action always knows why it is unavailable, and the save hint sa
  assert.equal(renderBlockReason({...ready,canRender:false,dirty:true,hasPresenter:false}),'Rendering is unavailable in this workspace.');
  assert.equal(renderBlockReason({...ready,canRender:false,renderBlocker:'Video rendering is not connected yet.'}),'Video rendering is not connected yet.');
  assert.equal(renderBlockReason({...ready,dirty:true,hasPresenter:false}),'Save your changes first.');
+ // With the timeline renderer connected, no presenter is needed: the video is made from the timeline with a voiceover.
+ assert.equal(renderBlockReason({...ready,canRender:false,canRenderTimeline:true,hasPresenter:false,languageSupported:false}),'');
+ assert.equal(renderBlockReason({...ready,canRender:false,canRenderTimeline:true,hasScript:false}),'Write a script first.');
+ assert.equal(renderRoute({canRender:true,canRenderTimeline:true,hasPresenter:true,languageSupported:true}),'avatar');
+ assert.equal(renderRoute({canRender:true,canRenderTimeline:true,hasPresenter:false,languageSupported:false}),'timeline');
+ assert.equal(renderRoute({canRender:false,canRenderTimeline:false,hasPresenter:true,languageSupported:true}),null);
  const edit={dirty:true,nextRevision:3,kind:'avatar_video' as const,videoChanged:true,hasVideo:true};
  assert.equal(saveHint(edit),'Saving creates v3 — the video will need a new render.');
  assert.equal(saveHint({...edit,videoChanged:false}),'Saving creates v3 — the video is reused.');

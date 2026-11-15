@@ -18,7 +18,7 @@ Create a workspace token in the studio (Connect your agent) with `campaign:read`
    - `cards`: `title`, `lower_third`, `cta`, `statement` (full-screen, hides captions), optional `imageFileId`.
    - `transcript.words`: `{ t, start, end }` on the timeline; `captions` are short pages whose words light up at those times.
    - `labels`: keep `aiAvatar: true` for avatar presenters; add a `disclaimer` for medical or financial topics.
-4. **Render.** `queue_video_render` with the saved revision, then poll `get_video_renders`. The MP4 appears as a `render` draft file with a download link.
+4. **Render.** `queue_video_render` with the saved revision, then poll `get_video_renders`. The MP4 appears as a `render` draft file with a download link. A timeline with no voice clip (and no presenter video playing its own sound) gets its script read aloud first: the persona's voice when `personaId` is given, else a stock voice (`docs/product/microsoft-tts.md`). Add your own voice clip to keep it out.
 
 ## Reel packages: the whole project in one command
 

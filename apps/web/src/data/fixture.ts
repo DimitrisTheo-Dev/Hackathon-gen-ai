@@ -236,6 +236,7 @@ const context: StudioContext = contextSchema.parse({
     mode: "fixture",
     canCreateCampaign: true,
     canRender: false,
+    canRenderTimeline: false,
     canConnectChannels: false,
     canRetry: false,
     canCancel: false,

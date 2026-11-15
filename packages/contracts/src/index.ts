@@ -242,6 +242,11 @@ export const contextSchema = z.object({
     /** Why rendering is unavailable, in words safe to show. Null when a renderer is connected. */
     renderBlocker: z.string().nullable().default(null),
     canRender: z.boolean(),
+    /**
+     * A saved timeline can be rendered to an MP4 by a reel render worker (reel-render.ts), with a voiceover made when
+     * nobody speaks in it. Independent of `canRender`, which is the stock-avatar renderer.
+     */
+    canRenderTimeline: z.boolean().default(false),
     canConnectChannels: z.boolean(),
     canRetry: z.boolean(),
     canCancel: z.boolean(),

@@ -25,6 +25,9 @@ import { dirname, join } from "node:path";
  *   • with HUMANLIKE_TRANSCRIBE_KEY in the environment, live transcription uses Humanlike's real socket.
  * The template library can be seeded two ways: `POST /__e2e/templates` adds two small stand-in templates, and
  * FACEFUL_E2E_TEMPLATES=<path to templates/_kit/library.json> loads the real rows and sample files at start.
+ * With FACEFUL_E2E_REEL=1, timelines can be rendered too (tests/browser/create.config.ts): the reel worker protocol takes
+ * REEL_WORKER_TOKEN below, and Microsoft Text to Speech answers every voiceover with a few seconds of real MP3 frames
+ * (silent ones), so the engine lays a voice into the render job the way it does with the real service.
  * Nothing here is imported by application code or by the deployed functions.
  */
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
@@ -39,6 +42,8 @@ import { MemoryMedia, MemoryStore } from "../../../packages/engine/src/store-mem
 import { handleMcpRequest } from "../../../packages/engine/src/mcp";
 
 const WORKER_TOKEN = "e2e-render-worker-token-not-a-real-credential-0001";
+/** The reel render worker's stand-in credential, only with FACEFUL_E2E_REEL=1. */
+export const REEL_WORKER_TOKEN = "e2e-reel-worker-token-not-a-real-credential-0001";
 /** A test-only stand-in for the key provider credentials are sealed with, so Buffer can be connected. */
 const SOCIALS_CREDENTIAL_KEY = "e2e0".repeat(16);
 const BUFFER_KEY = "e2e-buffer-key-not-a-credential";
@@ -68,6 +73,16 @@ function standInGemini(init: RequestInit | undefined) {
   return Response.json({ candidates: [{ content: { parts: [{ text }] }, finishReason: "STOP" }] });
 }
 const AVATARS = JSON.stringify([{ id: "minas_kontis", name: "Minas", languages: ["en", "el"] }]);
+
+/** Five seconds of MPEG-1 layer III frames at 128 kbit/s: what a speech service returns, minus the speech. */
+function standInSpeech() {
+  const frame = new Uint8Array(417);
+  frame.set([0xff, 0xfb, 0x90, 0x00]);
+  const frames = 192;
+  const bytes = new Uint8Array(417 * frames);
+  for (let index = 0; index < frames; index++) bytes.set(frame, index * 417);
+  return new Response(bytes, { headers: { "Content-Type": "audio/mpeg" } });
+}
 
 /** One second of silence. A <video> element can load it, which is all the player tests need. */
 function silentWav() {
@@ -202,7 +217,7 @@ const PIXEL = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKD
 
 export function createMemoryEngine(origin: string) {
   const store = new E2EStore(origin);
-  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET, SOCIALS_CREDENTIAL_KEY, SOCIALS_WEBHOOK_SECRET, GEMINI_API_KEY: "e2e-not-a-gemini-key" });
+  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET, SOCIALS_CREDENTIAL_KEY, SOCIALS_WEBHOOK_SECRET, GEMINI_API_KEY: "e2e-not-a-gemini-key", ...(process.env.FACEFUL_E2E_REEL === "1" ? { REEL_WORKER_TOKEN, AZURE_SPEECH_KEY: "e2e-not-an-azure-key", AZURE_SPEECH_REGION: "e2e" } : {}) });
   const memoryFiles = new E2EFiles(origin);
   const files: FileStore = settings.r2 ? new R2FileStore(settings.r2, () => new Date(), globalThis.fetch) : memoryFiles;
   // The Supabase client keeps its session under a key named after the project the app was built for.
@@ -226,6 +241,7 @@ export function createMemoryEngine(origin: string) {
     fetch: async (input, init) => {
       const url = new URL(String(input));
       if (url.origin === "https://api.buffer.com") return standInBuffer(init);
+      if (url.origin === "https://e2e.tts.speech.microsoft.com") return standInSpeech();
       if (url.origin === "https://generativelanguage.googleapis.com") return standInGemini(init);
       // Instagram through Unified login: a message or a public reply is accepted and given an ID.
       if (url.origin === "https://graph.facebook.com" && init?.method === "POST" && /\/(messages|replies)$/.test(url.pathname))

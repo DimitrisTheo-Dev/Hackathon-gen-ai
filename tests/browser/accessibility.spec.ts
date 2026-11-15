@@ -101,11 +101,11 @@ test('keyboard only: create a draft, edit it, save, and reach the guarded review
   await page.locator('#np-title-input').focus();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('Keyboard week');
+  // Script is the last step: its action is Create. The development studio cannot make videos, so Create saves the
+  // draft and opens the project instead of promising one.
+  await expect(page.locator('.np-foot').getByRole('button', { name: 'Create', exact: true })).toBeVisible();
+  await expect(page.locator('.np-rail li')).toHaveCount(4);
   await page.keyboard.press('ControlOrMeta+Enter');
-  // The development studio cannot make videos, so the last step says the draft is saved instead of promising one.
-  await expect(page.getByRole('heading', { name: 'Your draft is saved' })).toBeVisible();
-  await page.getByRole('button', { name: 'Finish later', exact: true }).focus();
-  await page.keyboard.press('Enter');
   // The project and its first video share the title the person typed: the page heading is the project's.
   await expect(page.getByRole('heading', { level: 1, name: 'Keyboard week', exact: true })).toBeVisible();
   // Edit: open the draft, switch to Details and change the title with keys alone.

@@ -18,8 +18,9 @@ import { defaultLanguage } from "./languages";
  * The guided New project flow, as plain data: which steps apply, what the person has chosen so far (kept in this
  * browser so closing the flow loses nothing), and the rough preview built from those choices before any render.
  */
-export type StepId = "describe" | "look" | "make" | "script" | "record" | "preview";
-export const STEP_LABELS: Record<StepId, string> = { describe: "Describe", look: "Look", make: "Make", script: "Script", record: "Record", preview: "Preview" };
+/** The steps before Create. There is no preview step: Create on the last one starts making the video. */
+export type StepId = "describe" | "look" | "make" | "script" | "record";
+export const STEP_LABELS: Record<StepId, string> = { describe: "Describe", look: "Look", make: "Make", script: "Script", record: "Record" };
 /** Target lengths, in seconds. A target, not a promise: the script decides the final length. */
 export const LENGTHS = [15, 30, 45, 60, 90] as const;
 /**
@@ -110,7 +111,7 @@ export function presenterOf(draft: Pick<Draft, "face" | "making">): Presenter | 
 }
 export const records = (presenter: Presenter | null) => presenter?.mode === "voice" || presenter?.mode === "camera";
 export function stepsFor(presenter: Presenter | null): StepId[] {
-  return ["describe", "look", "make", "script", ...(records(presenter) ? (["record"] as const) : []), "preview"];
+  return ["describe", "look", "make", "script", ...(records(presenter) ? (["record"] as const) : [])];
 }
 /** Who speaks, as far as the words go: an AI presenter (persona or stock avatar), the person themself (camera or voice), or no one. */
 const speakerOf = (mode: PresenterMode | undefined) => (mode === "camera" || mode === "voice" ? "self" : mode === "none" ? "none" : "presenter");

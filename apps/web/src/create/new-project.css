@@ -40,7 +40,7 @@ html:has(.np) { overflow: hidden; }
 .np-main { overflow: auto; padding: 36px 24px 0; scroll-padding: 12px; }
 .np-step, .np-foot { max-width: 760px; margin-inline: auto; }
 .np-step { animation: np-step var(--dur-base) var(--ease-out); }
-.np-step-record, .np-step-preview, .np-foot-record, .np-foot-preview { max-width: 980px; }
+.np-step-record, .np-foot-record { max-width: 980px; }
 @keyframes np-step { from { opacity: 0; transform: translateY(6px); } }
 .np h1 { margin: 0 0 8px; font-size: 30px; font-weight: 600; letter-spacing: -.035em; line-height: 1.15; }
 .np-lead { margin: 0 0 24px; max-width: 62ch; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }
@@ -49,7 +49,7 @@ html:has(.np) { overflow: hidden; }
 .np-group { margin: 28px 0 12px; font-size: 13px; font-weight: 550; color: var(--text-secondary); letter-spacing: 0; }
 
 .np-side { width: 292px; padding: 28px 24px; overflow: auto; }
-.np-side-frame, .np-preview-frame {
+.np-side-frame {
   aspect-ratio: 9 / 16; width: 100%; overflow: hidden; border-radius: 22px; background: #141413; box-shadow: var(--elev-2);
 }
 .np-side p { margin: 10px 0 0; font-size: 12.5px; color: var(--text-secondary); text-align: center; }
@@ -342,12 +342,13 @@ html:has(.np) { overflow: hidden; }
 .np-error { flex-basis: 100%; margin: 0; color: var(--danger); font-size: 14px; }
 .np-hint { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text-secondary); }
 
-/* ───────── preview ───────── */
-.np-preview { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 36px; align-items: start; }
-.np-summary { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0 0 20px; font-size: 14px; }
-.np-summary dt { color: var(--text-secondary); }
-.np-summary dd { margin: 0; font-weight: 550; }
-.np-honest { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; color: var(--text-secondary); }
+/* ───────── rough preview switch ─────────
+   There is no preview step: Create on the last step starts the video. The switch shows or hides the rough preview
+   beside the look, make and script steps. */
+.np-top-end { justify-self: end; display: flex; align-items: center; gap: 6px; }
+.np-preview-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+/* The side preview is hidden on narrower windows anyway, so the switch would do nothing there. */
+@media (max-width: 1180px) { .np-preview-toggle { display: none; } }
 
 /* Composite fields: the wrapper (composer, line card, ask box) draws the one focus indicator. */
 .np-compose textarea:is(:focus, :focus-visible),
@@ -377,8 +378,6 @@ html:has(.np) { overflow: hidden; }
   .np-make-ai { grid-template-columns: 96px minmax(0, 1fr); gap: 14px; padding-right: 48px; }
   .np-make-grid { gap: 10px; }
   .np-make-copy strong, .np-make-ai .np-make-copy strong { font-size: 15px; }
-  .np-preview { grid-template-columns: 1fr; gap: 20px; }
-  .np-preview-frame { max-width: 300px; margin: 0 auto; width: 100%; }
   .np-record-stage { height: 58vh; }
   .np-foot-note { display: none; }
   .np-foot { justify-content: space-between; }

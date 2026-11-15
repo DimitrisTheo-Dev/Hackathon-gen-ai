@@ -19,6 +19,10 @@ worker ── POST /v1/worker/reel/claim          {workerId}            → one 
 
 Every call carries `Authorization: Bearer $REEL_WORKER_TOKEN`. The worker never holds a database or storage key.
 
+## Voice
+
+A video always has a voice. The engine reads the script aloud when a render is queued and the timeline has nobody speaking in it (`packages/engine/src/voice.ts`), so most jobs arrive with a voice clip. A job that still has none (the engine has no speech keys, or predates voiceovers) is read aloud here, with the worker's own keys: Microsoft Text to Speech (`AZURE_SPEECH_KEY` with `AZURE_SPEECH_REGION` or `AZURE_SPEECH_ENDPOINT`), then the optional ElevenLabs or Cartesia stock voices. The claim says what to read (`job.narration`: script and language); an older engine says nothing, and the captions are read. When a voice is needed and none can be made, the job fails with the reason rather than rendering a silent video. Setup: `docs/product/microsoft-tts.md`.
+
 ## Run it
 
 Engine side (Vercel env): `REEL_WORKER_TOKEN` (32+ characters) and the `FACEFUL_R2_*` settings for draft files.
@@ -41,7 +45,20 @@ On a Mac you can use the installed Chrome instead of downloading Chrome Headless
 `CHROME_EXECUTABLE="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" CHROME_MODE=chrome-for-testing`.
 `--once` claims at most one job and exits.
 
-Cloudflare Containers can run the same image (it is a plain amd64 Linux container); that deployment is not set up yet.
+### On Cloudflare Containers
+
+`cloudflare/` deploys the same image to Cloudflare: a Worker (`faceful-reel-render`) claims waiting jobs every minute and starts one container per job (`standard-4`, up to 4 at once). The container renders, uploads and exits, so it only runs while it renders. Settings are Worker secrets, passed to the container as its environment:
+
+```sh
+cd workers/reel-render/cloudflare && npm ci
+npx wrangler secret put REEL_WORKER_TOKEN        # the engine's REEL_WORKER_TOKEN
+npx wrangler secret put SUPABASE_URL             # the engine's Supabase URL (media host)
+npx wrangler secret put FACEFUL_R2_ACCOUNT_ID    # the engine's R2 account (draft files host)
+npx wrangler secret put AZURE_SPEECH_KEY         # voiceovers; plus AZURE_SPEECH_REGION or AZURE_SPEECH_ENDPOINT
+npx wrangler deploy                              # needs Docker running; builds ../Dockerfile for linux/amd64
+```
+
+`FACEFUL_API_URL` is in `wrangler.jsonc`. Set the var `RENDERING` to `off` to stop claiming new jobs. `GET https://faceful-reel-render.<subdomain>.workers.dev/health` says whether it renders and which voices it has. Logs: `npx wrangler tail`.
 
 ## Safety
 

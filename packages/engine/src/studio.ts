@@ -167,6 +167,7 @@ export async function getContext(deps: EngineDeps, ctx: Ctx): Promise<StudioCont
       directorMode: deps.config.llm ? "ai" : "basic",
       renderBlocker: noRenderReason,
       canRender,
+      canRenderTimeline: Boolean(deps.config.reelWorkerToken) && ctx.scopes.has("render:write"),
       // YouTube is the one real destination, and only where this deployment is configured for it. Connecting is an
       // owner/admin decision made in person; agents never see this as available.
       canConnectChannels: ctx.principal.kind === "human" && ctx.scopes.has("connections:manage") && deps.config.youtube !== null,

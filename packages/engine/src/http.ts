@@ -359,6 +359,8 @@ export function health(deps: HttpDeps) {
     files: { connected: Boolean(deps.files?.configured) },
     likeness: { liveTranscription: Boolean(config.humanlikeTranscribeKey) },
     reelRendering: { connected: Boolean(config.reelWorkerToken) },
+    // Speech services the engine can read scripts with (voice.ts). Render workers may hold their own.
+    voiceover: { services: (["azure", "elevenlabs", "cartesia", "fal"] as const).filter((service) => config.voice[service]) },
     billing: { mode: config.stripe ? "sandbox" : "not_configured", problem: config.stripeProblem },
     // What can post: YouTube channels connected in the studio, and each social provider a workspace could connect here
     // (SOCIALS_CREDENTIAL_KEY set; for Instagram directly, also this deployment's own Instagram app).

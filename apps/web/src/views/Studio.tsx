@@ -100,6 +100,7 @@ function ViewSkeleton() {
 
 import { useDirectorHistory } from '../director/use-history';
 import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
+import { renderRoute } from './editor/model';
 type View = "home" | "canvas" | "schedule" | "video" | "templates" | "personas" | "connect" | "brand" | "billing" | "settings";
 /** Search, filter and sort only earn their place once a project is too long to take in at a glance. */
 const TOOLS_FROM = 7;
@@ -594,6 +595,25 @@ export function Studio({
   }
   async function render() {
     if (!item || !campaign) return;
+    const avatar = context!.avatars.find((entry) => entry.id === item.avatarId && entry.permission === "authorized");
+    const route = renderRoute({ canRender: context!.capabilities.canRender, canRenderTimeline: context!.capabilities.canRenderTimeline, hasPresenter: Boolean(avatar), languageSupported: Boolean(avatar?.languages.includes(item.language)) });
+    if (route === "timeline") {
+      // Made from the item's timeline (its first draft when none was saved yet), read aloud by a voiceover; the video studio follows the render.
+      await action(async () => {
+        const workspaceId = context!.workspace.id;
+        const document = await client.getComposition(item.id);
+        let revision = document.revision;
+        if (revision === 0) {
+          const saving = { contentId: item.id, expectedRevision: 0, composition: document.composition };
+          revision = (await client.saveComposition({ ...saving, operationKey: await operationKey(workspaceId, "save_composition", saving) })).revision;
+        }
+        const queue = { contentId: item.id, expectedRevision: revision };
+        await client.queueRender({ ...queue, operationKey: await operationKey(workspaceId, "queue_reel_render", queue) });
+        go("video");
+        setNotice("Your video is being made. It plays in the video studio when it’s ready.");
+      });
+      return;
+    }
     await action(async () => {
       const result = await client.renderContent({
         campaignId: campaign.id,
@@ -1366,10 +1386,19 @@ export function Studio({
             setNewProject(null);
             if (saved) adoptCampaign(saved, "Your project is saved as a draft. Nothing has been rendered.");
           }}
-          onDone={(saved, openVideo) => {
+          onDone={(saved, openVideo, started) => {
             setNewProject(null);
             setHomeIdea("");
-            adoptCampaign(saved, openVideo ? "Project saved. Adjust the timeline here, then render when it looks right." : "Project saved as a draft. Nothing has been rendered.");
+            adoptCampaign(
+              saved,
+              started
+                ? openVideo
+                  ? "Your video is being made. It plays here when it’s ready."
+                  : "Your video is being made. Follow it on the canvas."
+                : openVideo
+                  ? "Project saved. Adjust the timeline here, then render when it looks right."
+                  : "Project saved as a draft. Nothing has been rendered.",
+            );
             if (openVideo) setView("video");
           }}
         />

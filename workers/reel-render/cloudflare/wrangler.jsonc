@@ -1,0 +1,40 @@
+{
+  // Faceful reel renders on Cloudflare Containers. Every minute the Worker claims waiting render jobs from the engine and
+  // starts one container per job (the image in ../Dockerfile); the container renders, uploads and exits.
+  // Deploy (needs Docker running): npm ci && npx wrangler deploy
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "faceful-reel-render",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["* * * * *"] },
+  "containers": [
+    {
+      "class_name": "ReelRenderer",
+      "image": "../Dockerfile",
+      // The image takes the studio's composition from the repository (see the Dockerfile and Dockerfile.dockerignore).
+      "image_build_context": "../../..",
+      // At most this many renders at once. standard-4: 4 vCPU, 12 GiB memory, 20 GB disk.
+      "max_instances": 4,
+      "instance_type": "standard-4"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "RENDERER", "class_name": "ReelRenderer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ReelRenderer"] }],
+  "vars": {
+    "FACEFUL_API_URL": "https://faceful.dtheo.dev",
+    // "off" stops claiming new jobs (renders already running finish).
+    "RENDERING": "on"
+  }
+  // Secrets (never in this file), each with `npx wrangler secret put <NAME>`:
+  //   REEL_WORKER_TOKEN       the engine's REEL_WORKER_TOKEN (required)
+  //   SUPABASE_URL            the engine's Supabase project URL: its signed media links come from this host
+  //   FACEFUL_R2_ACCOUNT_ID   the engine's R2 account: draft files come from <account>.r2.cloudflarestorage.com
+  //   AZURE_SPEECH_KEY        Microsoft Text to Speech, with AZURE_SPEECH_REGION or AZURE_SPEECH_ENDPOINT
+  //                           (docs/product/microsoft-tts.md): voiceovers for jobs that arrive without one
+  //   optional: AZURE_TTS_VOICE, AZURE_TTS_VOICE_EL, ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID, CARTESIA_API_KEY + CARTESIA_VOICE_ID,
+  //             MEDIA_HOST_ALLOWLIST
+}
