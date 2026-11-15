@@ -284,13 +284,13 @@ export function Connect({ context, client, refresh, onContinue }: ConnectProps) 
             <p className="ob-footnote">Tested with Claude Code and Codex. The others use the same standard MCP connection and are not yet verified by us.</p>
           </section>
 
-          {/* A separate page, not a Faceful-hosted feature: it runs on the person's own server and subscription. */}
+          {/* A separate page: Claude Code runs on the person's own machine with their own Claude subscription. */}
           <a className="ob-runner-card" href="/claude-login-test/" target="_blank" rel="noreferrer">
             <span className="ob-runner-face">
               <AgentIcon host="claude" size={36} tile />
               <span className="ob-runner-text">
                 <strong>Claude Code in your browser<span className="ob-badge">Preview</span></strong>
-                <small>Runs on your own server with your own Claude subscription.</small>
+                <small>Connect your Claude subscription with one button. Runs on your own cloud machine.</small>
               </span>
               <ArrowUpRight className="ob-runner-arrow" size={16} aria-hidden="true" />
               <span className="sr-only"> (opens in a new tab)</span>

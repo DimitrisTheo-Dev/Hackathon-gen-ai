@@ -11,6 +11,7 @@
     "build": "tsc --noEmit && tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs && tsc --project tsconfig.api.json && node scripts/check-api.mjs && vite build --config apps/web/vite.config.ts && tsx scripts/prerender.ts && node scripts/check-prerender.mjs",
     "preview": "vite preview --config apps/web/vite.config.ts",
     "test": "tsx --test tests/*.test.ts",
+    "test:claude-live": "CLAUDE_MACHINE_LIVE=1 node --env-file-if-exists=.env.local --import tsx --test tests/claude-machine-live.test.ts",
     "typecheck": "tsc --noEmit",
     "quality:lint": "oxlint --deny-warnings",
     "quality:deadcode": "fallow dead-code",
