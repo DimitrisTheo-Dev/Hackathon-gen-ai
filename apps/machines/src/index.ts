@@ -4,24 +4,33 @@
 //                  │                 └─ apps/claude-runner inside, reached only through the Durable Object
 //                  └─ D1 faceful-machines: machines, projects, saves
 //
-// The Worker decides who is calling (a Faceful session or a personal token) and never lets a caller name
-// another user's machine. The container's disk is fresh on every wake; the runner restores the user's
-// Claude sign-in and each project from their own R2 folder, and autosaves after every run.
+// The Worker decides who is calling (a short-lived token the engine trades for a Faceful session, or a personal
+// token), lets in only listed accounts, and never lets a caller name another user's machine. The container's disk
+// is fresh on every wake; the runner restores the user's Claude sign-in and each project from their own R2 folder,
+// and autosaves after every run.
 import { Container, getContainer } from "@cloudflare/containers";
-import { mintToken } from "../../workspace-store/src/index";
-import { asSaveRecord, corsFor, createLineScanner, createSessionVerifier, identify, isProjectId, parseOrigins, parseRunEvent, slugify, type Identity, type SaveRecord } from "./lib";
+import { MACHINE_STORE_TOKEN_TTL, mintToken } from "../../workspace-store/src/index";
+import { asSaveRecord, corsFor, createLineScanner, homeKeyFor, identify, isProjectId, limitProblem, limitsFrom, machineUsage, NOT_ENABLED, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, WAKE_SQL, type Identity, type LimitProblem, type SaveRecord, type Wake } from "./lib";
 
 export type Env = {
   MACHINE: DurableObjectNamespace<UserMachine>;
   DB: D1Database;
   /** Same value as the workspace store's secret: lets this Worker mint each machine's folder token. */
   STORE_SIGNING_KEY: string;
-  /** Signs personal gateway tokens (fgw1.…). Optional: without it only Faceful sessions are accepted. */
+  /** Only here, never on the store: each user's key for sealing Claude's sign-in is derived from it (lib.ts homeKeyFor). */
+  HOME_ENCRYPTION_KEY: string;
+  /** Keyring that signs personal gateway tokens (fgw2.…, expiring). Optional: without it no personal token is accepted. */
   GATEWAY_SIGNING_KEY?: string;
-  SUPABASE_URL: string;
+  /** Same value as the engine's: checks the ten-minute tokens the engine trades for a Faceful session (fgs1.…). */
+  MACHINES_GATEWAY_KEY?: string;
   STORE_URL: string;
   ALLOWED_ORIGINS: string;
   INSTANCE_TYPE: string;
+  /** Secret. Comma-separated user ids that may have a machine; unset or empty lets nobody in. */
+  MACHINE_ALLOWED_USERS?: string;
+  /** Per-user limits (lib.ts limitsFrom): wakes in any hour, and minutes awake per UTC day. */
+  MACHINE_WAKES_PER_HOUR?: string;
+  MACHINE_AWAKE_MINUTES_PER_DAY?: string;
 };
 
 const PORT = 8787;
@@ -30,6 +39,14 @@ const now = () => new Date().toISOString();
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const problem = (status: number, code: string, message: string) => json(status, { error: { code, message } });
 const logFailure = (what: string) => (error: unknown) => console.error(`${what} failed:`, error instanceof Error ? error.message : error);
+const limited = (refused: LimitProblem) => {
+  const response = json(429, { error: { code: refused.code, message: refused.message, retryAfterSeconds: refused.retryAfterSeconds } });
+  response.headers.set("retry-after", String(refused.retryAfterSeconds));
+  return response;
+};
+class LimitReached extends Error {
+  constructor(readonly refused: LimitProblem) { super(refused.message); }
+}
 
 // ---------- database ----------
 
@@ -66,6 +83,8 @@ export class UserMachine extends Container<Env> {
   private readonly innerSecret = this.ctx.id.toString();
   private ready: Promise<void> | null = null;
   private booted = false;
+  /** When the runner's store token (12 hours) is due for a new one: halfway through its life. */
+  private storeTokenRenewAt = 0;
 
   private api(path: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
@@ -77,14 +96,42 @@ export class UserMachine extends Container<Env> {
     return state.status === "running" || state.status === "healthy";
   }
 
-  /** Starts the container with this user's own storage token. Once per wake. */
+  /** This user's limits as of now: `waking` also counts the wakes in the last hour. */
+  private async usageProblem(uid: string, waking: boolean): Promise<LimitProblem | null> {
+    const at = Date.now();
+    const { results } = await this.env.DB.prepare(WAKE_SQL.usage).bind(uid, usageSince(at)).all<Wake>();
+    return limitProblem(machineUsage(results, at), limitsFrom(this.env), at, { waking });
+  }
+
+  /** Hands the runner a fresh store token once the one it holds is halfway through its life. */
+  private async renewStoreToken(uid: string): Promise<void> {
+    if (Date.now() < this.storeTokenRenewAt) return;
+    const token = await mintToken(this.env.STORE_SIGNING_KEY, uid, MACHINE_STORE_TOKEN_TTL);
+    const response = await this.api("/v1/store-token", { method: "POST", body: JSON.stringify({ token }), headers: { "content-type": "application/json" } });
+    if (!response.ok) throw new Error(`the runner answered ${response.status}`);
+    this.storeTokenRenewAt = Date.now() + MACHINE_STORE_TOKEN_TTL * 500;
+  }
+
+  /** Starts the container with this user's own storage token. Once per wake, within the user's limits. */
   private boot(uid: string, via: Identity["via"]): Promise<void> {
     // A container that went away by itself (a deploy, a crash) needs a full start, not the remembered one.
     if (this.booted && this.ctx.container?.running !== true) { this.booted = false; this.ready = null; }
     this.ready ??= (async () => {
+      const db = this.env.DB;
       await this.ctx.storage.put("uid", uid);
-      await touchMachine(this.env.DB, uid, via, this.env.INSTANCE_TYPE);
-      if (!(await this.isUp())) await this.env.DB.prepare("update machines set state = 'starting', updated_at = ? where user_id = ?").bind(now(), uid).run();
+      await touchMachine(db, uid, via, this.env.INSTANCE_TYPE);
+      const waking = !(await this.isUp());
+      if (waking) {
+        // A stop that was never recorded is charged until now: rare, and it errs on the side of the spend cap.
+        await db.prepare(WAKE_SQL.close).bind(now(), uid).run();
+        const refused = await this.usageProblem(uid, true);
+        if (refused) throw new LimitReached(refused);
+        await db.batch([
+          db.prepare(WAKE_SQL.open).bind(uid, now()),
+          db.prepare(WAKE_SQL.prune).bind(uid, new Date(Date.now() - 7 * 86_400_000).toISOString()),
+          db.prepare("update machines set state = 'starting', updated_at = ? where user_id = ?").bind(now(), uid),
+        ]);
+      }
       // Kept on the object, so every start of this container gets the same settings, whoever triggers it.
       this.envVars = {
         HOST: "0.0.0.0",
@@ -93,11 +140,15 @@ export class UserMachine extends Container<Env> {
         RUNNER_ALLOWED_ORIGINS: "http://container",
         STORE_URL: this.env.STORE_URL,
         STORE_TOKEN: await mintToken(this.env.STORE_SIGNING_KEY, uid),
+        CLAUDE_HOME_KEY: await homeKeyFor(this.env.HOME_ENCRYPTION_KEY, uid),
       };
       await this.startAndWaitForPorts({ ports: PORT, cancellationOptions: { instanceGetTimeoutMS: 60_000, portReadyTimeoutMS: 90_000 } });
+      // A container that was already up kept the token from its own start, of unknown age: renew it right away.
+      this.storeTokenRenewAt = waking ? Date.now() + MACHINE_STORE_TOKEN_TTL * 500 : 0;
       this.booted = true;
-    })().catch((error) => {
+    })().catch(async (error) => {
       this.ready = null;
+      if (!(error instanceof LimitReached)) await this.env.DB.prepare(WAKE_SQL.close).bind(now(), uid).run().catch(logFailure("closing the failed wake"));
       throw error;
     });
     return this.ready;
@@ -113,12 +164,22 @@ export class UserMachine extends Container<Env> {
       return outcome === "busy" ? problem(409, "busy", "Claude Code is still working. Stop the run, then put the machine to sleep.") : json(200, { stopped: outcome === "stopped" });
     }
 
+    // An awake machine that has used up today's time takes no more work, and goes to sleep as soon as it is idle.
+    if (this.ctx.container?.running === true) {
+      const refused = await this.usageProblem(uid, false);
+      if (refused) {
+        this.ctx.waitUntil(this.saveAndStop().catch(logFailure("putting an over-limit machine to sleep")));
+        return limited(refused);
+      }
+    }
     try { await this.boot(uid, via); }
     catch (error) {
+      if (error instanceof LimitReached) return limited(error.refused);
       logFailure(`starting the machine for ${uid}`)(error);
       await this.env.DB.prepare("update machines set state = 'failed', updated_at = ? where user_id = ?").bind(now(), uid).run().catch(logFailure("marking the machine failed"));
       return problem(503, "machine_unavailable", "Your machine couldn't start. Try again in a moment.");
     }
+    await this.renewStoreToken(uid).catch(logFailure("renewing the store token"));
     const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
     const response = await this.api(`${url.pathname}${url.search}`, { method: request.method, body, headers: body ? { "content-type": "application/json" } : {} });
     return this.observe(uid, `${request.method} ${url.pathname}`, body, response);
@@ -164,6 +225,7 @@ export class UserMachine extends Container<Env> {
     if (!(await this.isUp())) return "asleep";
     const uid = await this.ctx.storage.get<string>("uid");
     try {
+      if (uid) await this.renewStoreToken(uid).catch(logFailure("renewing the store token"));
       const synced = await this.api("/v1/sync", { method: "POST" });
       if (synced.status === 409) return "busy"; // the run autosaves by itself when it ends
       if (synced.ok && uid) {
@@ -206,7 +268,11 @@ export class UserMachine extends Container<Env> {
     this.ready = null;
     this.booted = false;
     const uid = await this.ctx.storage.get<string>("uid");
-    if (uid) await this.env.DB.prepare("update machines set state = 'stopped', last_stopped_at = ?, updated_at = ? where user_id = ?").bind(now(), now(), uid).run().catch(logFailure("recording the stop"));
+    const db = this.env.DB;
+    if (uid) await db.batch([
+      db.prepare("update machines set state = 'stopped', last_stopped_at = ?, updated_at = ? where user_id = ?").bind(now(), now(), uid),
+      db.prepare(WAKE_SQL.close).bind(now(), uid),
+    ]).catch(logFailure("recording the stop"));
   }
 
   override onError(error: unknown): unknown {
@@ -216,8 +282,6 @@ export class UserMachine extends Container<Env> {
 }
 
 // ---------- the gateway ----------
-
-let verifySession: ((token: string) => Promise<string | null>) | null = null;
 
 async function route(request: Request, url: URL, env: Env, who: Identity): Promise<Response> {
   const machine = getContainer(env.MACHINE, who.uid);
@@ -256,6 +320,8 @@ async function route(request: Request, url: URL, env: Env, who: Identity): Promi
     return json(200, { saves: results });
   }
 
+  // Only the machine itself hands its runner a store token.
+  if (url.pathname === "/v1/store-token") return problem(404, "not_found", "Unknown endpoint.");
   // Everything else is the runner's own API, on this user's machine. This wakes the machine if it sleeps.
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
   return machine.fetch(new Request(`http://machine${url.pathname}${url.search}`, { method: request.method, headers: identity, body }));
@@ -277,9 +343,10 @@ export default {
     if (!url.pathname.startsWith("/v1/")) return withCors(problem(404, "not_found", "Unknown endpoint."));
     if (origin && !cors) return problem(403, "origin_not_allowed", `This gateway doesn't accept requests from ${origin}.`);
 
-    verifySession ??= createSessionVerifier(env.SUPABASE_URL);
-    const who = await identify(request.headers.get("authorization"), { signingKey: env.GATEWAY_SIGNING_KEY, verifySession });
+    const who = await identify(request.headers.get("authorization"), { personal: env.GATEWAY_SIGNING_KEY, session: env.MACHINES_GATEWAY_KEY });
     if (!who) return withCors(problem(401, "unauthorized", "Sign in again, or check your access token."));
+    // Default deny: an account only reaches any route once it is on the list.
+    if (!parseAllowlist(env.MACHINE_ALLOWED_USERS).has(who.uid)) return withCors(problem(403, "machine_not_enabled", NOT_ENABLED));
     try { return withCors(await route(request, url, env, who)); }
     catch (error) {
       logFailure(`${request.method} ${url.pathname}`)(error);

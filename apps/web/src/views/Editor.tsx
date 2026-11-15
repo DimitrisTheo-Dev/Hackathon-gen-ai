@@ -12,6 +12,8 @@ import {
   Copy,
   ArrowUpRight,
   X,
+  MessageSquare,
+  SlidersHorizontal,
 } from "lucide-react";
 import type {
   Campaign,
@@ -418,11 +420,14 @@ export function Editor({
           <div className="director-thumb"><Preview item={item} index={index} compact brandName={brandName}/></div>
           <div><strong title={item.title}>{item.title}</strong><small>Version {item.revision} · <span className={`status-word tone-${badge.tone}`}>{badge.label}</span></small></div>
         </div>
+        {/* The panel is the AI chat. Details (script, presenter, channels, times, review, versions) is one quiet step away. */}
+        <div className="editor-heading-actions">
+          <button type="button" className="director-preview-switch editor-mode-button" onClick={onShowContent}>Preview</button>
+          {mode==='chat'
+            ? <button type="button" className="editor-mode-button" onClick={()=>{onStart?.();setMode('details');}}><SlidersHorizontal size={14} aria-hidden="true"/><span>Details</span></button>
+            : <button type="button" className="editor-mode-button" onClick={()=>setMode('chat')}><MessageSquare size={14} aria-hidden="true"/><span>AI Chat</span></button>}
+        </div>
       </header>
-      <div className="director-tabs segmented" data-mode={mode} aria-label="Creative Director views"><button className="director-preview-switch" onClick={onShowContent}>Preview</button>
-        <button aria-pressed={mode==='chat'} onClick={()=>setMode('chat')}>AI Chat</button>
-        <button aria-pressed={mode==='details'} onClick={()=>{onStart?.();setMode('details');}}>Details</button>
-      </div>
       {/* Kept mounted while Details is open so an in-flight plan, the scope and attachments are not lost. */}
       <div className="editor-chat" hidden={mode!=='chat'}>
         <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');scroller.current?.scrollTo({top:0});}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>reveal('versions'):undefined} onPresenter={()=>reveal('presenter')} onAgents={onAgents} onSources={onSources} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>

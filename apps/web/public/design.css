@@ -106,6 +106,9 @@ html[data-boot-view="canvas"] .boot-canvas, html[data-boot-view="page"] .boot-pa
 .boot-head { display: block; padding: 22px 24px 25.6px; }
 :is(.boot-head, .boot-page) .boot-title { block-size: calc(clamp(21px, 1.9vw, 26px) * 1.15 - 6px); inline-size: min(260px, 60%); margin-block: 3px; border-radius: 8px; }
 :is(.boot-head, .boot-page) .boot-line { block-size: 11px; inline-size: min(190px, 44%); margin-block: 13px 0; }
+/* The project header's draft-to-post rail (components/FlowRail.tsx): same height, so the cards do not move. */
+.boot-rail { block-size: 47px; margin-block-start: 17px; border-radius: 12px; background: var(--boot-ink); opacity: .55; }
+@media (max-width: 760px) { .boot-rail { block-size: 54px; margin-block-start: 10px; } }
 .boot-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(204px, 1fr)); align-items: start; gap: 20px; box-sizing: border-box; inline-size: 100%; padding-inline: 24px; }
 /* Same box as a draft card: a 9:16 preview inside 9px of padding, then two lines of text. */
 .boot-cards i { padding: 9px 9px 65px; border-radius: 18px; background: var(--surface); box-shadow: var(--elev-1); }
@@ -195,7 +198,7 @@ html[data-boot-sidebar="collapsed"] .boot-user { justify-content: center; paddin
   .boot-home .boot-line { margin-block: 29.3px 0; inline-size: 250px; }
   .boot-home .boot-chips { order: 1; margin-block-start: 133.4px; gap: 6px; }
   .boot-home .boot-composer { order: 2; block-size: 94px; margin-block-start: 18px; }
-  .boot-head { box-sizing: border-box; block-size: 72px; padding: 12px 16px; }
+  .boot-head { box-sizing: border-box; block-size: 136px; padding: 12px 16px; }
   .boot-head .boot-title { display: none; }
   .boot-head .boot-line { margin-block: 16.5px 0; inline-size: 150px; }
   .boot-page { padding: 20px 16px 32px; }

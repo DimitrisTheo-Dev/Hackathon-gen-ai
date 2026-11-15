@@ -10,6 +10,7 @@ import { archiveFile, completeUpload, listFiles, requestUpload, saveTextFile } f
 import { authenticateReelWorker, cancelRender, listRenders, queueRender, reelWorker } from "./reel-render.js";
 import { EngineError } from "./errors.js";
 import { likenessLiveToken, likenessUploadUrl, revokeLikenessConsent, saveLikenessConsent } from "./likeness.js";
+import { machinesToken } from "./machines.js";
 import { createPersona, createPersonaLook, deletePersona, deletePersonaLook, listPersonas, personaConsentToWithdraw, personaImageUploadUrl, updatePersona, updatePersonaLook } from "./personas.js";
 import type { Planner } from "./llm.js";
 import { createProduct, deleteProduct, placeProduct, productImageUploadUrl, updateProduct } from "./products.js";
@@ -208,6 +209,8 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     return json(await saveLikenessConsent(deps, ctx, await body(request), client));
   }
   if (request.method === "DELETE" && (match = path.match(/^\/likeness\/consents\/([^/]+)$/))) return json(await revokeLikenessConsent(deps, ctx, decodeURIComponent(match[1])));
+  // A ten-minute token for the Claude Code machines gateway, so the session itself never leaves Faceful (machines.ts).
+  if (post && path === "/machines/token") return json(machinesToken(deps, ctx));
   if (post && (match = path.match(/^\/operations\/([a-z_]+)$/))) {
     const name = match[1];
     const operation = operations.get(name);
