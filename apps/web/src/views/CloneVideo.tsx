@@ -323,7 +323,7 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
             </div>
           ) : jobs === null ? (
             <ul className="cv-jobs-skeleton" aria-hidden="true">
-              {[0, 1].map((row) => <li key={row} className="cv-job"><span className="cv-job-thumb" /><span className="cv-job-main"><i /><i /></span><span className="cv-job-state"><i /></span></li>)}
+              {[0, 1].map((row) => <li key={row}><span className="cv-job-thumb" /><span className="cv-job-main"><i /><i /></span><span className="cv-job-state"><i /></span></li>)}
             </ul>
           ) : null}
           {!!jobs?.length && (

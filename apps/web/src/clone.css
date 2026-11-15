@@ -109,7 +109,7 @@
   .cv-jobs-skeleton .cv-job-main i:last-child { inline-size: min(420px, 85%); }
   .cv-jobs-skeleton .cv-job-state i { inline-size: 90px; margin-block-start: 6px; }
   .cv-jobs ul { list-style: none; border-block-start: 1px solid var(--border); }
-  .cv-job { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px 4px; border-block-end: 1px solid var(--border); }
+  .cv-job, .cv-jobs-skeleton > li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px 4px; border-block-end: 1px solid var(--border); }
   .cv-job-thumb { display: grid; place-items: center; inline-size: 48px; block-size: 48px; overflow: hidden; border-radius: 10px; background: var(--subtle); color: var(--text-secondary); }
   .cv-job-thumb img { inline-size: 100%; block-size: 100%; object-fit: cover; }
   .cv-job-main { display: grid; gap: 3px; min-inline-size: 0; }
@@ -156,7 +156,7 @@
 
   @media (max-width: 760px) {
     .cv { padding: 20px 16px 112px; }
-    .cv-job { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
+    .cv-job, .cv-jobs-skeleton > li { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
     .cv-job-thumb { inline-size: 44px; block-size: 44px; }
     .cv-job-state { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px 10px; justify-items: start; text-align: start; }
     .cv-start-row .button { flex: 1 1 100%; }
