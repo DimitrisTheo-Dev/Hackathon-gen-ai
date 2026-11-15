@@ -538,7 +538,39 @@
     border-radius: 8px;
     background: #111214;
   }
+
+  /* ── Show a product (video/ShowProduct.tsx): which product, which layout, an end card, and where it lands ── */
+  .sp { display: grid; gap: 18px; }
+  .sp :is(p, fieldset) { margin: 0; }
+  .sp-fieldset { display: grid; gap: 8px; min-inline-size: 0; padding: 0; border: 0; }
+  .sp-fieldset legend { margin-block-end: 8px; padding: 0; color: var(--ink); font-size: 12.5px; font-weight: 550; }
+  .sp-products { display: grid; gap: 8px; }
+  .sp-product { position: relative; display: block; cursor: pointer; }
+  .sp-product input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  /* The thumbnail sits 6px inside a 12px row with a 1px edge: 12 − 7 = 5px. */
+  .sp-product-face { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+  .sp-product input:checked + .sp-product-face { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .sp-thumb { inline-size: 48px; aspect-ratio: 1; overflow: hidden; border-radius: 5px; background: var(--subtle); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+  .sp-thumb img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
+  .sp-product-name { min-inline-size: 0; color: var(--ink); font-size: 14px; font-weight: 550; line-height: 1.35; overflow-wrap: anywhere; }
+  .sp-help, .sp-why { color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
+  .sp-when { padding: 10px 12px; border-radius: 10px; background: var(--subtle); color: var(--ink-secondary); font-size: 12.5px; line-height: 1.5; text-wrap: pretty; font-variant-numeric: tabular-nums; }
+  .sp .sp-check { align-items: flex-start; gap: 10px; color: var(--ink); font-size: 13.5px; line-height: 1.5; cursor: pointer; }
+  .sp .sp-check input { margin-block-start: 4px; }
+  .sp-check small { display: block; color: var(--text-secondary); font-size: 12.5px; }
+  .sp .notice .text-button { margin-inline-start: 0; }
+  .sp-actions { margin-block-start: 4px; }
+  @media (hover: hover) and (pointer: fine) {
+    .sp-product:hover input:not(:checked) + .sp-product-face { border-color: var(--text-muted); }
+  }
+  @media (pointer: coarse) {
+    .sp-product-face { min-block-size: 60px; }
+    .sp .sp-check { min-block-size: 44px; font-size: 15px; }
+  }
 }
+/* Unlayered, like the shared focus rules: the invisible radio draws no ring; its row does. */
+.sp-product input:is(:focus, :focus-visible) { outline: none; }
+.sp-product:has(input:focus-visible) .sp-product-face { outline: 2px solid var(--focus); outline-offset: 2px; }
 @layer responsive {
   @media (max-width: 1000px) {
     .video-studio {

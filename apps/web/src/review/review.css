@@ -1,0 +1,44 @@
+/*
+ * Shared review vocabulary (review/vocabulary.tsx): the domain chip and the claim status chip, used by the brand
+ * kit, Details → Review and the video studio. Status is ink on a pale fill, always with an icon and a word.
+ * In the polish layer with the brand kit, so a surface's own unlayered rules can place them.
+ */
+@layer polish {
+  .domain-chip, .claim-chip { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; inline-size: max-content; max-inline-size: 100%; padding: 2px 9px 2px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 550; line-height: 1.55; letter-spacing: 0; white-space: nowrap; }
+  .domain-chip { background: var(--subtle); color: var(--ink-secondary); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); }
+  .domain-chip > svg, .claim-chip > svg { flex: 0 0 auto; }
+  .claim-chip { background: rgba(42,42,39,.055); color: var(--ink-secondary); }
+  .claim-chip[data-tone="danger"] { background: var(--danger-surface); color: var(--danger); }
+  .claim-chip[data-tone="warning"] { background: var(--warning-surface); color: var(--warning-ink); }
+  .claim-chip[data-tone="positive"] { background: var(--positive-surface); color: var(--positive-ink); }
+
+  /* A segmented control of native radios (product kind, product layout): arrow keys move between them, the drawn face carries the state. */
+  .choice-segmented { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(42,42,39,.055); }
+  .choice-segmented label { position: relative; display: block; min-inline-size: 0; cursor: pointer; }
+  .choice-segmented input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .choice-segmented span { display: flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 32px; padding: 0 8px; border-radius: 7px; color: var(--text-secondary); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+  .choice-segmented input:checked + span { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px rgba(42,42,39,.05), 0 1px 2px rgba(42,42,39,.10); }
+  :disabled .choice-segmented :is(label, input) { cursor: default; }
+  @media (hover: hover) and (pointer: fine) {
+    .choice-segmented label:hover input:not(:checked, :disabled) + span { color: var(--ink); }
+  }
+  @media (pointer: coarse) {
+    .choice-segmented span { min-block-size: 44px; font-size: 15px; }
+  }
+  @media (max-width: 380px) {
+    /* The narrowest phones keep only the words, so three choices never wrap. */
+    .choice-segmented span > svg { display: none; }
+  }
+
+  @media (prefers-contrast: more) {
+    .domain-chip, .claim-chip { box-shadow: inset 0 0 0 1px currentColor; }
+  }
+  @media (forced-colors: active) {
+    .domain-chip, .claim-chip { border: 1px solid CanvasText; }
+    .choice-segmented input:checked + span { outline: 2px solid CanvasText; outline-offset: -2px; }
+  }
+}
+
+/* Unlayered, like the shared focus rules it refines: the invisible radio draws no ring; its face does. */
+.choice-segmented input:is(:focus, :focus-visible) { outline: none; }
+.choice-segmented label:has(input:focus-visible) span { outline: 2px solid var(--focus); outline-offset: 2px; }

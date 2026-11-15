@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
-import { CircleAlert, Captions, Check, Clapperboard, FileStack, Film, LoaderCircle, Palette, Play, Plus, RotateCcw, Save, Trash2, Type, Video, X } from "lucide-react";
+import { CircleAlert, Captions, Check, Clapperboard, FileStack, Film, LoaderCircle, Package, Palette, Play, Plus, RotateCcw, Save, Trash2, Type, Video, X } from "lucide-react";
 import {
   COMPOSITION_HEIGHT,
   COMPOSITION_WIDTH,
@@ -24,6 +24,7 @@ import { Timeline, type Selection } from "../video/Timeline";
 import { FilesPanel, type FileAction, type UploadRequest } from "../video/FilesPanel";
 import { CommitField, RangeField, TimeField, TransitionField } from "../video/fields";
 import { putToStorage } from "../video/upload";
+import { ShowProduct } from "../video/ShowProduct";
 import * as model from "../video/model";
 import "../video/video.css";
 
@@ -84,10 +85,15 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
   const [linkError, setLinkError] = useState("");
   const [wordIndex, setWordIndex] = useState<number | null>(null);
   const [shiftBy, setShiftBy] = useState(0);
+  const [showingProduct, setShowingProduct] = useState(false);
+  // After a product is placed, the preview jumps to it once the new timeline is in.
+  const [seekAfterLoad, setSeekAfterLoad] = useState<number | null>(null);
   const playerRef = useRef<PlayerRef>(null);
   const scopes = context.principal.scopes;
   const canEdit = scopes.includes("content:edit");
   const canRender = scopes.includes("render:write");
+  // Only products with a photo can be shown; without any, the control is not offered at all.
+  const showable = context.products.filter((product) => product.hasImage);
 
   const load = useCallback(
     async (discardLocal: boolean) => {
@@ -207,6 +213,13 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
     seek(clip.start + Math.min(0.4, (clip.end - clip.start) / 2));
     requestAnimationFrame(() => document.getElementById(`clip-${clip.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   };
+  useEffect(() => {
+    if (seekAfterLoad === null || !composition) return;
+    const at = seekAfterLoad;
+    setSeekAfterLoad(null);
+    // One frame later, so the player has the new timeline's length before it seeks into it.
+    requestAnimationFrame(() => seek(at + 0.4));
+  }, [seekAfterLoad, composition]);
   const sourceName = (source: VideoClip["source"]) =>
     source.kind === "item_media" ? (entry?.base.itemMedia ? "Rendered presenter video" : "Rendered presenter video (not rendered yet)") : source.kind === "url" ? source.url : (fileById.get(source.fileId)?.name ?? entry?.base.files[source.fileId]?.name ?? "A file that is not ready");
   const labelFor = (track: model.Track, clip: model.Clip) => ("text" in clip ? clip.text : "title" in clip ? clip.title : "source" in clip ? sourceName(clip.source) : track);
@@ -358,6 +371,12 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
           <small className={dirty ? "video-status dirty" : "video-status"} role="status">{status}</small>
         </div>
         <div className="video-head-actions">
+          {canEdit && showable.length > 0 && (
+            <button className="button secondary" disabled={!entry} onClick={() => setShowingProduct(true)}>
+              <Package size={14} aria-hidden="true" />
+              Show product
+            </button>
+          )}
           {dirty && canEdit && (
             <button className="button secondary" disabled={saving} onClick={() => update(() => entry!.base.composition)}>
               <RotateCcw size={14} />Discard changes
@@ -717,6 +736,26 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
             )}
           </section>
         </div>
+      )}
+      {showingProduct && entry && (
+        <ShowProduct
+          client={client}
+          workspaceId={context.workspace.id}
+          item={item}
+          products={showable}
+          composition={entry.base.composition}
+          revision={entry.base.revision}
+          dirty={dirty}
+          onClose={() => setShowingProduct(false)}
+          onReload={() => load(true)}
+          onPlaced={(result, product, endCard) => {
+            setShowingProduct(false);
+            void Promise.all([load(true), loadFiles()]).then(() => {
+              setNotice(`${product.name} is on screen at ${model.timeLabel(result.placedAt)}${endCard ? " and on the end card" : ""}. Saved as version ${result.compositionRevision}.`);
+              setSeekAfterLoad(result.placedAt);
+            });
+          }}
+        />
       )}
     </div>
   );

@@ -39,6 +39,14 @@ import {
   type SaveTextFileInput,
   type ReelRender,
   type QueueRenderInput,
+  type ApproveReviewInput,
+  type ContentReview,
+  type CreateProductInput,
+  type PlaceProductInput,
+  type PlaceProductResult,
+  type Product,
+  type ReviewContentInput,
+  type UpdateProductInput,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -254,6 +262,21 @@ export interface StudioClient {
   listCloneJobs(): Promise<CloneJob[]>;
   /** Queues a clone job. Nothing is made until a worker takes it; nothing is published. */
   createCloneJob(input: CloneJobInput): Promise<CloneJob>;
+  /** Brand kit products. Their approved facts are the only product claims a script may make without a source. */
+  createProduct(input: CreateProductInput): Promise<Product>;
+  /** Only the fields sent change; `imageKey: null` removes the photo. */
+  updateProduct(input: UpdateProductInput): Promise<Product>;
+  deleteProduct(productId: string): Promise<void>;
+  /** Stores a product photo (checked by its SHA-256) and returns the key for createProduct/updateProduct. */
+  uploadProductImage(photo: Blob): Promise<string>;
+  /** Copies a product photo into the project and puts it on the item's saved timeline. A newer timeline is a conflict. */
+  placeProduct(input: PlaceProductInput): Promise<PlaceProductResult>;
+  /** The latest content review of an item, or null when it was never checked. */
+  getReview(itemId: string): Promise<ContentReview | null>;
+  /** Checks the item's saved version: its claims, voice and captions, and what is on screen. It never says "verified". */
+  reviewContent(input: ReviewContentInput): Promise<ContentReview>;
+  /** A person's named approval of one review. Agents can never approve. */
+  approveReview(input: ApproveReviewInput): Promise<ContentReview>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {

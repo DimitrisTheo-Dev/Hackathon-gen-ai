@@ -15,10 +15,11 @@ import {
   dateLabel,
   platformNames,
 } from "../components/ui";
-import { approvalBlock, blockerScope, reviewState, reviewSteps, type ReviewStep } from "./editor/review";
+import { approvalBlock, blockerScope, blockerText, reviewState, reviewSteps, type ReviewStep } from "./editor/review";
 import "../editor.css";
 
 const stepTitle: Record<ReviewStep["id"], string> = {
+  claims: "Claims",
   videos: "Videos rendered",
   channels: "Posting times and channels",
   other: "Other checks",
@@ -43,6 +44,7 @@ export function Review({
   client,
   onClose,
   onRefresh,
+  onOpenReview,
 }: {
   campaign: Campaign;
   manifest: ScheduleManifest;
@@ -50,6 +52,8 @@ export function Review({
   client: StudioClient;
   onClose: () => void;
   onRefresh: () => Promise<void>;
+  /** Opens Details → Review for one draft, so its claims can be fixed or approved. */
+  onOpenReview?: (itemId: string) => void;
 }) {
   const [manifest, setManifest] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -125,6 +129,19 @@ export function Review({
   }
 
   const fix = (step: ReviewStep) => {
+    if (step.id === "claims") {
+      if (!onOpenReview) return null;
+      const ids = [...new Set(step.blockers.flatMap((blocker) => blocker.itemIds))].filter((id) => campaign.items.some((item) => item.id === id));
+      return (
+        <div className="review-fixes">
+          {ids.map((id) => (
+            <button type="button" className="review-fix" key={id} onClick={() => onOpenReview(id)}>
+              {ids.length === 1 ? "Open its review" : `Open “${campaign.items.find((item) => item.id === id)?.title}”`} <ArrowRight size={13} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      );
+    }
     if (step.id === "videos")
       return context.capabilities.canRender ? (
         <button type="button" className="review-fix" onClick={onClose}>
@@ -194,7 +211,7 @@ export function Review({
                         <ul className="review-blockers">
                           {step.blockers.map((blocker) => (
                             <li key={blocker.message}>
-                              <span>{blocker.message}</span>
+                              <span>{blockerText(blocker.message)}</span>
                               <small className="blocker-scope">{blockerScope(blocker.itemIds, campaign)}</small>
                             </li>
                           ))}
