@@ -15,6 +15,7 @@ import {
   restoreInputSchema,
   templateInputSchema,
   templateSchema,
+  libraryTemplateSchema,
   versionSchema,
   addSourceInputSchema,
   brandSchema,
@@ -247,6 +248,7 @@ export function createLiveClient(
         { timeoutMs: 110_000 },
       ),
     listTemplates: () => request("/templates", z.array(templateSchema)),
+    listLibraryTemplates: () => request("/templates/library", z.array(libraryTemplateSchema)),
     createFromTemplate: (input) =>
       request(
         "/operations/create_from_template",

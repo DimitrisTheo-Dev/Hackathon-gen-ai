@@ -538,6 +538,8 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     // The fixture never drafts, bills or switches workspaces. Exact local edits stay in the Director panel.
     directorTurn: unavailable,
     listTemplates: async () => [],
+    // The library's media lives in private storage behind the signed-in studio.
+    listLibraryTemplates: async () => [],
     createFromTemplate: unavailable,
     createSampleProject: unavailable,
     listVersions: unavailable,

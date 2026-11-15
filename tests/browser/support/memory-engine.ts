@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 /**
  * TEST-ONLY harness. Mounted by scripts/serve-built.ts solely when FACEFUL_E2E_ENGINE=memory.
  *
@@ -8,6 +10,8 @@
  *   • the model: a scripted planner returns fixed proposals (or is switched off per user);
  *   • the renderer: `/__e2e/complete-renders` finishes queued jobs through the real worker protocol
  *     with a one-second silent audio clip standing in for a rendered file.
+ * The template library can be seeded two ways: `POST /__e2e/templates` adds two small stand-in templates, and
+ * FACEFUL_E2E_TEMPLATES=<path to templates/_kit/library.json> loads the real rows and sample files at start.
  * Nothing here is imported by application code or by the deployed functions.
  */
 import { loadConfig } from "../../../packages/engine/src/config";
@@ -76,8 +80,32 @@ const scripted: Planner = {
   },
 };
 
+/** A row of public.templates for the stand-in library. */
+function standInTemplate(id: string, position: number, family: "face" | "no_face") {
+  const base = `templates/${id}/v1`;
+  return {
+    id, version: 1, family, name: family === "face" ? "Talking tip" : "Chat Q&A", summary: "A stand-in template for browser tests.",
+    use_for: family === "face" ? "A quick practical tip." : "A frequent question with a short answer.", position, published: true,
+    language: "el", languages: ["el"], aspect_ratio: "9:16", fps: 25, duration_min: 15, duration_max: 35, sample_topic: "Δείγμα",
+    sample_seconds: 1, voice: "One stock voice", fonts: ["Inter"], inputs: [{ key: "say", label: "One line per beat" }],
+    script: [{ id: "hook", text: "Μία γραμμή." }], spec: {}, video_path: `${base}/sample.mp4`, poster_path: `${base}/poster.jpg`,
+    stills: [{ beat: "hook", path: `${base}/stills/01-hook.jpg` }], variants: [], qa: {},
+  };
+}
+// A 1x1 JPEG, enough for an <img> to load.
+const PIXEL = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
+
 export function createMemoryEngine(origin: string) {
   const store = new E2EStore(origin);
+  // Real rows and files from the content-creator templates folder, when asked for (see the note at the top).
+  const library = process.env.FACEFUL_E2E_TEMPLATES;
+  if (library) {
+    const { rows, files } = JSON.parse(readFileSync(library, "utf8")) as { rows: Array<Record<string, unknown>>; files: Array<{ path: string; file: string; mime: string }> };
+    const root = dirname(dirname(library));
+    for (const row of rows) void store.insert("templates", row);
+    for (const f of files) void store.media.put(f.path, new Uint8Array(readFileSync(join(root, f.file))), f.mime);
+    console.log(`in-memory engine: ${rows.length} templates and ${files.length} files from ${library}`);
+  }
   const base: HttpDeps = {
     store,
     // `llm` only flips the reported director mode to "ai"; the scripted planner below is what actually answers.
@@ -97,7 +125,8 @@ export function createMemoryEngine(origin: string) {
       if (!object) return new Response("Not found", { status: 404 });
       // Byte ranges, like the real storage: Safari will not play media from a server that cannot serve them.
       const bytes = object.bytes, size = bytes.byteLength;
-      const headers = { "Content-Type": "audio/wav", "Accept-Ranges": "bytes", "Cache-Control": "no-store" };
+      // Render stand-ins are a silent WAV whatever their label; template files are served as what they are.
+      const headers = { "Content-Type": pathname.startsWith("/__e2e/media/templates") ? object.mime : "audio/wav", "Accept-Ranges": "bytes", "Cache-Control": "no-store" };
       const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("range") ?? "");
       if (!range) return new Response(bytes, { headers });
       const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
@@ -109,6 +138,18 @@ export function createMemoryEngine(origin: string) {
     let user: ReturnType<typeof claims>;
     try { user = claims(token); } catch { return json({ error: "e2e session required" }, 401); }
     const body = request.method === "POST" ? await request.json().catch(() => ({})) : {};
+    if (pathname === "/__e2e/templates" && request.method === "POST") {
+      if (!(await store.select("templates", {})).length) {
+        for (const [i, [id, family]] of ([["talking-tip", "face"], ["chat-qa", "no_face"]] as const).entries()) {
+          const row = standInTemplate(id, i, family);
+          await store.insert("templates", row);
+          await store.media.put(row.video_path, wav, "video/mp4");
+          await store.media.put(row.poster_path, new Uint8Array(PIXEL), "image/jpeg");
+          await store.media.put(row.stills[0].path, new Uint8Array(PIXEL), "image/jpeg");
+        }
+      }
+      return json({ count: (await store.select("templates", {})).length });
+    }
     if (pathname === "/__e2e/planner") {
       if (body.mode === "none") plannerOff.add(user.sub); else plannerOff.delete(user.sub);
       return json({ mode: plannerOff.has(user.sub) ? "none" : "scripted" });

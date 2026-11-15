@@ -507,3 +507,37 @@ export const templateInputSchema = z
   .object({ templateId: idSchema, language: z.string().min(2).max(12), inputs: z.record(z.string(), z.string().max(400)), operationKey: z.uuid() })
   .strict();
 export type TemplateInput = z.infer<typeof templateInputSchema>;
+
+// ── Template library: first-party short-form video templates (built with OpenMontage), each with a rendered sample. ──
+/** One library template. Media URLs are short-lived signed links; null when a file is missing from storage. */
+export const libraryTemplateSchema = z.object({
+  id: idSchema,
+  version: z.number().int().positive(),
+  /** "face": a lip-synced presenter (a fictional person or an illustrated character). "no_face": type, diagrams, charts. */
+  family: z.enum(["face", "no_face"]),
+  name: z.string(),
+  summary: z.string(),
+  useFor: z.string(),
+  /** The sample's language; `languages` lists every language a sample exists in. */
+  language: z.string(),
+  languages: z.array(z.string()),
+  aspectRatio: z.literal("9:16"),
+  fps: z.number().int().positive(),
+  /** Seconds a video made from this template should last. */
+  durationRange: z.tuple([z.number().int().positive(), z.number().int().positive()]),
+  sampleTopic: z.string(),
+  sampleSeconds: z.number().positive(),
+  voice: z.string(),
+  fonts: z.array(z.string()),
+  /** What a new video needs, beyond topic, brand and call to action. */
+  inputs: z.array(z.object({ key: z.string(), label: z.string() })),
+  /** The sample's lines, as shown on screen. */
+  script: z.array(z.object({ id: z.string(), text: z.string() })),
+  videoUrl: httpUrlSchema.nullable(),
+  posterUrl: httpUrlSchema.nullable(),
+  stills: z.array(z.object({ beat: z.string(), url: httpUrlSchema.nullable() })),
+  variants: z.array(z.object({ language: z.string(), url: httpUrlSchema.nullable() })),
+  /** When the signed URLs stop working. */
+  expiresAt: instantSchema,
+});
+export type LibraryTemplate = z.infer<typeof libraryTemplateSchema>;

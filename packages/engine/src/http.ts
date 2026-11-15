@@ -12,6 +12,7 @@ import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRe
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
 import { addDraft, addSource, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, removeSource, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign, updateBrand } from "./studio.js";
 import { createFromTemplate, createSampleProject, listTemplates } from "./templates.js";
+import { listLibraryTemplates } from "./template-library.js";
 
 export interface HttpDeps extends EngineDeps {
   planner: Planner | null;
@@ -126,6 +127,7 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
+  if (read && path === "/templates/library") return json(await listLibraryTemplates(deps));
   if (read && path === "/billing") return json(await getBillingStatus(deps, ctx));
   if (read && path === "/channels") return json(await getChannelStatus(deps, ctx));
   if (post && path === "/workspace/select") {
