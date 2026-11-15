@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeRunnerUrl, readNdjson, type StreamEvent } from "../apps/web/src/claude/runner";
+import { createMachineTokenSource, createRunnerClient, normalizeRunnerUrl, readNdjson, RunnerError, type StreamEvent } from "../apps/web/src/claude/runner";
 import { addUserPrompt, applyEvent, emptyTranscript, summarizeToolInput } from "../apps/web/src/claude/transcript";
 
 test("runner address: https anywhere, http only for this computer", () => {
@@ -75,4 +75,37 @@ test("cloud saves and restores show up as quiet notes", () => {
   assert.ok(state.items[0].kind === "notice" && !state.items[0].error && state.items[0].text === "Saved to your cloud folder · 1 file.");
   state = applyEvent(emptyTranscript(), { type: "runner", event: "save_failed", message: "Cloud storage answered 500." });
   assert.ok(state.items[0].kind === "notice" && state.items[0].error && state.items[0].text === "Cloud storage answered 500.");
+});
+
+test("the gateway gets a machines token from the engine, never the Faceful session", async () => {
+  let clock = Date.parse("2026-11-15T10:00:00.000Z");
+  let session: string | null = "session-a";
+  const calls: { url: string; authorization: string | null }[] = [];
+  const engine = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const authorization = new Headers(init?.headers).get("authorization");
+    calls.push({ url: String(input), authorization });
+    if (authorization === "Bearer session-b") return Response.json({ error: { code: "forbidden", message: "Cloud machines are invite-only for now." } }, { status: 403 });
+    return Response.json({ token: `fgs1.token-${calls.length}`, expiresAt: new Date(clock + 600_000).toISOString() });
+  }) as typeof fetch;
+  const token = createMachineTokenSource("https://faceful.test/", async () => session, engine, () => clock);
+
+  assert.deepEqual(await Promise.all([token(), token()]), ["fgs1.token-1", "fgs1.token-1"], "concurrent calls share one request");
+  assert.deepEqual(calls, [{ url: "https://faceful.test/v1/studio/machines/token", authorization: "Bearer session-a" }]);
+  clock += 8 * 60_000;
+  assert.equal(await token(), "fgs1.token-1", "kept while it has more than a minute left");
+  clock += 60_000;
+  assert.equal(await token(), "fgs1.token-2");
+
+  // What the gateway receives: the machines token. A refusal from the engine reaches the page as itself.
+  const seen: string[] = [];
+  const gateway = (async (_input: RequestInfo | URL, init?: RequestInit) => { seen.push(new Headers(init?.headers).get("authorization") ?? ""); return Response.json({ ok: true }); }) as typeof fetch;
+  await createRunnerClient("https://machines.test", token, gateway).cancelLogin();
+  assert.deepEqual(seen, ["Bearer fgs1.token-2"]);
+  session = "session-b";
+  await assert.rejects(createRunnerClient("https://machines.test", token, gateway).cancelLogin(), (error: unknown) => error instanceof RunnerError && error.status === 403 && /invite-only/.test(error.message));
+  assert.equal(seen.length, 1, "nothing reaches the gateway without a token");
+  session = null;
+  await assert.rejects(token(), (error: unknown) => error instanceof RunnerError && error.status === 401);
+  const offline = createMachineTokenSource("https://faceful.test", async () => "session-a", (async () => { throw new TypeError("offline"); }) as typeof fetch);
+  await assert.rejects(offline(), (error: unknown) => error instanceof RunnerError && error.code === "unreachable");
 });

@@ -5,10 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer as createNetServer, type AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { mintToken } from "../apps/workspace-store/src/index";
+import { mintToken, revocationKey } from "../apps/workspace-store/src/index";
 import { memoryBucket, serveStore } from "./support/memory-bucket";
-import { buildRunArgs, corsHeaders, createRunner, extractLoginUrl, isSubscriptionToken, keyMatches, parseRunRequest, restoreHome, summarizeAuth, type RunnerConfig } from "../apps/claude-runner/server";
+import { buildRunArgs, corsHeaders, createRunner, extractLoginUrl, isSubscriptionToken, keyMatches, loadConfig, openHome, parseRunRequest, restoreHome, sealHome, summarizeAuth, type RunnerConfig } from "../apps/claude-runner/server";
 
 const KEY = "k".repeat(48);
 const ORIGIN = "http://127.0.0.1:5173";
@@ -40,7 +41,7 @@ else if (args[0] === "auth" && args[1] === "login") {
   process.stdin.on("end", () => {
     const at = args.indexOf("--resume");
     const sid = at >= 0 ? args[at + 1] : "11111111-2222-3333-4444-555555555555";
-    out({ type: "system", subtype: "init", session_id: sid, model: "claude-test", permissionMode: args[args.indexOf("--permission-mode") + 1], cwd: process.cwd(), apiKeySeen: Boolean(process.env.ANTHROPIC_API_KEY), runnerKeySeen: Boolean(process.env.RUNNER_ACCESS_KEY), tokenSeen: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN), storeSeen: Boolean(process.env.FACEFUL_STORE_URL && process.env.FACEFUL_STORE_TOKEN) });
+    out({ type: "system", subtype: "init", session_id: sid, model: "claude-test", permissionMode: args[args.indexOf("--permission-mode") + 1], cwd: process.cwd(), apiKeySeen: Boolean(process.env.ANTHROPIC_API_KEY), runnerKeySeen: Boolean(process.env.RUNNER_ACCESS_KEY), tokenSeen: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN), storeSeen: Object.values(process.env).some((value) => /^fst\\d\\./.test(value || "")), homeKeySeen: Boolean(process.env.CLAUDE_HOME_KEY) });
     if (prompt === "wait") { setTimeout(() => {}, 20000); return; }
     if (prompt.startsWith("write ")) { const [, name, ...rest] = prompt.split(" "); fs.writeFileSync(name, rest.join(" ")); }
     out({ type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text: "Echo" } } });
@@ -50,12 +51,12 @@ else if (args[0] === "auth" && args[1] === "login") {
 }
 `;
 
-async function startRunner(store: { url: string; token: string } | null = null) {
+async function startRunner(store: { url: string; token: string } | null = null, homeKey: Buffer | null = null) {
   const home = await mkdtemp(join(tmpdir(), "claude-runner-"));
   const bin = join(home, "fake-claude");
   await writeFile(bin, FAKE_CLAUDE);
   await chmod(bin, 0o755);
-  const config: RunnerConfig = { port: 0, host: "127.0.0.1", accessKey: KEY, allowedOrigins: [ORIGIN], claudeBin: bin, homeDir: home, workspaceDir: join(home, "work"), dataDir: join(home, ".claude-runner"), maxRunMinutes: 1, storeUrl: store?.url ?? null, storeToken: store?.token ?? null };
+  const config: RunnerConfig = { port: 0, host: "127.0.0.1", accessKey: KEY, allowedOrigins: [ORIGIN], claudeBin: bin, homeDir: home, workspaceDir: join(home, "work"), dataDir: join(home, ".claude-runner"), maxRunMinutes: 1, storeUrl: store?.url ?? null, storeToken: store?.token ?? null, homeKey };
   await mkdir(config.workspaceDir, { recursive: true });
   const server = createRunner(config);
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
@@ -233,11 +234,11 @@ test("a stop signal ends the run and the runner exits cleanly, as a container's 
   }
 });
 
-async function cloud(uid = "minas") {
+async function cloud(uid = "minas", limits: Record<string, string> = {}) {
   const secret = "w".repeat(64);
   const { bucket, objects } = memoryBucket();
-  const store = await serveStore({ BUCKET: bucket, STORE_SIGNING_KEY: secret });
-  return { objects, store: { url: store.url, token: await mintToken(secret, uid) }, close: async () => { store.server.closeAllConnections(); await new Promise((done) => store.server.close(done)); } };
+  const store = await serveStore({ BUCKET: bucket, STORE_SIGNING_KEY: secret, ...limits });
+  return { bucket, objects, secret, store: { url: store.url, token: await mintToken(secret, uid) }, close: async () => { store.server.closeAllConnections(); await new Promise((done) => store.server.close(done)); } };
 }
 const label = (event: Record<string, unknown>) => (typeof event.event === "string" ? event.event : event.type);
 const runProject = async (runner: Awaited<ReturnType<typeof startRunner>>, project: string, prompt: string) => lines(await runner.call("/v1/run", { method: "POST", body: JSON.stringify({ prompt, project }) }));
@@ -329,4 +330,105 @@ test("without a store nothing is saved and the endpoints say so", async () => {
     assert.deepEqual((await runProject(runner, "demo", "hi")).map(label), ["started", "system", "stream_event", "assistant", "result", "exit"]);
     assert.equal((await (await runner.call("/v1/sync", { method: "POST" })).json()).configured, false);
   } finally { await runner.close(); }
+});
+
+test("Claude never sees the store token, and the machine hands the runner a new one when it must", async (t) => {
+  const storage = await cloud();
+  t.after(() => storage.close());
+  const runner = await startRunner(storage.store);
+  t.after(() => runner.close());
+  const events = await runProject(runner, "demo", "write a.txt one");
+  assert.equal(events[1].storeSeen, false, "no environment variable of Claude's holds a store token");
+  assert.equal(events.at(-1)?.event, "saved");
+
+  // The token leaks and is revoked: saving stops until the machine renews it.
+  await storage.bucket.put(revocationKey("minas"), new TextEncoder().encode("leaked").buffer as ArrayBuffer);
+  const refused = await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "demo" }) });
+  assert.equal(refused.status, 502);
+  assert.equal((await runner.call("/v1/store-token", { method: "POST", body: JSON.stringify({ token: "not-a-token" }) })).status, 400);
+  const fresh = await mintToken(storage.secret, "minas", 3600, Date.now() + 2000);
+  assert.equal((await runner.call("/v1/store-token", { method: "POST", body: JSON.stringify({ token: fresh }) })).status, 200);
+  assert.equal((await runner.call("/v1/store-token", { method: "POST", key: "wrong", body: JSON.stringify({ token: fresh }) })).status, 401);
+  assert.equal((await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "demo" }) })).status, 201);
+});
+
+test("Claude's saved sign-in is sealed with the user's key, which Claude never sees", async (t) => {
+  const storage = await cloud();
+  t.after(() => storage.close());
+  const key = randomBytes(32);
+  const saved = () => Buffer.from(storage.objects.get("users/minas/private/claude-home.tar.gz")!.bytes);
+  const signIn = async (runner: Awaited<ReturnType<typeof startRunner>>) => {
+    await runner.call("/v1/login/start", { method: "POST" });
+    assert.equal((await (await runner.call("/v1/login/finish", { method: "POST", body: JSON.stringify({ code: "good-code-123#abc" }) })).json()).auth.loggedIn, true);
+  };
+
+  // Before sealing: a plain archive. A machine with a key leaves it alone, so the person signs in once more.
+  const unsealed = await startRunner(storage.store);
+  await signIn(unsealed);
+  await unsealed.close();
+  assert.deepEqual([...saved().subarray(0, 2)], [0x1f, 0x8b], "gzip");
+  const upgraded = await startRunner(storage.store, key);
+  assert.equal(await restoreHome(upgraded.config), false);
+  assert.equal((await (await upgraded.call("/v1/status")).json()).auth.loggedIn, false);
+
+  process.env.CLAUDE_HOME_KEY = key.toString("base64url");
+  try {
+    await signIn(upgraded);
+    const init = (await runProject(upgraded, "demo", "hi"))[1];
+    assert.equal(init.homeKeySeen, false, "the key stays with the runner");
+  } finally { delete process.env.CLAUDE_HOME_KEY; await upgraded.close(); }
+  const sealed = saved();
+  assert.equal(sealed.subarray(0, 4).toString(), "FCH1");
+  assert.equal(storage.objects.get("users/minas/private/claude-home.tar.gz")!.customMetadata?.sealed, "1");
+  assert.ok(openHome(key, sealed), "the runner's key opens it");
+
+  const next = await startRunner(storage.store, key);
+  try {
+    assert.equal(await restoreHome(next.config), true);
+    assert.equal((await (await next.call("/v1/status")).json()).auth.loggedIn, true, "a fresh machine with the same key is signed in");
+  } finally { await next.close(); }
+
+  for (const [label, runnerKey] of [["another user's key", randomBytes(32)], ["no key", null]] as const) {
+    const stranger = await startRunner(storage.store, runnerKey);
+    try { assert.equal(await restoreHome(stranger.config), false, label); } finally { await stranger.close(); }
+  }
+  const tampered = Buffer.from(sealed);
+  tampered[tampered.length - 1] ^= 1;
+  assert.equal(openHome(key, tampered), null, "a changed archive is refused, not unpacked");
+  assert.equal(openHome(key, sealHome(randomBytes(32), Buffer.from("x"))), null);
+});
+
+test("CLAUDE_HOME_KEY must be 32 bytes in base64", () => {
+  const base = { RUNNER_ACCESS_KEY: KEY };
+  assert.equal(loadConfig(base).homeKey, null);
+  assert.equal(loadConfig({ ...base, CLAUDE_HOME_KEY: randomBytes(32).toString("base64") }).homeKey?.length, 32);
+  assert.equal(loadConfig({ ...base, CLAUDE_HOME_KEY: randomBytes(32).toString("base64url") }).homeKey?.length, 32);
+  assert.throws(() => loadConfig({ ...base, CLAUDE_HOME_KEY: "too-short" }), /32 random bytes/);
+});
+
+test("a full cloud folder is reported as such, and a project keeps its newest versions", async (t) => {
+  const storage = await cloud("minas", { MAX_VERSIONS_PER_PROJECT: "2" });
+  t.after(() => storage.close());
+  const runner = await startRunner(storage.store);
+  t.after(() => runner.close());
+  await runProject(runner, "p1", "write a.txt one");
+  const keys: string[] = [];
+  for (let index = 0; index < 3; index++) {
+    const saved = await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "p1" }) });
+    assert.equal(saved.status, 201);
+    keys.push((await saved.json()).save.key);
+  }
+  const listed = await (await runner.call("/v1/workspace?project=p1")).json();
+  assert.deepEqual(listed.saves.map((item: { key: string }) => item.key), [keys[2], keys[1]], "the oldest made room for the newest");
+
+  const tiny = await cloud("maria", { USER_QUOTA_BYTES: "10" });
+  t.after(() => tiny.close());
+  const crowded = await startRunner(tiny.store);
+  t.after(() => crowded.close());
+  const events = await runProject(crowded, "demo", "write a.txt one");
+  assert.equal(events.at(-1)?.event, "save_failed");
+  assert.match(String(events.at(-1)?.message), /cloud folder is full/);
+  const refused = await crowded.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "demo" }) });
+  assert.equal(refused.status, 507);
+  assert.equal((await refused.json()).error.code, "quota_exceeded");
 });

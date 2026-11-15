@@ -3,7 +3,7 @@ import { ArrowUp, Check, ChevronRight, CircleCheck, CircleX, ExternalLink, Loade
 import { AgentIcon } from "../components/AgentIcon";
 import { Mark, Notice } from "../components/ui";
 import { supabase } from "../lib/supabase";
-import { createRunnerClient, normalizeRunnerUrl, RunnerError, type Machine, type Model, type PermissionMode, type Project, type RunnerStatus } from "./runner";
+import { createMachineTokenSource, createRunnerClient, normalizeRunnerUrl, RunnerError, type Machine, type Model, type PermissionMode, type Project, type RunnerStatus } from "./runner";
 import { addNotice, addUserPrompt, applyEvent, emptyTranscript, type Transcript, type TranscriptItem } from "./transcript";
 import { WorkspaceCard } from "./WorkspaceCard";
 import "./claude.css";
@@ -16,7 +16,9 @@ const DEV_TOKEN = import.meta.env.DEV ? ((import.meta.env.VITE_CLAUDE_GATEWAY_TO
 /** `session` means the Faceful sign-in is the credential, so there is no key to keep. */
 type Connection = { url: string; key: string; session?: boolean };
 const readProject = () => { try { return localStorage.getItem(`${STORE}.project`) || "default"; } catch { return "default"; } };
-const sessionToken = async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? "";
+/** The gateway gets a ten-minute token the engine trades for the Faceful session, never the session itself. */
+let machineToken: (() => Promise<string>) | null = null;
+const gatewayToken = () => (machineToken ??= createMachineTokenSource(import.meta.env.VITE_CASTROOM_API_URL || location.origin, async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null))();
 
 function loadConnection(): Connection | null {
   try {
@@ -58,7 +60,7 @@ export default function ClaudeVpsPage() {
   const [connection, setConnection] = useState<Connection | null>(loadConnection);
   /** The gateway turned this Faceful session down, so the page stops offering it by itself. */
   const [sessionRefused, setSessionRefused] = useState(false);
-  const client = useMemo(() => (connection ? createRunnerClient(connection.url, connection.session ? sessionToken : connection.key) : null), [connection]);
+  const client = useMemo(() => (connection ? createRunnerClient(connection.url, connection.session ? gatewayToken : connection.key) : null), [connection]);
   const [machine, setMachine] = useState<Machine | null>(null);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [project, setProject] = useState(readProject);
@@ -100,7 +102,8 @@ export default function ClaudeVpsPage() {
       if (info) setMachine(await target.machine());
     } catch (error) {
       setServerError(problem(error));
-      if (error instanceof RunnerError && error.status === 401) {
+      // 403: this account has no cloud machine (yet). The page says why and offers your own server instead.
+      if (error instanceof RunnerError && (error.status === 401 || (connection?.session && error.status === 403))) {
         if (connection?.session) setSessionRefused(true);
         saveConnection(null); setConnection(null); setStatus(null); setMachine(null); setProjects(null);
       }
@@ -284,7 +287,7 @@ export default function ClaudeVpsPage() {
                 <label htmlFor="cc-url">Address</label>
                 <input id="cc-url" data-cc-focus="server" type="url" inputMode="url" autoComplete="url" {...exact} placeholder="https://claude.yourdomain.com" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
                 <label htmlFor="cc-key">Access token</label>
-                <input id="cc-key" type="password" autoComplete="off" {...exact} placeholder="fgw1.… or RUNNER_ACCESS_KEY" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
+                <input id="cc-key" type="password" autoComplete="off" {...exact} placeholder="fgw2.… or RUNNER_ACCESS_KEY" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
                 <label className="cc-check"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy !== null} />Remember the key on this device</label>
                 <button className="button primary" disabled={busy !== null}>{busy === "connect" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />{machine ? "Waking your machine…" : "Connecting…"}</> : "Connect"}</button>
               </form>

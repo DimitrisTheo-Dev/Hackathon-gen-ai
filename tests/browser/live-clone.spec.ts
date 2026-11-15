@@ -28,9 +28,27 @@ async function signIn(page: Page) {
 test('Clone a video: a link shows the platform player, a brief and toggles start a real queued job', async ({ page }) => {
   const token = await signIn(page);
   await page.goto('/studio/');
-  await page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Clone a video' }).click();
-  await expect(page).toHaveURL(/view=clone/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Clone a video' })).toBeVisible();
+  // Clone a video is the second way to start on the Templates page, not a sidebar item of its own.
+  const nav = page.getByRole('navigation', { name: 'Studio' });
+  await expect(nav.getByRole('button', { name: 'Clone a video' })).toHaveCount(0);
+  await nav.getByRole('button', { name: 'Templates' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Templates' })).toBeVisible();
+  const formatsTab = page.getByRole('tab', { name: 'Start from a format' });
+  const cloneTab = page.getByRole('tab', { name: 'Clone a video you like' });
+  await expect(formatsTab).toHaveAttribute('aria-selected', 'true');
+  await cloneTab.click();
+  await expect(cloneTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/view=templates&tab=clone/);
+  await expect(page.getByRole('tabpanel', { name: 'Clone a video you like' })).toBeVisible();
+  // The tabs are one keyboard stop; the arrow keys move between them and the address follows.
+  await cloneTab.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(formatsTab).toBeFocused();
+  await expect(formatsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page).not.toHaveURL(/tab=clone/);
+  await page.keyboard.press('ArrowRight');
+  await expect(cloneTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/view=templates&tab=clone/);
   // The empty result frame names the workspace's brand kit, which the new version is made in.
   await expect(page.locator('.cv-result')).toContainText('shows here once a worker has made it.');
 
@@ -91,24 +109,58 @@ test('Clone a video: a link shows the platform player, a brief and toggles start
   expect(jobs[0]).toMatchObject({ state: 'queued', resultUrl: null, source: { url: 'https://www.youtube.com/shorts/jNQXAC9IVRw' } });
   expect(jobs[0].clone).toEqual(['structure', 'pacing', 'transitions', 'captions', 'graphics', 'music']);
 
+  // A brief in progress survives a look at the formats: the tab's panel stays mounted.
+  await page.getByLabel('Video link').fill('https://youtu.be/jNQXAC9IVRw');
+  await formatsTab.click();
+  await cloneTab.click();
+  await expect(page.getByLabel('Video link')).toHaveValue('https://youtu.be/jNQXAC9IVRw');
+
   // The tab and the job survive a reload.
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1, name: 'Clone a video' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Clone a video you like' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.cv-job')).toHaveCount(1);
   await expect(page.locator('.cv-job')).toContainText('Queued, waiting for a worker');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('the old Clone a video address opens the Templates page on its Clone tab', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/studio/?view=clone');
+  await expect(page.getByRole('heading', { level: 1, name: 'Templates' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Clone a video you like' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByLabel('Video link')).toBeVisible();
+  await expect(page).toHaveURL(/view=templates&tab=clone/);
+  // Templates is the sidebar item that is current.
+  await expect(page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Templates' })).toHaveAttribute('aria-current', 'page');
+  // Leaving Templates drops the tab from the address.
+  await page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Schedule' }).click();
+  await expect(page).toHaveURL(/view=schedule/);
+  await expect(page).not.toHaveURL(/tab=/);
+});
+
 test('Clone a video at phone width: one column in reading order, no sideways scroll', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
-  await page.goto('/studio/?view=clone');
-  await expect(page.getByRole('heading', { level: 1, name: 'Clone a video' })).toBeVisible();
+  await page.goto('/studio/?view=templates&tab=clone');
+  await expect(page.getByRole('heading', { level: 1, name: 'Templates' })).toBeVisible();
+  // Both ways to start fit in one row, at a touch-sized height.
+  for (const name of ['Start from a format', 'Clone a video you like']) {
+    const box = await page.getByRole('tab', { name }).boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390 - 16 + 1);
+  }
   // No link yet: the original's empty frame is not shown on a phone.
   await expect(page.locator('.cv-source')).toBeHidden();
   await page.getByLabel('Video link').fill('youtu.be/jNQXAC9IVRw');
   await expect(page.locator('.cv-source iframe')).toBeVisible();
-  const order = await page.evaluate(() => ['.cv-link', '.cv-source', '.cv-brief', '.cv-traits', '.cv-result', '.cv-start'].map((selector) => Math.round(document.querySelector(selector)!.getBoundingClientRect().top)));
+  // Reading order: link, original, brief, what to clone, your version (the Start row sticks to the bottom).
+  const order = await page.evaluate(() => ['.cv-link', '.cv-source', '.cv-brief', '.cv-traits', '.cv-result'].map((selector) => Math.round(document.querySelector(selector)!.getBoundingClientRect().top)));
   expect([...order].sort((a, b) => a - b)).toEqual(order);
+  // Start job stays in reach at the bottom of the screen while the form is in view, above the dock.
+  const start = await page.getByRole('button', { name: 'Start job' }).boundingBox();
+  const dock = await page.locator('.mobile-dock').boundingBox();
+  expect(start!.height).toBeGreaterThanOrEqual(44);
+  expect(start!.y + start!.height).toBeLessThanOrEqual(dock!.y);
+  expect(start!.y).toBeGreaterThan(dock!.y - 140);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

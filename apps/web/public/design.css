@@ -94,8 +94,8 @@ html[data-boot-view="canvas"] .boot-topbar i:nth-child(2) { display: block; }
 .boot-view > * { flex-shrink: 0; }
 /* Centred on the same line as the real composer block: its centre sits 9vh above the middle of the canvas. */
 .boot-home { display: flex; align-items: center; justify-content: center; padding: 0 24px calc(9vh + 75.4px); }
-html[data-boot-view="canvas"] .boot-home, html[data-boot-view="page"] .boot-home, html[data-boot-view="grid"] .boot-home, html[data-boot-view="clone"] .boot-home { display: none; }
-html[data-boot-view="canvas"] .boot-canvas, html[data-boot-view="page"] .boot-page, html[data-boot-view="grid"] .boot-grid, html[data-boot-view="clone"] .boot-clone { display: flex; }
+html[data-boot-view="canvas"] .boot-home, html[data-boot-view="page"] .boot-home, html[data-boot-view="grid"] .boot-home, html[data-boot-view="formats"] .boot-home, html[data-boot-view="clone"] .boot-home { display: none; }
+html[data-boot-view="canvas"] .boot-canvas, html[data-boot-view="page"] .boot-page, html[data-boot-view="grid"] .boot-grid, html[data-boot-view="formats"] .boot-grid, html[data-boot-view="clone"] .boot-clone { display: flex; }
 /* The home heading scales with the window; the bar keeps that line's height so everything below it lines up. */
 .boot-title { block-size: calc(clamp(28px, 3.1vw, 40px) * 1.08 - 9.2px); inline-size: min(440px, 76%); margin-block: 4.6px; border-radius: 10px; background: var(--boot-ink); }
 .boot-line { block-size: 14px; inline-size: min(340px, 58%); margin-block: 19.4px 82.2px; border-radius: 7px; background: var(--boot-ink); }
@@ -106,6 +106,9 @@ html[data-boot-view="canvas"] .boot-canvas, html[data-boot-view="page"] .boot-pa
 .boot-head { display: block; padding: 22px 24px 25.6px; }
 :is(.boot-head, .boot-page) .boot-title { block-size: calc(clamp(21px, 1.9vw, 26px) * 1.15 - 6px); inline-size: min(260px, 60%); margin-block: 3px; border-radius: 8px; }
 :is(.boot-head, .boot-page) .boot-line { block-size: 11px; inline-size: min(190px, 44%); margin-block: 13px 0; }
+/* The project header's draft-to-post rail (components/FlowRail.tsx): same height, so the cards do not move. */
+.boot-rail { block-size: 47px; margin-block-start: 17px; border-radius: 12px; background: var(--boot-ink); opacity: .55; }
+@media (max-width: 760px) { .boot-rail { block-size: 54px; margin-block-start: 10px; } }
 .boot-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(204px, 1fr)); align-items: start; gap: 20px; box-sizing: border-box; inline-size: 100%; padding-inline: 24px; }
 /* Same box as a draft card: a 9:16 preview inside 9px of padding, then two lines of text. */
 .boot-cards i { padding: 9px 9px 65px; border-radius: 18px; background: var(--surface); box-shadow: var(--elev-1); }
@@ -113,22 +116,44 @@ html[data-boot-view="canvas"] .boot-canvas, html[data-boot-view="page"] .boot-pa
 .boot-page { box-sizing: border-box; inline-size: 100%; max-inline-size: 928px; padding: 22px 24px 32px; }
 .boot-page .boot-line { margin-block-end: 29.6px; }
 .boot-block { block-size: 132px; margin-block-end: 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); }
-/* Templates and Personas: the library grid of 9:16 posters (templates.css). Clone a video: the form and two frames (clone.css). */
-:is(.boot-grid, .boot-clone) { box-sizing: border-box; inline-size: 100%; padding: 26px 24px 32px; }
-.boot-grid { max-inline-size: 1120px; }
-.boot-clone { max-inline-size: 1180px; }
+/*
+ * Personas: the library grid of 9:16 posters. Templates: the same header plus its two tabs ("formats" and "clone"),
+ * then the format grid (templates.css) or the clone form beside its two frames (clone.css). Measured against the
+ * real pages at 1440 and 390 wide.
+ */
+:is(.boot-grid, .boot-clone) { box-sizing: border-box; inline-size: 100%; max-inline-size: 1180px; padding: 26px 24px 32px; }
+html[data-boot-view="grid"] .boot-grid { max-inline-size: 1120px; }
 :is(.boot-grid, .boot-clone) .boot-title { block-size: 24px; inline-size: min(210px, 60%); margin-block: 3px; border-radius: 8px; }
 :is(.boot-grid, .boot-clone) .boot-line { block-size: 12px; inline-size: min(520px, 80%); margin-block: 11px 0; }
+.boot-tabs { display: none; box-sizing: border-box; grid-template-columns: 1fr 1fr; gap: 2px; inline-size: min(413px, 100%); block-size: 48px; margin-block-start: 24.5px; padding: 4px; border-radius: 13px; background: rgba(42,42,39,.055); }
+html[data-boot-view="formats"] .boot-tabs, html[data-boot-view="clone"] .boot-tabs { display: grid; }
+.boot-tabs i { border-radius: 9px; }
+html[data-boot-view="formats"] .boot-tabs i:first-child, html[data-boot-view="clone"] .boot-tabs i:last-child { background: var(--surface); box-shadow: 0 0 0 1px rgba(42,42,39,.05), 0 1px 2px rgba(42,42,39,.08); }
 .boot-posters { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 22px 18px; margin-block-start: 119px; }
+html[data-boot-view="formats"] .boot-posters { gap: 24px 18px; margin-block-start: 94px; }
 .boot-posters i { aspect-ratio: 9 / 16; border-radius: 16px; background: var(--boot-ink); }
-.boot-clone-body { display: grid; grid-template-columns: minmax(0, 1fr) 270px 270px; column-gap: 24px; margin-block-start: 48px; }
-.boot-clone-form { display: grid; align-content: start; gap: 58px; padding-block-start: 26px; }
-.boot-clone-form i { block-size: 44px; border-radius: 10px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
-.boot-clone-form i.is-area { block-size: 168px; }
-.boot-clone-form i.is-chips { block-size: 88px; background: var(--boot-ink); box-shadow: none; }
+.boot-clone-body { display: grid; grid-template-columns: minmax(0, 1fr) 270px 270px; column-gap: 24px; margin-block-start: 32px; }
+/* Each field sits where the real one does: its label and note above it, the form's 28px gaps between steps. */
+.boot-clone-form { display: grid; align-content: start; padding-block-start: 28px; }
+.boot-clone-form i { block-size: 45.7px; border-radius: 10px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+.boot-clone-form i.is-area { block-size: 175.8px; margin-block-start: 128.5px; }
+.boot-clone-form i.is-chips { block-size: 88px; margin-block-start: 81px; background: var(--boot-ink); box-shadow: none; }
 .boot-clone-frame { aspect-ratio: 9 / 16; margin-block-start: 30px; border-radius: 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
-@media (max-width: 1255px) { .boot-clone-body { grid-template-columns: minmax(0, 1fr); } .boot-clone-frame { display: none; } }
-@media (max-width: 760px) { :is(.boot-grid, .boot-clone) { padding: 20px 16px; } .boot-posters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
+/* The clone form stacks when its column is under 940px wide (the 248px sidebar to 1255px, the 60px rail below 1068px). */
+@media (min-width: 1221px) and (max-width: 1396px), (min-width: 1068px) and (max-width: 1208px) { .boot-clone-body { grid-template-columns: minmax(0, 1fr) 236px 236px; } }
+@media (min-width: 1221px) and (max-width: 1255px), (max-width: 1067px) { .boot-clone-body { grid-template-columns: minmax(0, 1fr); } .boot .boot-clone-frame { display: none; } }
+@media (max-width: 760px) {
+  :is(.boot-grid, .boot-clone) { padding: 20px 16px; }
+  .boot-posters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  html[data-boot-view="formats"] .boot-posters { gap: 20px 12px; }
+  html:is([data-boot-view="formats"], [data-boot-view="clone"]) .boot-title { block-size: 22px; margin-block: 2.8px; }
+  .boot-tabs { inline-size: 100%; block-size: 52px; margin-block-start: 20.5px; }
+  html[data-boot-view="formats"] .boot-posters { margin-block-start: 108px; }
+  .boot-clone-body { margin-block-start: 26px; }
+  .boot-clone-form i.is-chips { block-size: 148px; }
+}
+/* Under 360px the intro takes a second line. */
+@media (max-width: 359px) { html:is([data-boot-view="formats"], [data-boot-view="clone"]) .boot-line { margin-block-end: 21px; } .boot-clone-form i.is-area { margin-block-start: 147.5px; } }
 .boot-panel { display: none; flex-direction: column; justify-content: space-between; padding: 12px; background: var(--surface); border-inline-start: 1px solid var(--border); }
 .boot-panel-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 0 40px; }
 .boot-panel-head i { block-size: 12px; inline-size: 150px; border-radius: 6px; background: var(--boot-ink); }
@@ -173,7 +198,7 @@ html[data-boot-sidebar="collapsed"] .boot-user { justify-content: center; paddin
   .boot-home .boot-line { margin-block: 29.3px 0; inline-size: 250px; }
   .boot-home .boot-chips { order: 1; margin-block-start: 133.4px; gap: 6px; }
   .boot-home .boot-composer { order: 2; block-size: 94px; margin-block-start: 18px; }
-  .boot-head { box-sizing: border-box; block-size: 72px; padding: 12px 16px; }
+  .boot-head { box-sizing: border-box; block-size: 136px; padding: 12px 16px; }
   .boot-head .boot-title { display: none; }
   .boot-head .boot-line { margin-block: 16.5px 0; inline-size: 150px; }
   .boot-page { padding: 20px 16px 32px; }

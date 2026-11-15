@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowRight, ArrowUpRight, Check, CircleAlert, LoaderCircle, RotateCcw } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, CircleAlert, CopyPlus, LoaderCircle, RotateCcw } from "lucide-react";
 import { CLONE_BRIEF_MAX, parseCloneLink, type CloneJob, type CloneLink, type CloneSource, type CloneTrait, type StudioContext } from "@castroom/contracts";
 import { ApiError, type StudioClient } from "../data/client";
 import { Notice, PlatformIcon, dateLabel } from "../components/ui";
 import "../clone.css";
-import { CLONE_INTRO } from "./page-skeletons";
 
 /** What can be borrowed from the source, in the order the engine stores them. Defaults keep the format, not the sound. */
 const TRAITS: Array<{ key: CloneTrait; label: string; hint: string; on: boolean; group: "format" | "sound" }> = [
@@ -30,6 +29,8 @@ const STATE: Record<CloneJob["state"], string> = {
   failed: "Failed",
   cancelled: "Cancelled",
 };
+/** Status language as everywhere in the studio: one dot, one word, strictly from the server's state. */
+const TONE: Record<CloneJob["state"], string> = { queued: "tone-queued", running: "tone-rendering", succeeded: "tone-ready", failed: "tone-failed", cancelled: "" };
 const POLL_MS = 20_000;
 
 type Lookup = { url: string; state: "loading" } | { url: string; state: "done"; source: CloneSource } | { url: string; state: "refused" | "unavailable"; message: string };
@@ -39,7 +40,7 @@ function errorText(reason: unknown, fallback: string) {
 }
 
 /**
- * Clone a video: paste a YouTube, TikTok or Instagram link, see the original in the platform's own player, say
+ * Clone a video (the Templates page's second tab): paste a YouTube, TikTok or Instagram link, see the original in the platform's own player, say
  * what to keep and what to change, pick what to clone, and start a job. The job is queued in the engine
  * (`create_clone_job`); nothing is made, charged or published until a worker takes it, and the page says so.
  */
@@ -161,11 +162,6 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
 
   return (
     <div className="cv">
-      <header className="cv-intro">
-        <h1>Clone a video</h1>
-        <p>{CLONE_INTRO}</p>
-      </header>
-
       <form className="cv-form" onSubmit={start} noValidate>
         <div className="cv-link">
           <label htmlFor={`${ids}-link`}><span className="cv-step" aria-hidden="true">1</span>Video link</label>
@@ -275,14 +271,16 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
           ) : (
             <div className="cv-frame is-empty">
               {shown ? (
-                <div className="cv-wait" role="status">
-                  <strong>{(shown.state === "queued" || shown.state === "running") && <i className="cv-live" aria-hidden="true" />}{STATE[shown.state]}</strong>
-                  <span>{shown.state === "failed" ? shown.error ?? "The worker gave up on this job." : shown.state === "queued" ? "Nothing has been made yet. The video shows here when a worker has made it." : null}</span>
+                <div className="cv-wait" role="status" data-state={shown.state}>
+                  <span className="cv-wait-mark" aria-hidden="true">{shown.state === "failed" ? <CircleAlert size={18} /> : shown.state === "queued" || shown.state === "running" ? <i className="cv-live" /> : <Check size={18} />}</span>
+                  <strong>{STATE[shown.state]}</strong>
+                  <span>{shown.state === "failed" ? shown.error ?? "The worker gave up on this job." : shown.state === "queued" ? "Nothing has been made yet. The video shows here when a worker has made it." : shown.state === "running" ? "Nothing to watch yet. The video shows here when it is done." : null}</span>
                 </div>
               ) : (
                 <div className="cv-empty">
                   <span className="cv-brand-mark" aria-hidden="true" style={{ background: context.brand.color || undefined }}>{(context.brand.name || "F").trim().charAt(0).toUpperCase()}</span>
-                  <p>Your version, in {context.brand.name ? `${context.brand.name}'s` : "your"} brand kit, shows here once a worker has made it.</p>
+                  {context.brand.name && <span className="cv-brand-name">{context.brand.name}</span>}
+                  <p>Made in your brand kit. It shows here once a worker has made it.</p>
                 </div>
               )}
             </div>
@@ -296,10 +294,10 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
           ) : (
             <div className="cv-start-row">
               <button className="button primary" type="submit" disabled={busy} aria-busy={busy || undefined}>
-                {busy && <LoaderCircle size={15} className="spin" aria-hidden="true" />}
+                {busy ? <LoaderCircle size={15} className="spin" aria-hidden="true" /> : <CopyPlus size={15} aria-hidden="true" />}
                 {busy ? "Starting job…" : "Start job"}
               </button>
-              <p className="cv-note">The job waits in a queue until a worker takes it. Nothing is published.</p>
+              <p className="cv-note">The job waits in a queue for a worker. Nothing is published.</p>
             </div>
           )}
         </div>
@@ -308,7 +306,7 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
 
       {(jobsError || jobs === null || !!jobs.length) && (
         <section className="cv-jobs" aria-labelledby={`${ids}-jobs`} aria-busy={jobs === null && !jobsError ? true : undefined}>
-          <h2 id={`${ids}-jobs`}>Jobs</h2>
+          <h2 id={`${ids}-jobs`}>Your clone jobs{!!jobs?.length && <span className="cv-count-badge">{jobs.length}</span>}</h2>
           {jobsError ? (
             <div className="cv-jobs-failed" role="alert">
               <span className="cv-jobs-failed-icon" aria-hidden="true"><CircleAlert size={16} /></span>
@@ -342,7 +340,7 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
                     <span className="cv-job-traits">{TRAITS.filter((t) => job.clone.includes(t.key)).map((t) => t.label).join(", ")}</span>
                   </span>
                   <span className="cv-job-state">
-                    <strong data-state={job.state}>{STATE[job.state]}</strong>
+                    <span className={`status-pill ${TONE[job.state]}`} data-state={job.state}><i aria-hidden="true" />{STATE[job.state]}</span>
                     <time dateTime={job.createdAt}>{dateLabel(job.createdAt, timezone)}</time>
                   </span>
                 </li>

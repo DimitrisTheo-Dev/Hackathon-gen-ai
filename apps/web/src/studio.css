@@ -236,6 +236,14 @@
   .app-frame .director-selected strong { font-size: 14px; font-weight: 550; line-height: 1.3; letter-spacing: -.01em; }
   .app-frame .director-selected small { margin-block-start: 1px; font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
   .app-frame .director-tabs { display: flex; margin: 0 14px 4px; flex: 0 0 auto; }
+  /* Header actions replace the old Chat/Details tabs: one quiet toggle, and Preview on phones. */
+  .app-frame .editor-heading-actions { display: flex; align-items: center; gap: 6px; flex: none; margin-inline-start: auto; }
+  .app-frame .editor-mode-button { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--subtle); color: var(--ink-secondary); font-size: 12.5px; font-weight: 550; white-space: nowrap; transition: background-color 160ms ease, color 160ms ease, transform 120ms var(--ease-out); }
+  .app-frame .editor-mode-button:active { transform: scale(.97); }
+  .app-frame .editor-mode-button > svg { color: var(--text-secondary); }
+  .app-frame .editor-mode-button.director-preview-switch { display: none; }
+  @media (max-width: 1000px) { .app-frame .editor-mode-button.director-preview-switch { display: inline-flex; } }
+  @media (hover: hover) and (pointer: fine) { .app-frame .editor-mode-button:hover { background: var(--muted-surface); color: var(--ink); } }
   .app-frame .director-tabs button { flex: 1; min-block-size: 30px; }
   .app-frame .segmented .director-preview-switch { display: none; }
   .editor-chat { display: flex; flex-direction: column; flex: 1; min-block-size: 0; }
@@ -343,6 +351,7 @@
     .app-frame .editor-heading { min-block-size: 52px; padding-inline: max(12px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-right)); }
     .app-frame .editor-back { inline-size: auto; min-inline-size: 44px; block-size: 44px; display: inline-flex; align-items: center; gap: 4px; padding-inline: 6px 10px; font-size: 15px; color: var(--ink); }
     .app-frame .director-tabs { margin-inline: max(14px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-right)); }
+    .app-frame .editor-mode-button { min-block-size: 40px; padding-inline: 14px; font-size: 14px; }
     .app-frame .director-tabs button { min-block-size: 38px; font-size: 14px; }
     .app-frame .director-conversation { padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); -webkit-overflow-scrolling: touch; }
     .app-frame .director-user, .app-frame .director-response { font-size: 15px; }
@@ -461,6 +470,30 @@
 
   /* ───────────── project header: the title once, one quiet line, one action ───────────── */
   .project-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px; padding: 22px 24px 18px; }
+  /* From draft to post: four steps in the order the work happens. Done steps are quiet, the next one is ringed. */
+  .flow-rail { grid-column: 1 / -1; margin-block-start: 12px; min-inline-size: 0; }
+  .flow-rail ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .flow-rail li { position: relative; min-inline-size: 0; }
+  .flow-rail li + li::before { content: ""; position: absolute; inset-block-start: 50%; inset-inline: -6px 100%; block-size: 1px; background: var(--border); }
+  .flow-rail button { display: flex; align-items: center; gap: 10px; inline-size: 100%; min-block-size: 46px; padding: 6px 10px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: background-color 160ms ease, transform 120ms var(--ease-out); }
+  .flow-rail button:active { transform: scale(.98); }
+  .flow-rail li[data-here] button { background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(42,42,39,.05); }
+  .flow-node { display: grid; place-items: center; flex: none; inline-size: 22px; block-size: 22px; border-radius: 50%; background: var(--subtle); color: var(--text-secondary); font-size: 11.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .flow-rail li[data-done] .flow-node { background: var(--positive-surface, #E9F5EE); color: var(--positive-ink); }
+  .flow-rail li[data-current] .flow-node { background: var(--ink); color: var(--surface); }
+  .flow-text { display: grid; min-inline-size: 0; line-height: 1.25; }
+  .flow-text strong { font-size: 13px; font-weight: 600; }
+  .flow-text small { display: flex; align-items: center; gap: 4px; overflow: hidden; font-size: 11.5px; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+  .flow-text small > svg { flex: none; color: var(--text-muted); }
+  @media (hover: hover) and (pointer: fine) { .flow-rail button:hover { background: var(--subtle); } .flow-rail li[data-here] button:hover { background: var(--surface); } }
+  @media (max-width: 760px) {
+    .flow-rail { margin-block-start: 6px; }
+    .flow-rail ol { gap: 2px; }
+    .flow-rail button { flex-direction: column; justify-content: center; gap: 4px; min-block-size: 54px; padding: 6px 2px; text-align: center; }
+    .flow-text { justify-items: center; }
+    .flow-text small { display: none; }
+    .flow-rail li + li::before { inset-block-start: 17px; }
+  }
   .project-heading { min-inline-size: 0; }
   .project-head h1 { font-size: clamp(21px, 1.9vw, 26px); line-height: 1.15; font-weight: 600; letter-spacing: -.025em; text-wrap: balance; overflow-wrap: anywhere; }
   .app-frame .campaign-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }

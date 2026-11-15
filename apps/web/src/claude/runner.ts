@@ -57,15 +57,46 @@ export async function readNdjson(body: ReadableStream<Uint8Array>, onValue: (val
   flush(buffer + decoder.decode());
 }
 
-/** `accessKey` is a fixed key, or a function for credentials that expire (a Faceful session). */
+/**
+ * The machines gateway runs on another provider, so the page never sends it the Faceful session: the engine trades
+ * the session for a ten-minute token that only the gateway accepts (POST /v1/studio/machines/token). A token is kept
+ * for the session it came from until a minute before it expires; concurrent calls share one request.
+ */
+export function createMachineTokenSource(engineUrl: string, session: () => Promise<string | null>, fetcher: typeof fetch = (...args) => fetch(...args), now = () => Date.now()) {
+  let kept: { session: string; token: string; expiresAt: number } | null = null;
+  let pending: Promise<string> | null = null;
+  async function mint(access: string): Promise<string> {
+    let response: Response;
+    try {
+      response = await fetcher(`${engineUrl.replace(/\/+$/, "")}/v1/studio/machines/token`, { method: "POST", headers: { Authorization: `Bearer ${access}` }, credentials: "omit", cache: "no-store", redirect: "error" });
+    } catch {
+      throw new RunnerError(0, "unreachable", "Couldn't reach Faceful to open your machine. Check the connection and try again.");
+    }
+    const body = (await response.json().catch(() => null)) as { token?: unknown; expiresAt?: unknown; error?: { code?: string; message?: string } } | null;
+    if (!response.ok || typeof body?.token !== "string" || typeof body.expiresAt !== "string") throw new RunnerError(response.status, body?.error?.code ?? "http_error", body?.error?.message ?? `Faceful answered ${response.status}.`);
+    kept = { session: access, token: body.token, expiresAt: Date.parse(body.expiresAt) };
+    return body.token;
+  }
+  return async (): Promise<string> => {
+    const access = await session();
+    if (!access) throw new RunnerError(401, "unauthenticated", "Sign in to Faceful again to reach your machine.");
+    if (kept?.session === access && kept.expiresAt - now() > 60_000) return kept.token;
+    pending ??= mint(access).finally(() => { pending = null; });
+    return pending;
+  };
+}
+
+/** `accessKey` is a fixed key, or a function for credentials that expire (a machines token from the engine). */
 export function createRunnerClient(baseUrl: string, accessKey: string | (() => Promise<string>), fetcher: typeof fetch = (...args) => fetch(...args)) {
   async function call<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    // Outside the try below: a refusal from Faceful (403, 401) reaches the page as itself, not as "couldn't reach".
+    const key = typeof accessKey === "string" ? accessKey : await accessKey();
     let response: Response;
     try {
       response = await fetcher(`${baseUrl}${path}`, {
         method,
         signal,
-        headers: { Authorization: `Bearer ${typeof accessKey === "string" ? accessKey : await accessKey()}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+        headers: { Authorization: `Bearer ${key}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
         body: body === undefined ? undefined : JSON.stringify(body),
         cache: "no-store",
       });

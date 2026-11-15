@@ -1,6 +1,8 @@
 # Faceful workspace store (Cloudflare Worker in front of the faceful-workspaces R2 bucket).
 # Deploy: CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... npx wrangler deploy --config apps/workspace-store/wrangler.toml
 # Secret: STORE_SIGNING_KEY (wrangler secret put STORE_SIGNING_KEY), also kept by whoever mints machine tokens.
+# It may be a keyring, "2:<new>,1:<old>", to rotate. Never put HOME_ENCRYPTION_KEY here: the store only sees sealed archives.
+# Revoke one user's tokens: echo revoked | npx wrangler r2 object put faceful-workspaces/revocations/<uid> --pipe --remote
 name = "faceful-workspace-store"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
@@ -9,3 +11,9 @@ workers_dev = true
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "faceful-workspaces"
+
+# Per-user limits (src/index.ts storeLimits). Writes past them are refused with 507 quota_exceeded or 409.
+[vars]
+USER_QUOTA_BYTES = "5368709120"     # 5 GB in all
+MAX_VERSIONS_PER_PROJECT = "30"     # the runner removes a project's oldest version to make room for a new one
+MAX_PROJECTS_PER_USER = "100"
