@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getComposition, saveComposition } from "../packages/engine/src/composition";
 import { listFiles } from "../packages/engine/src/files";
-import { cancelRender, listRenders, queueRender } from "../packages/engine/src/reel-render";
+import { EngineError } from "../packages/engine/src/errors";
+import { authenticateReelWorker, cancelRender, listRenders, queueRender } from "../packages/engine/src/reel-render";
 import { WORKER_TOKEN, engine, key, rejects, seed, sha256 } from "./reel-support";
 
 async function savedReel(env: ReturnType<typeof engine>) {
@@ -98,6 +99,10 @@ test("render routes over HTTP: scopes and tenancy; the worker route needs its ow
   assert.equal((await env.call(`/v1/studio/items/${item.id}/renders`, "user:u1")).status, 200);
   assert.equal((await env.call(`/v1/studio/items/${item.id}/renders`, "user:u2")).status, 404);
   assert.equal((await env.call("/v1/worker/reel/claim", "user:u1", { workerId: "x" })).status, 401, "a member session is not a worker credential");
+  // Compared as digests: a prefix, an extension or a same-length near miss of the token is refused all the same.
+  for (const near of [WORKER_TOKEN.slice(0, -1), `${WORKER_TOKEN}r`, `${WORKER_TOKEN.slice(0, -1)}s`]) assert.equal((await env.call("/v1/worker/reel/claim", near, { workerId: "x" })).status, 401, near);
+  assert.throws(() => authenticateReelWorker(env.deps, `Bearer ${WORKER_TOKEN.slice(0, -1)}s`), (error: unknown) => error instanceof EngineError && error.code === "unauthenticated");
+  assert.doesNotThrow(() => authenticateReelWorker(env.deps, `Bearer ${WORKER_TOKEN}`));
   const none = engine({ REEL_WORKER_TOKEN: "" });
   assert.equal((await none.call("/v1/worker/reel/claim", WORKER_TOKEN, { workerId: "x" })).status, 401, "no worker can claim when none is configured");
 });

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compositionSchema } from "../packages/contracts/src/index";
 import { handleMcpRequest } from "../packages/engine/src/mcp";
+import type { MemoryStore } from "../packages/engine/src/store-memory";
 import { packageFromOpenMontage, wavSeconds } from "../scripts/reel/from-openmontage";
 import { engine } from "./reel-support";
 
@@ -151,7 +152,14 @@ test("pushing a package through MCP creates the project, every draft file and th
     return new Response(null, { status: 200 });
   };
 
-  const first = await reel.pushPackage({ dir: out, url: "https://faceful.test", token, fetch: send });
+  // Rate-limit windows follow the test's clock, and waiting for the next one moves it on.
+  (env.deps.store as MemoryStore).clock = env.deps.now;
+  const waits: number[] = [];
+  const wait = async (ms: number) => {
+    waits.push(ms);
+    env.advance(ms / 60_000);
+  };
+  const first = await reel.pushPackage({ dir: out, url: "https://faceful.test", token, fetch: send, wait });
   assert.equal(first.revision, 1);
   assert.match(first.studioUrl, new RegExp(`view=video&campaign=${first.projectId}&item=${first.itemId}`));
   // Six media parts are uploaded; the three text parts are saved as text drafts.
@@ -165,7 +173,9 @@ test("pushing a package through MCP creates the project, every draft file and th
   assert.equal(composition.transcript?.sourceFileId, first.fileIds.transcript);
 
   // Pushing again into the same item adds a timeline revision and file versions, not a new project.
-  const again = await reel.pushPackage({ dir: out, url: "https://faceful.test", token, itemId: first.itemId, fetch: send });
+  const again = await reel.pushPackage({ dir: out, url: "https://faceful.test", token, itemId: first.itemId, fetch: send, wait });
   assert.deepEqual([again.projectId, again.itemId, again.revision], [first.projectId, first.itemId, 2]);
+  // Twelve upload links in one minute is over the costly limit of ten: the tool waited for the next window once.
+  assert.deepEqual(waits, [60_000]);
   assert.equal((await env.deps.store.select("projects", { org_id: ctx.org.id })).length, 1);
 });

@@ -19,7 +19,8 @@ function engine(options: { files?: boolean; env?: Record<string, string> } = {})
   const store = new MemoryStore();
   const deps: HttpDeps = {
     store,
-    config: loadConfig({ SUPABASE_URL: "https://project.supabase.co", APP_BASE_URL: BASE, ...options.env }),
+    // A capture asks for seven upload links, and these tests make several in a minute; the limit has its own tests.
+    config: loadConfig({ SUPABASE_URL: "https://project.supabase.co", APP_BASE_URL: BASE, RATE_LIMIT_COSTLY_PER_MINUTE: "1000", ...options.env }),
     now: () => new Date(clock),
     verifyAccessToken: async (token) => {
       const [kind, id, client] = token.split(":");
@@ -85,6 +86,23 @@ test("an upload link is for a signed-in person, one file, and their own folder i
 
   for (const bad of [{ ...input, type: "video/quicktime" }, { ...input, size: 300 * 1024 * 1024 }, { ...input, sha256: "nope" }, { ...input, type: "image/jpeg", size: 16 * 1024 * 1024 }, { ...input, extra: true }])
     assert.equal((await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: bad })).status, 400, JSON.stringify(bad));
+});
+
+test("face scan and persona photo links are refused once the workspace's file storage is full", async () => {
+  const { call, store } = engine({ env: { STORAGE_QUOTA_BYTES: String(1024 * 1024) } });
+  const input = { type: "image/jpeg", size: 1000, sha256: "a".repeat(64) };
+  assert.equal((await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: input })).status, 200);
+  const [org] = await store.select("organizations", {});
+  // The workspace's draft files fill all but 999 bytes of it.
+  await store.insert("project_files", { id: crypto.randomUUID(), org_id: org.id, project_id: crypto.randomUUID(), item_id: null, name: "Clip", version: 1, state: "ready", bytes: 1024 * 1024 - 999, created_at: "2026-11-15T09:00:00.000Z" });
+  const full = await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: input });
+  assert.deepEqual([full.status, full.body.error.code], [429, "quota_exceeded"]);
+  assert.match(full.body.error.message, /file storage/);
+  const persona = await call("/v1/studio/operations/create_persona", { as: "user:u1", body: { name: "Dr. Maria", description: "Calm nutrition explainer", language: "el", operationKey: crypto.randomUUID() } });
+  const photo = await call("/v1/studio/operations/persona_image_upload_url", { as: "user:u1", body: { personaId: persona.body.id, ...input } });
+  assert.deepEqual([photo.status, photo.body.error.code], [429, "quota_exceeded"]);
+  assert.match(photo.body.error.message, /file storage/);
+  assert.equal((await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: { ...input, size: 999 } })).status, 200, "what still fits is accepted");
 });
 
 test("without R2 settings the capture is told storage is not connected, and health says so without leaking anything", async () => {
@@ -271,13 +289,13 @@ test("the R2 signer reproduces AWS's published SigV4 presigned URL, and upload l
     return new Response(null, { status: 204, headers: { "content-length": "2036", "content-type": "application/json" } });
   }) as typeof fetch);
   const key = "orgs/o1/likeness/u1/00000000-0000-4000-8000-000000000000.webm";
-  const link = await r2.uploadUrl(key, { sha256Hex: "a".repeat(64), contentType: "video/webm", expiresSeconds: 600 });
+  const link = await r2.uploadUrl(key, { sha256Hex: "a".repeat(64), contentType: "video/webm", bytes: 2_000_000, expiresSeconds: 600 });
   const parsed = new URL(link.url);
   assert.equal(parsed.host, `${"0".repeat(32)}.r2.cloudflarestorage.com`);
   assert.equal(parsed.pathname, `/faceful-media/${key}`);
   assert.equal(parsed.searchParams.get("X-Amz-Expires"), "600");
-  // The type and checksum are signed headers: the same link cannot carry a different file.
-  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-type;host;x-amz-checksum-sha256");
+  // The size, type and checksum are signed headers: the same link cannot carry a different file.
+  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-length;content-type;host;x-amz-checksum-sha256");
   // The browser only accepts a link over https; plain http is for a loopback test server and nothing else.
   const ticket = (uploadUrl: string) => likenessUploadTicketSchema.safeParse({ key, uploadUrl, headers: link.headers, expiresAt: "2026-11-15T10:10:00.000Z" }).success;
   assert.equal(ticket(link.url), true);

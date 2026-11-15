@@ -4,6 +4,7 @@ import { uploadTicketSchema } from "../packages/contracts/src/index";
 import { archiveFile, completeUpload, listFiles, requestUpload, saveTextFile } from "../packages/engine/src/files";
 import { loadConfig } from "../packages/engine/src/config";
 import { presignUrl, R2FileStore } from "../packages/engine/src/r2";
+import { EngineError } from "../packages/engine/src/errors";
 import { engine, key, rejects, seed, sha256 } from "./reel-support";
 
 test("the R2 signer reproduces AWS's published SigV4 presigned URL", () => {
@@ -11,17 +12,36 @@ test("the R2 signer reproduces AWS's published SigV4 presigned URL", () => {
   assert.match(url, /X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404$/);
 });
 
-test("R2 upload links are bound to one object, its type and its SHA-256", async () => {
+test("R2 upload links are bound to one object, its type, its SHA-256 and its size", async () => {
   const store = new R2FileStore({ accountId: "0".repeat(32), accessKeyId: "AK", secretAccessKey: "SK", bucket: "faceful-media" }, () => new Date("2026-11-14T10:00:00Z"), fetch);
   const digest = sha256("hello");
-  const { url, headers } = await store.uploadUrl(`orgs/o/projects/p/files/${digest}.txt`, { sha256Hex: digest, contentType: "text/plain", expiresSeconds: 900 });
+  const { url, headers } = await store.uploadUrl(`orgs/o/projects/p/files/${digest}.txt`, { sha256Hex: digest, contentType: "text/plain", bytes: 5, expiresSeconds: 900 });
   const parsed = new URL(url);
   assert.equal(parsed.host, `${"0".repeat(32)}.r2.cloudflarestorage.com`);
   assert.equal(parsed.pathname, `/faceful-media/orgs/o/projects/p/files/${digest}.txt`);
-  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-type;host;x-amz-checksum-sha256");
+  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-length;content-type;host;x-amz-checksum-sha256");
   assert.equal(parsed.searchParams.get("X-Amz-Expires"), "900");
   assert.equal(headers["x-amz-checksum-sha256"], Buffer.from(digest, "hex").toString("base64"));
-  await assert.rejects(store.uploadUrl("../escape", { sha256Hex: digest, contentType: "text/plain", expiresSeconds: 60 }));
+  // The size is signed but not handed to the client: fetch refuses a script-set Content-Length and sends the real one.
+  assert.deepEqual(Object.keys(headers).sort(), ["content-type", "x-amz-checksum-sha256"]);
+  // The signature commits to exactly that length: re-signing with it reproduces the link, any other length does not.
+  const resign = (length: string) => presignUrl({ method: "PUT", host: parsed.host, path: parsed.pathname, region: "auto", accessKeyId: "AK", secretAccessKey: "SK", now: new Date("2026-11-14T10:00:00Z"), expiresSeconds: 900, headers: { ...headers, "content-length": length } });
+  assert.equal(resign("5"), url);
+  assert.notEqual(new URL(resign("6")).searchParams.get("X-Amz-Signature"), parsed.searchParams.get("X-Amz-Signature"));
+  await assert.rejects(store.uploadUrl("../escape", { sha256Hex: digest, contentType: "text/plain", bytes: 5, expiresSeconds: 60 }));
+  await assert.rejects(store.uploadUrl(`orgs/o/projects/p/files/${digest}.txt`, { sha256Hex: digest, contentType: "text/plain", bytes: 1.5, expiresSeconds: 60 }));
+});
+
+test("server-side writes to R2 sign the length of the body they send", async () => {
+  const sent: Array<{ url: URL; headers: Record<string, string>; size: number }> = [];
+  const store = new R2FileStore({ accountId: "0".repeat(32), accessKeyId: "AK", secretAccessKey: "SK", bucket: "faceful-media" }, () => new Date("2026-11-14T10:00:00Z"), (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    sent.push({ url: new URL(String(input)), headers: init.headers as Record<string, string>, size: (init.body as Blob).size });
+    return new Response(null, { status: 200 });
+  }) as typeof fetch);
+  await store.put("orgs/o/manifest.json", new TextEncoder().encode('{"ok":true}'), "application/json");
+  assert.equal(sent[0].url.searchParams.get("X-Amz-SignedHeaders"), "content-length;content-type;host;x-amz-checksum-sha256");
+  assert.equal(sent[0].size, 11);
+  assert.equal(sent[0].headers["content-length"], undefined, "fetch sets the length from the body");
 });
 
 test("R2 settings are read from FACEFUL_R2_* and refused when the account id is malformed", () => {
@@ -70,6 +90,36 @@ test("uploads refuse unsafe types, oversize files, wrong sizes and other project
   const ticket = await requestUpload(env.deps, ctx, { ...base, mime: "image/png", operationKey: key() });
   await env.files.put(`orgs/${ctx.org.id}/projects/${campaign.id}/files/${base.sha256}.png`, new Uint8Array(9), "image/png");
   await rejects(completeUpload(env.deps, ctx, { fileId: ticket.file.id, operationKey: key() }), "validation_error");
+});
+
+test("upload links stop at the workspace's storage quota; archiving gives room back; server-side writes are not limited", async () => {
+  const MB = 1024 * 1024;
+  const env = engine({ STORAGE_QUOTA_BYTES: String(3 * MB) });
+  const { ctx, campaign, item } = await seed(env);
+  const ask = (bytes: number) => requestUpload(env.deps, ctx, { campaignId: campaign.id, itemId: item.id, kind: "video", name: "Clip", mime: "video/mp4", bytes, sha256: sha256(crypto.randomUUID()), operationKey: key() });
+  const first = await ask(2 * MB);
+  // Pending files count: their bytes may already be on their way.
+  await assert.rejects(ask(MB + 1), (error: unknown) => error instanceof EngineError && error.code === "quota_exceeded" && /used 2 MB of its 3 MB of file storage/.test(error.message));
+  await ask(MB);
+  await rejects(ask(1), "quota_exceeded");
+  // The quota is per workspace: another workspace is unaffected.
+  const other = await seed(env, "user:u2");
+  await requestUpload(env.deps, other.ctx, { campaignId: other.campaign.id, itemId: other.item.id, kind: "video", name: "Clip", mime: "video/mp4", bytes: 2 * MB, sha256: sha256("other"), operationKey: key() });
+  await archiveFile(env.deps, ctx, { fileId: first.file.id, operationKey: key() });
+  assert.equal((await ask(2 * MB)).file.state, "pending");
+  // Text drafts are written by the engine itself, not through a link, so a full workspace can still save a script.
+  assert.equal((await saveTextFile(env.deps, ctx, { campaignId: campaign.id, itemId: item.id, kind: "script", name: "Script", mime: "text/plain", text: "Hello", operationKey: key() })).state, "ready");
+});
+
+test("a workspace has at most 20 uploads in progress; an expired link stops counting", async () => {
+  const env = engine();
+  const { ctx, campaign, item } = await seed(env);
+  const ask = () => requestUpload(env.deps, ctx, { campaignId: campaign.id, itemId: item.id, kind: "image", name: "Still", mime: "image/png", bytes: 10, sha256: sha256(crypto.randomUUID()), operationKey: key() });
+  for (let i = 0; i < 20; i++) await ask();
+  await rejects(ask(), "quota_exceeded");
+  // Links last 15 minutes; after that the pending file can no longer receive bytes through them.
+  env.advance(16);
+  assert.equal((await ask()).file.state, "pending");
 });
 
 test("text drafts are written by the engine; JSON must parse; archived files leave the list", async () => {

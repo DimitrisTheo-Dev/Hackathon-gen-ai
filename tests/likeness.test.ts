@@ -16,7 +16,7 @@ function matrix(yawDeg: number, pitchDeg: number): number[] {
   const ry = [[Math.cos(y), 0, Math.sin(y)], [0, 1, 0], [-Math.sin(y), 0, Math.cos(y)]];
   const rx = [[1, 0, 0], [0, Math.cos(-p), -Math.sin(-p)], [0, Math.sin(-p), Math.cos(-p)]];
   const r = ry.map((row) => [0, 1, 2].map((c) => row.reduce((sum, value, k) => sum + value * rx[k][c], 0)));
-  const data = new Array(16).fill(0);
+  const data = Array.from({ length: 16 }, () => 0);
   for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) data[col * 4 + row] = r[row][col];
   data[15] = 1;
   return data;

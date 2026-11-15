@@ -49,7 +49,7 @@ export function bootProbe(): void {
       if (localStorage.getItem("faceful:sidebar") === "collapsed") root.setAttribute("data-boot-sidebar", "collapsed");
       if (localStorage.getItem("faceful:panel") === "closed") root.setAttribute("data-boot-panel", "closed");
     }
-  } catch (error) {
+  } catch {
     // Storage can throw in private windows. Whatever was decided so far stands.
   }
   root.setAttribute("data-boot", state);

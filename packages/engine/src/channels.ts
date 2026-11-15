@@ -4,7 +4,7 @@ import { audit, idempotent, requireHuman, requireScope, type Ctx, type EngineDep
 import { EngineError, StoreConflict } from "./errors.js";
 import { ChannelGrantExpired, createYoutubeClient, MAX_UPLOAD_BYTES, YOUTUBE_UPLOAD_SCOPE } from "./providers/youtube.js";
 import type { Publisher } from "./schedule.js";
-import { selectOne, type Row } from "./store.js";
+import { selectOne } from "./store.js";
 import { parse, PLATFORMS } from "./studio.js";
 
 /**

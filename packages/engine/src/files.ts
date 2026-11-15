@@ -95,6 +95,41 @@ export async function listFiles(deps: EngineDeps, ctx: Ctx, campaignId: string):
   return Promise.all(rows.map((row) => fileContract(deps, row)));
 }
 
+/** Draft-file upload links a workspace may have open at once: pending files whose link has not expired yet. */
+export const MAX_OPEN_UPLOADS = 20;
+const USAGE_PAGE = 1000;
+const USAGE_MAX_PAGES = 50;
+const readable = (bytes: number) => (bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${Math.ceil(bytes / 1024 ** 2)} MB`);
+
+/**
+ * Checked before any upload link is issued (draft files, face scans, persona photos), never on server-side writes.
+ * Refuses a link that would take the workspace past its storage quota (bytes of its pending and ready draft files,
+ * STORAGE_QUOTA_BYTES) or, for a draft file, past MAX_OPEN_UPLOADS links still open. Not atomic: requests racing
+ * each other can overshoot by a few files, which the `costly` rate limit keeps small.
+ */
+export async function assertUploadAllowed(deps: EngineDeps, orgId: string, bytes: number, options: { draftFile?: boolean } = {}) {
+  const openSince = deps.now().getTime() - UPLOAD_TTL_SECONDS * 1000;
+  let used = 0;
+  let open = 0;
+  let before: string | null = null;
+  // Paged by id: the database returns at most 1,000 rows per read, and a sum of the first page alone would undercount.
+  for (let page = 0; ; page++) {
+    if (page === USAGE_MAX_PAGES) throw new EngineError("quota_exceeded", "This workspace holds too many draft files to add more. Archive the ones you no longer need, then try again.");
+    const rows: Row[] = await deps.store.select(FILES_TABLE, { org_id: orgId, state: { in: ["pending", "ready"] }, ...(before ? { id: { lt: before } } : {}) }, { order: ["id", "desc"], limit: USAGE_PAGE, columns: ["id", "bytes", "state", "created_at"] });
+    for (const row of rows) {
+      used += Number(row.bytes) || 0;
+      if (row.state === "pending" && new Date(row.created_at).getTime() > openSince) open++;
+    }
+    if (rows.length < USAGE_PAGE) break;
+    before = rows[rows.length - 1].id;
+  }
+  if (options.draftFile && open >= MAX_OPEN_UPLOADS)
+    throw new EngineError("quota_exceeded", `This workspace already has ${MAX_OPEN_UPLOADS} uploads in progress. Finish them, or wait for their links to expire, then try again.`, { retryAfterSeconds: 60 });
+  const quota = deps.config.storageQuotaBytes;
+  if (used + bytes > quota)
+    throw new EngineError("quota_exceeded", `This workspace has used ${readable(used)} of its ${readable(quota)} of file storage, so a ${readable(bytes)} file does not fit. Archive draft files you no longer need, then try again.`);
+}
+
 export async function requestUpload(deps: EngineDeps, ctx: Ctx, raw: unknown): Promise<UploadTicket> {
   requireScope(ctx, "content:edit");
   const input = parse(requestUploadInputSchema, raw);
@@ -105,6 +140,7 @@ export async function requestUpload(deps: EngineDeps, ctx: Ctx, raw: unknown): P
     const existing = await files.head(key);
     // Identical bytes already stored for this project: record the new draft without a second upload.
     const ready = !!existing && existing.bytes === input.bytes;
+    if (!ready) await assertUploadAllowed(deps, ctx.org.id, input.bytes, { draftFile: true });
     const now = deps.now().toISOString();
     const row = await deps.store.insert(FILES_TABLE, {
       id: crypto.randomUUID(),
@@ -129,7 +165,7 @@ export async function requestUpload(deps: EngineDeps, ctx: Ctx, raw: unknown): P
     if (ready) await audit(deps, ctx, { projectId: project.id, action: `Added draft file ${input.name}`, objectId: row.id, revision: row.version, outcome: `${input.kind}, already stored` });
     const upload = ready
       ? null
-      : { ...(await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.mime, expiresSeconds: UPLOAD_TTL_SECONDS })), method: "PUT" as const, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() };
+      : { ...(await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.mime, bytes: input.bytes, expiresSeconds: UPLOAD_TTL_SECONDS })), method: "PUT" as const, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() };
     return parse(uploadTicketSchema, { file: await fileContract(deps, row), upload });
   });
 }

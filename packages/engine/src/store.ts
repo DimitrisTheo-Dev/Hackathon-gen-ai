@@ -18,6 +18,8 @@ export type Filter = Record<string, Condition>;
 export interface SelectOptions {
   order?: [column: string, direction: "asc" | "desc"];
   limit?: number;
+  /** Columns to read when only a few are needed. A store may return more; never fewer. */
+  columns?: string[];
 }
 
 export interface MediaStorage {
