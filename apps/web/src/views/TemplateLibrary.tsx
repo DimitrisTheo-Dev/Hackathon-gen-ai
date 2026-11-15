@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
-import { LoaderCircle, Maximize, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { CircleAlert, LoaderCircle, Maximize, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import type { LibraryTemplate } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
-import { Modal, Notice } from "../components/ui";
+import { Modal } from "../components/ui";
 import "../templates.css";
+import { TEMPLATES_INTRO, TemplateGridSkeleton } from "./page-skeletons";
 
 const languageNames: Record<string, string> = { el: "Greek", en: "English" };
 const FAMILIES: Array<{ family: LibraryTemplate["family"]; title: string; note: string }> = [
@@ -31,13 +32,15 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
   const [templates, setTemplates] = useState<LibraryTemplate[] | null>(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const reloads = useRef(0);
   const load = useCallback(() => {
     let active = true;
     client
       .listLibraryTemplates()
       .then((list) => { if (active) { setTemplates(list); setError(""); } })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "The templates could not be loaded."); });
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "The templates could not be loaded."); })
+      .finally(() => { if (active) setRetrying(false); });
     return () => { active = false; };
   }, [client]);
   useEffect(() => load(), [load]);
@@ -51,12 +54,19 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
     <div className="tl">
       <header className="tl-intro">
         <h1>Templates</h1>
-        <p>Short-form formats for health content, each with a sample rendered in Greek. Pick the one that fits what you want to say.</p>
+        <p>{TEMPLATES_INTRO}</p>
       </header>
-      {error && <Notice error>{error}</Notice>}
-      {templates === null && !error && (
-        <p className="tl-loading" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading templates…</p>
+      {error && !templates && (
+        <div className="tl-failed" role="alert">
+          <span className="tl-failed-icon" aria-hidden="true"><CircleAlert size={16} /></span>
+          <p><strong>Couldn’t load the templates</strong><span>{error}</span></p>
+          <button className="button secondary" disabled={retrying} onClick={() => { setRetrying(true); load(); }}>
+            {retrying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RotateCcw size={14} aria-hidden="true" />}
+            {retrying ? "Retrying…" : "Retry"}
+          </button>
+        </div>
       )}
+      {templates === null && !error && <TemplateGridSkeleton />}
       {templates?.length === 0 && <p className="tl-empty">No templates are published yet.</p>}
       {!!templates?.length &&
         FAMILIES.map(({ family, title, note }) => {

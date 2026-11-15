@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowUpRight, Check, LoaderCircle } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, CircleAlert, LoaderCircle, RotateCcw } from "lucide-react";
 import { CLONE_BRIEF_MAX, parseCloneLink, type CloneJob, type CloneLink, type CloneSource, type CloneTrait, type StudioContext } from "@castroom/contracts";
 import { ApiError, type StudioClient } from "../data/client";
 import { Notice, PlatformIcon, dateLabel } from "../components/ui";
 import "../clone.css";
+import { CLONE_INTRO } from "./page-skeletons";
 
 /** What can be borrowed from the source, in the order the engine stores them. Defaults keep the format, not the sound. */
-const TRAITS: Array<{ key: CloneTrait; label: string; hint: string; on: boolean }> = [
-  { key: "structure", label: "Hook and structure", hint: "The opening line and the order of the beats.", on: true },
-  { key: "pacing", label: "Pacing and cuts", hint: "How long each shot lasts and where it cuts.", on: true },
-  { key: "transitions", label: "Transitions", hint: "How one shot moves into the next.", on: true },
-  { key: "captions", label: "Caption style", hint: "Font, size, placement and how words appear.", on: true },
-  { key: "graphics", label: "Graphics", hint: "Text cards, arrows, stickers and overlays.", on: true },
-  { key: "sound", label: "Sound effects", hint: "The pops and whooshes that land on the cuts.", on: true },
-  { key: "music", label: "Music", hint: "A track with the same mood and tempo, never the same song.", on: false },
-  { key: "voice", label: "Voice delivery", hint: "Tone and pace of speech, in your own voice.", on: false },
-  { key: "colours", label: "Colours", hint: "The colour grade. Off keeps your brand kit colours.", on: false },
+const TRAITS: Array<{ key: CloneTrait; label: string; hint: string; on: boolean; group: "format" | "sound" }> = [
+  { key: "structure", label: "Hook and structure", hint: "The opening line and the order of the beats.", on: true, group: "format" },
+  { key: "pacing", label: "Pacing and cuts", hint: "How long each shot lasts and where it cuts.", on: true, group: "format" },
+  { key: "transitions", label: "Transitions", hint: "How one shot moves into the next.", on: true, group: "format" },
+  { key: "captions", label: "Caption style", hint: "Font, size, placement and how words appear.", on: true, group: "format" },
+  { key: "graphics", label: "Graphics", hint: "Text cards, arrows, stickers and overlays.", on: true, group: "format" },
+  { key: "sound", label: "Sound effects", hint: "The pops and whooshes that land on the cuts.", on: true, group: "sound" },
+  { key: "music", label: "Music", hint: "A track with the same mood and tempo, never the same song.", on: false, group: "sound" },
+  { key: "voice", label: "Voice delivery", hint: "Tone and pace of speech, in your own voice.", on: false, group: "sound" },
+  { key: "colours", label: "Colours", hint: "The colour grade. Off keeps your brand kit colours.", on: false, group: "sound" },
 ];
 const PLATFORM: Record<CloneLink["platform"], string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" };
+const GROUPS: Array<{ key: "format" | "sound"; label: string }> = [
+  { key: "format", label: "Format" },
+  { key: "sound", label: "Sound and look" },
+];
 const STATE: Record<CloneJob["state"], string> = {
   queued: "Queued, waiting for a worker",
   running: "A worker is making it",
@@ -88,6 +93,7 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
   const embed = current?.state === "refused" ? null : (source ?? (link?.embedUrl ? { ...link, embedUrl: link.embedUrl } : null));
   const linkError = parsed && !parsed.ok ? (linkTouched ? parsed.reason : "") : current?.state === "refused" ? current.message : "";
 
+  const [retryingJobs, setRetryingJobs] = useState(false);
   const loadJobs = useCallback(async () => {
     try {
       setJobs(await client.listCloneJobs());
@@ -96,6 +102,11 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
       setJobsError(errorText(reason, "Your clone jobs could not be loaded."));
     }
   }, [client]);
+  const retryJobs = async () => {
+    setRetryingJobs(true);
+    await loadJobs();
+    setRetryingJobs(false);
+  };
   useEffect(() => { void loadJobs(); }, [loadJobs]);
   // Waiting jobs are checked now and then, only while the page is in view.
   const waiting = !!jobs?.some((job) => job.state === "queued" || job.state === "running");
@@ -152,12 +163,12 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
     <div className="cv">
       <header className="cv-intro">
         <h1>Clone a video</h1>
-        <p>Paste a link to a short video you like. Say what to keep and what to change, and Faceful queues a job to make your own version.</p>
+        <p>{CLONE_INTRO}</p>
       </header>
 
       <form className="cv-form" onSubmit={start} noValidate>
         <div className="cv-link">
-          <label htmlFor={`${ids}-link`}>Video link</label>
+          <label htmlFor={`${ids}-link`}><span className="cv-step" aria-hidden="true">1</span>Video link</label>
           <input
             ref={linkRef}
             id={`${ids}-link`}
@@ -188,7 +199,12 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
               {current?.state === "loading" ? (
                 <p role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Opening the link…</p>
               ) : (
-                <p>The video shows here, in {link ? PLATFORM[link.platform] : "the platform"}'s own player.</p>
+                <div className="cv-empty">
+                  <span className="cv-platforms" aria-hidden="true">
+                    {(["youtube", "tiktok", "instagram"] as const).map((platform) => <span key={platform} data-on={link?.platform === platform || undefined}><PlatformIcon platform={platform} /></span>)}
+                  </span>
+                  <p>The video plays here, in {link ? PLATFORM[link.platform] : "the platform"}'s own player.</p>
+                </div>
               )}
             </div>
           )}
@@ -207,7 +223,7 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
         </section>
 
         <div className="cv-brief">
-          <label htmlFor={`${ids}-brief`}>What should your version be?</label>
+          <label htmlFor={`${ids}-brief`}><span className="cv-step" aria-hidden="true">2</span>What should your version be?</label>
           <p id={`${ids}-brief-note`} className="cv-note">What to keep and what to change: the topic, your brand, the language, the call to action.</p>
           <textarea
             ref={briefRef}
@@ -225,20 +241,25 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
         </div>
 
         <fieldset ref={traitsRef} className="cv-traits" aria-describedby={problems.traits ? `${ids}-traits-error` : undefined}>
-          <legend>What to clone</legend>
-          <div className="cv-tags">
-            {TRAITS.map((trait) => {
-              const on = traits.has(trait.key);
-              return (
-                <label key={trait.key} className="cv-trait" data-on={on || undefined} title={trait.hint}>
-                  <input type="checkbox" checked={on} onChange={() => toggle(trait.key)} aria-labelledby={`${ids}-${trait.key}-label`} aria-describedby={`${ids}-${trait.key}`} />
-                  <span className="cv-box" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>
-                  <span id={`${ids}-${trait.key}-label`}>{trait.label}</span>
-                  <span id={`${ids}-${trait.key}`} className="sr-only">{trait.hint}</span>
-                </label>
-              );
-            })}
-          </div>
+          <legend><span className="cv-step" aria-hidden="true">3</span>What to clone</legend>
+          {GROUPS.map((group) => (
+            <div className="cv-group" key={group.key} role="group" aria-labelledby={`${ids}-${group.key}`}>
+              <span className="cv-group-label" id={`${ids}-${group.key}`}>{group.label}</span>
+              <div className="cv-tags">
+                {TRAITS.filter((trait) => trait.group === group.key).map((trait) => {
+                  const on = traits.has(trait.key);
+                  return (
+                    <label key={trait.key} className="cv-trait" data-on={on || undefined} title={trait.hint}>
+                      <input type="checkbox" checked={on} onChange={() => toggle(trait.key)} aria-labelledby={`${ids}-${trait.key}-label`} aria-describedby={`${ids}-${trait.key}`} />
+                      <span className="cv-box" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>
+                      <span id={`${ids}-${trait.key}-label`}>{trait.label}</span>
+                      <span id={`${ids}-${trait.key}`} className="sr-only">{trait.hint}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           {problems.traits ? (
             <p id={`${ids}-traits-error`} className="cv-error" role="alert">{problems.traits}</p>
           ) : (
@@ -247,6 +268,7 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
         </fieldset>
 
         <section className="cv-result" aria-labelledby={`${ids}-result`}>
+          <span className="cv-becomes" aria-hidden="true"><ArrowRight size={14} /></span>
           <h2 id={`${ids}-result`}>Your version</h2>
           {shown?.resultUrl ? (
             <video className="cv-frame" src={shown.resultUrl} controls playsInline preload="metadata" />
@@ -254,11 +276,14 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
             <div className="cv-frame is-empty">
               {shown ? (
                 <div className="cv-wait" role="status">
-                  <strong>{STATE[shown.state]}</strong>
+                  <strong>{(shown.state === "queued" || shown.state === "running") && <i className="cv-live" aria-hidden="true" />}{STATE[shown.state]}</strong>
                   <span>{shown.state === "failed" ? shown.error ?? "The worker gave up on this job." : shown.state === "queued" ? "Nothing has been made yet. The video shows here when a worker has made it." : null}</span>
                 </div>
               ) : (
-                <p>Your video shows here once a worker has made it.</p>
+                <div className="cv-empty">
+                  <span className="cv-brand-mark" aria-hidden="true" style={{ background: context.brand.color || undefined }}>{(context.brand.name || "F").trim().charAt(0).toUpperCase()}</span>
+                  <p>Your version, in {context.brand.name ? `${context.brand.name}'s` : "your"} brand kit, shows here once a worker has made it.</p>
+                </div>
               )}
             </div>
           )}
@@ -281,10 +306,26 @@ export function CloneVideo({ client, context }: { client: StudioClient; context:
       </form>
       <p className="sr-only" aria-live="polite">{announce}</p>
 
-      {(jobsError || !!jobs?.length) && (
-        <section className="cv-jobs" aria-labelledby={`${ids}-jobs`}>
+      {(jobsError || jobs === null || !!jobs.length) && (
+        <section className="cv-jobs" aria-labelledby={`${ids}-jobs`} aria-busy={jobs === null && !jobsError ? true : undefined}>
           <h2 id={`${ids}-jobs`}>Jobs</h2>
-          {jobsError && <Notice error>{jobsError}</Notice>}
+          {jobsError ? (
+            <div className="cv-jobs-failed" role="alert">
+              <span className="cv-jobs-failed-icon" aria-hidden="true"><CircleAlert size={16} /></span>
+              <p>
+                <strong>Couldn’t load your clone jobs</strong>
+                <span>{jobsError}</span>
+              </p>
+              <button className="button secondary" type="button" disabled={retryingJobs} onClick={() => void retryJobs()}>
+                {retryingJobs ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RotateCcw size={14} aria-hidden="true" />}
+                {retryingJobs ? "Retrying…" : "Retry"}
+              </button>
+            </div>
+          ) : jobs === null ? (
+            <ul className="cv-jobs-skeleton" aria-hidden="true">
+              {[0, 1].map((row) => <li key={row} className="cv-job"><span className="cv-job-thumb" /><span className="cv-job-main"><i /><i /></span><span className="cv-job-state"><i /></span></li>)}
+            </ul>
+          ) : null}
           {!!jobs?.length && (
             <ul>
               {jobs.map((job) => (

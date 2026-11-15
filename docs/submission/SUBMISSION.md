@@ -37,7 +37,7 @@ Short presenter-led videos (Reels, Shorts, TikToks) are the most effective forma
 **Not yet live (stated plainly in the product):**
 - **Presenter-video rendering** waits for the Humanlike recorder.
 - **AI writing on the server** needs a model key. Until then, the studio offers the hand-off to your own agent.
-- **The reel editor** (Remotion timeline, draft files, MP4 renders), **Personas**, **Clone a video** and **social accounts** (Buffer, or Instagram directly) are built. They wait on a database migration and on their services: a files store, a render worker, and Buffer or Instagram credentials.
+- **The reel editor** (Remotion timeline, draft files, MP4 renders), **Personas**, **Clone a video** and **social accounts** (Buffer, or Instagram directly) are built. They are reachable on production and wait on their services: a files store, a render worker, and Buffer or Instagram credentials.
 - **YouTube publishing** is built but not yet verified with a real channel. TikTok needs the platform's app review or Buffer.
 - **The template library** is live: 11 formats with rendered Greek samples.
 
