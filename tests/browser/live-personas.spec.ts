@@ -157,14 +157,14 @@ test.describe('the face scan inside the Personas tab', () => {
 
     await scan.getByRole('textbox').fill('Maria Papadopoulou');
     // The real checkbox is visually hidden behind the drawn box; people click its label.
-    await scan.getByText(/I consent to an avatar/).click();
+    await scan.getByText('I agree', { exact: true }).click();
     await expect(scan.getByRole('checkbox')).toBeChecked();
     // The consent statement they will read aloud is shown before they start.
     await expect(scan.getByText(/I, Maria Papadopoulou, agree that Faceful may create an avatar/)).toBeVisible();
     await scan.getByRole('button', { name: 'Continue' }).click();
     // Get ready: the camera is explained before the browser asks for it (granted here, so no prompt follows).
     await expect(scan.getByRole('heading', { name: 'Get ready' })).toBeVisible();
-    await scan.getByRole('button', { name: /Start the scan|Allow camera and microphone/ }).click();
+    await scan.getByRole('button', { name: /Start the scan|Allow access/ }).click();
     // The stand-in camera shows no face: once the tracker is running it says so.
     await expect(scan.getByText('Looking for your face…', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => page.evaluate(() => (document.querySelector('.lk-video') as HTMLVideoElement | null)?.videoWidth ?? 0)).toBeGreaterThan(0);

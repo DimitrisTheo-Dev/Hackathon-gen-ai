@@ -409,13 +409,6 @@
 }
 .ob-field input::placeholder { color: var(--text-muted); }
 .ob-field input:is(:focus, :focus-visible) { border-color: var(--ink); outline: 2px solid var(--ink); outline-offset: -2px; }
-/* Language: the select is the control; the segments mirror it for pointers. */
-.ob-language { position: relative; display: inline-grid; grid-template-columns: repeat(var(--ob-count), minmax(0, 1fr)); justify-self: start; padding: 3px; border-radius: 999px; background: var(--muted-surface); }
-.ob-language::before { content: ""; position: absolute; inset-block: 3px; inset-inline-start: 3px; inline-size: calc((100% - 6px) / var(--ob-count)); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 2px rgba(42, 42, 39, 0.12), 0 2px 6px -2px rgba(42, 42, 39, 0.12); transform: translateX(calc(var(--ob-index) * 100%)); transition: transform 240ms var(--ob-move); }
-.ob-language-select { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; font-size: 16px; }
-.ob-language button { position: relative; min-block-size: 36px; padding: 0 18px; border: 0; border-radius: 999px; background: none; font-size: 13px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; transition: color var(--ob-fast) ease; }
-.ob-language button[data-checked] { color: var(--ink); }
-.ob-language:has(select:focus-visible) { outline: 2px solid var(--ob-ring); outline-offset: 2px; }
 .ob-template-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-block-start: 18px; border-block-start: 1px solid var(--border); }
 
 /* ───────────────────────── pointer hover (never on touch) ───────────────────────── */
@@ -438,7 +431,7 @@
   .ob-agent-stack:hover > span { translate: 0 0; rotate: calc(var(--ob-offset) * 2deg); }
   .ob-template-option:hover { border-color: color-mix(in srgb, var(--ink) 18%, var(--border)); box-shadow: 0 10px 22px -14px rgba(42, 42, 39, 0.22); }
   .ob-template-option:hover .ob-template-arrow { transform: translateX(3px); color: var(--ink); }
-  .ob-segmented label:hover, .ob-language button:hover { color: var(--ink); }
+  .ob-segmented label:hover { color: var(--ink); }
 }
 
 /* ───────────────────────── touch and small screens ───────────────────────── */
@@ -446,7 +439,7 @@
   .ob-link, .ob-back, .ob-past summary { min-block-size: 44px; }
   .ob-copy, .ob-icon-button { min-block-size: 44px; }
   .ob-icon-button { inline-size: 44px; }
-  .ob-segmented label, .ob-language button { min-block-size: 44px; }
+  .ob-segmented label { min-block-size: 44px; }
   .ob-token-row input, .ob-field input { font-size: 16px; min-block-size: 46px; }
   .ob-auth-foot a { min-block-size: 44px; }
 }
@@ -459,7 +452,7 @@
   .ob-setup-head { align-items: flex-start; gap: 12px; }
   .ob-step-item { gap: 12px; }
   .ob-code-block pre { padding: 52px 14px 14px; padding-inline-end: 14px; font-size: 12px; }
-  .ob-segmented, .ob-language { display: grid; justify-self: stretch; inline-size: 100%; box-sizing: border-box; }
+  .ob-segmented { display: grid; justify-self: stretch; inline-size: 100%; box-sizing: border-box; }
   .billing-view.ob-billing { inline-size: calc(100% - 32px); padding-block: 24px 40px; gap: 20px; }
   .ob-billing .ob-upgrade { padding: 20px; }
   .ob-template-actions { flex-direction: column-reverse; align-items: stretch; }
@@ -505,7 +498,7 @@
   .ob-emblem-breathing, .ob-live-dot::after, .ob-code-slot[data-active]::after, .ob-skeleton-lines i, .ob-skeleton-card i, .ob-connections > ul > li[data-fresh] { animation: none; }
   .ob-button, .ob-copy, .ob-icon-button, .ob-template-option, .ob-template-arrow, .ob-agent-stack > span { transition-property: background-color, border-color, color, box-shadow; }
   .ob-button:active:not(:disabled), .ob-copy:active:not(:disabled), .ob-icon-button:active, .ob-template-option:active, .ob-template-option:hover .ob-template-arrow { transform: none; }
-  .ob-segmented::before, .ob-language::before { transition: none; }
+  .ob-segmented::before { transition: none; }
   .ob-agent-face, .ob-runner-arrow { transition-property: background-color, border-color, color, box-shadow; }
   .ob-agent-card:hover .ob-agent-face, .ob-agent-card:active .ob-agent-face, .ob-agent-card:hover:active .ob-agent-face, .ob-runner-card:hover .ob-runner-arrow { transform: none; }
 }
@@ -519,6 +512,6 @@
   .ob-agent-face, .ob-runner-face { border-color: var(--ink); }
 }
 @media (forced-colors: active) {
-  .ob-segmented::before, .ob-language::before { border: 1px solid CanvasText; }
+  .ob-segmented::before { border: 1px solid CanvasText; }
   .ob-step-item[data-state="current"] .ob-step-badge { border: 2px solid CanvasText; }
 }

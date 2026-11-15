@@ -26,13 +26,53 @@ export interface SyncOptions {
   threshold?: number;
 }
 
+// Greek letters in Latin, digraphs first. Names come back in either alphabet ("Μηνάς Κόντης" for "Minas
+// Kontis" from a Greek recognizer, and the reverse), so script and speech are both compared in Latin.
+const GREEK_PAIRS: [RegExp, string][] = [[/ου/g, "ou"], [/αι/g, "e"], [/ει|οι|υι/g, "i"], [/μπ/g, "mp"], [/ντ/g, "nt"], [/γγ|γκ/g, "g"], [/αυ/g, "av"], [/ευ/g, "ev"]];
+const GREEK_LETTERS: Record<string, string> = { α: "a", β: "v", γ: "g", δ: "d", ε: "e", ζ: "z", η: "i", θ: "th", ι: "i", κ: "k", λ: "l", μ: "m", ν: "n", ξ: "x", ο: "o", π: "p", ρ: "r", σ: "s", τ: "t", υ: "i", φ: "f", χ: "ch", ψ: "ps", ω: "o" };
+// Recognizers write numbers as digits ("meet at 7"); scripts spell them out. Both become "#7".
+const NUMBER_WORDS: Record<string, string> = {
+  zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10", eleven: "11", twelve: "12",
+  first: "1st", second: "2nd", third: "3rd", fourth: "4th", fifth: "5th", sixth: "6th", seventh: "7th", eighth: "8th", ninth: "9th", tenth: "10th",
+  ena: "1", mia: "1", enas: "1", dio: "2", tria: "3", tris: "3", tessera: "4", tesseris: "4", pente: "5", exi: "6", epta: "7", efta: "7",
+  ochto: "8", okto: "8", enea: "9", ennea: "9", ennia: "9", deka: "10", endeka: "11", dodeka: "12",
+};
+
 export function normalizeWord(word: string): string {
-  return word
+  let norm = word
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/ς/g, "σ")
     .replace(/[^\p{L}\p{N}]/gu, "");
+  if (/[α-ω]/.test(norm)) {
+    for (const [pattern, latin] of GREEK_PAIRS) norm = norm.replace(pattern, latin);
+    norm = norm.replace(/[α-ω]/g, (letter) => GREEK_LETTERS[letter] ?? letter);
+  }
+  const number = NUMBER_WORDS[norm] ?? (/^\d+(st|nd|rd|th)?$/.test(norm) ? norm : null);
+  return number ? `#${number}` : norm;
+}
+
+/**
+ * How a word sounds, roughly: voiced and unvoiced pairs, c/k, ph/f, close vowels and doubled letters fold
+ * together. "Condis" and "Kontis", "Meenas" and "Minas" get the same key. Names are where recognizers differ
+ * most from the script, and no phrase list can be sent to the live model (it refuses one).
+ */
+export function soundKey(norm: string): string {
+  return norm
+    .replace(/ph/g, "f")
+    .replace(/th/g, "t")
+    .replace(/ch/g, "k")
+    .replace(/h/g, "")
+    .replace(/[cqg]/g, "k")
+    .replace(/x/g, "ks")
+    .replace(/d/g, "t")
+    .replace(/b/g, "p")
+    .replace(/[vw]/g, "f")
+    .replace(/z/g, "s")
+    .replace(/[eyj]/g, "i")
+    .replace(/u/g, "o")
+    .replace(/(.)\1+/g, "$1");
 }
 
 export function tokenizeScript(script: string): ScriptWord[] {
@@ -65,9 +105,15 @@ export function wordSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   const longest = Math.max(a.length, b.length);
   if (longest <= 2) return 0;
-  const similarity = 1 - levenshtein(a, b) / longest;
+  let similarity = 1 - levenshtein(a, b) / longest;
   // A prefix is the half-spoken word still being revised by the recognizer.
-  if (a.length >= 3 && b.startsWith(a)) return Math.max(similarity, 0.85);
+  if (a.length >= 3 && b.startsWith(a)) similarity = Math.max(similarity, 0.85);
+  // Spelled differently, sounds the same: a little below an exact match.
+  if (longest >= 3 && !a.startsWith("#") && !b.startsWith("#")) {
+    const ka = soundKey(a);
+    const kb = soundKey(b);
+    similarity = Math.max(similarity, 0.9 * (1 - levenshtein(ka, kb) / Math.max(ka.length, kb.length, 1)));
+  }
   return similarity;
 }
 
@@ -79,7 +125,9 @@ export function mergeSplitWords(tokens: string[], targets: string[]): string[] {
   const merged: string[] = [];
   for (let i = 0; i < tokens.length; i++) {
     const joined = i + 1 < tokens.length ? tokens[i] + tokens[i + 1] : "";
-    if (joined && targets.some((target) => wordSimilarity(joined, target) >= 0.85)) {
+    // Not when the second word is a script word itself: "choose a" is two words, not "choosea".
+    const secondIsWord = joined && targets.some((target) => wordSimilarity(tokens[i + 1], target) >= 0.85);
+    if (joined && !secondIsWord && targets.some((target) => wordSimilarity(joined, target) >= 0.85)) {
       merged.push(joined);
       i++;
     } else merged.push(tokens[i]);
