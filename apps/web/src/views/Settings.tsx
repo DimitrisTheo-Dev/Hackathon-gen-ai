@@ -4,13 +4,16 @@ import { Notice } from "../components/ui";
 import { ApiError } from "../data/client";
 import { supabase } from "../lib/supabase";
 import { createSocialsApi, type SocialCatalog, type SocialProviderInfo } from "../socials/api";
+import { createCampaignsApi } from "../socials/campaigns-api";
+import { CampaignsSection } from "../socials/CampaignsSection";
 import { accountSource, activity, cancelledNote, managedHere, plural } from "../socials/model";
 import "../channels.css";
 import "../settings.css";
 
 /**
  * Settings: the social accounts Faceful posts to, and connecting more (Instagram by signing in, Buffer with its API
- * key). A YouTube channel is connected with Google in the Schedule view and only listed here.
+ * key). A YouTube channel is connected with Google in the Schedule view and only listed here. Below them, comment-to-DM
+ * campaigns for Instagram accounts connected directly (socials/CampaignsSection.tsx).
  *
  * Webhooks are not something a person sets up. The engine subscribes each account to its platform's activity when it
  * connects and keeps asking until the platform agrees (socials.ts, socials-events.ts); each row only says where that
@@ -50,8 +53,11 @@ function failureText(failure: unknown, fallback: string) {
 type Busy = { action: "starting" | "connecting" | "refreshing" | "removing"; id: string } | null;
 type Confirming = { kind: "provider" | "account"; id: string; label: string } | null;
 
+const sessionToken = async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null;
+
 export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
-  const api = useMemo(() => createSocialsApi(import.meta.env.VITE_CASTROOM_API_URL || location.origin, async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null), []);
+  const api = useMemo(() => createSocialsApi(import.meta.env.VITE_CASTROOM_API_URL || location.origin, sessionToken), []);
+  const campaignsApi = useMemo(() => createCampaignsApi(import.meta.env.VITE_CASTROOM_API_URL || location.origin, sessionToken), []);
   const [catalog, setCatalog] = useState<SocialCatalog | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -337,6 +343,8 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
               </form>
             )}
           </section>
+
+          <CampaignsSection api={campaignsApi} />
         </div>
       )}
     </div>

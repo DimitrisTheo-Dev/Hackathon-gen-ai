@@ -109,6 +109,16 @@ export interface SocialProvider<Credentials = any> {
   publish(deps: EngineDeps, input: PublishInput): Promise<{ providerPostId: string; state: "submitted" | "verified_published"; url: string | null }>;
   /** Where a submitted post stands. Without it, a post stays "submitted". */
   postStatus?(deps: EngineDeps, input: { credentials: Credentials; account: Row; providerPostId: string }): Promise<PostStatus>;
+  /** Writing to people on the account's behalf (socials-campaigns.ts). Without it, the account only posts. */
+  messaging?: ProviderMessaging<Credentials>;
+}
+export interface ProviderMessaging<Credentials = any> {
+  /** One private message in answer to a comment. `recipientId` is who it went to, as their later messages name them. */
+  privateReply(deps: EngineDeps, input: { credentials: Credentials; account: Row; commentId: string; text: string }): Promise<{ recipientId: string | null; messageId: string | null }>;
+  /** A message to someone who has written to the account. */
+  send(deps: EngineDeps, input: { credentials: Credentials; account: Row; recipientId: string; text: string }): Promise<{ messageId: string | null }>;
+  /** A public reply under a comment. */
+  replyToComment(deps: EngineDeps, input: { credentials: Credentials; account: Row; commentId: string; text: string }): Promise<{ commentId: string | null }>;
 }
 export const socialProviders: Record<string, SocialProvider> = {
   [bufferProvider.id]: bufferProvider,
@@ -493,6 +503,22 @@ export async function removeSocialAccount(deps: EngineDeps, ctx: Ctx, accountId:
 export function connectedThroughProvider(account: Row | null | undefined): account is Row {
   return Boolean(account?.provider) && Object.hasOwn(socialProviders, account!.provider);
 }
+
+/** What an account's provider can say to people for it, with its credentials opened only when something is sent. Null: it cannot. */
+export function accountMessenger(deps: EngineDeps, account: Row | null | undefined) {
+  if (!connectedThroughProvider(account) || account.state !== "connected") return null;
+  const provider = socialProviders[account.provider];
+  const key = deps.config.socials.credentialKey;
+  const messaging = provider.messaging;
+  if (!key || !messaging) return null;
+  const credentials = () => parse(provider.credentialsSchema, open(key, account));
+  return {
+    privateReply: (commentId: string, text: string) => messaging.privateReply(deps, { credentials: credentials(), account, commentId, text }),
+    send: (recipientId: string, text: string) => messaging.send(deps, { credentials: credentials(), account, recipientId, text }),
+    replyToComment: (commentId: string, text: string) => messaging.replyToComment(deps, { credentials: credentials(), account, commentId, text }),
+  };
+}
+export type AccountMessenger = NonNullable<ReturnType<typeof accountMessenger>>;
 
 /**
  * The publisher for one connected account, or null when its provider cannot post for it on this deployment.

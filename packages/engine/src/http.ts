@@ -22,7 +22,8 @@ import { approveReview, getLatestReview, reviewContent } from "./review.js";
 import type { ReviewModel } from "./review-model.js";
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
 import { completeSocialSignIn, connectSocialProvider, disconnectSocialProvider, getSocialPlatform, listSocials, refreshSocialCredentials, removeSocialAccount, socialSignInReturn, syncSocialProvider, usableProviders } from "./socials.js";
-import { listSocialEvents, receiveSocialWebhook, renewWebhookSubscriptions, socialWebhookHandshake } from "./socials-events.js";
+import { campaignTestView, createDmCampaign, deleteDmCampaign, listCampaignConversations, listDmCampaigns, prepareCampaignTest, sendDueCampaignMessages, updateDmCampaign } from "./socials-campaigns.js";
+import { deliverTestEvents, listSocialEvents, receiveSocialWebhook, renewWebhookSubscriptions, socialWebhookHandshake } from "./socials-events.js";
 import { addDraft, addSource, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, removeSource, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign, updateBrand } from "./studio.js";
 import { createFromTemplate, createSampleProject, listTemplates } from "./templates.js";
 import { listLibraryTemplates } from "./template-library.js";
@@ -296,6 +297,25 @@ async function socials(deps: HttpDeps, request: Request, path: string, correlati
   const ctx = await resolveContext(deps, principal, request.headers.get("x-faceful-workspace"), correlationId);
   if (method === "GET" && (path === "" || path === "/")) return json(await listSocials(deps, ctx));
   if (method === "GET" && path === "/events") return json(await listSocialEvents(deps, ctx, Object.fromEntries(query)));
+  // Comment-to-DM campaigns (socials-campaigns.ts). Before `/:platform`, which "campaigns" would otherwise match.
+  if (path === "/campaigns") {
+    if (method === "GET") return json(await listDmCampaigns(deps, ctx));
+    if (method === "POST") return json(await createDmCampaign(deps, ctx, await body(request)), 201);
+  }
+  if ((match = path.match(/^\/campaigns\/([0-9a-f-]{36})(\/conversations|\/test)?$/))) {
+    const [, id, sub] = match;
+    if (!sub && method === "PATCH") return json(await updateDmCampaign(deps, ctx, id, await body(request)));
+    if (!sub && method === "DELETE") return json(await deleteDmCampaign(deps, ctx, id));
+    if (sub === "/conversations" && method === "GET") return json(await listCampaignConversations(deps, ctx, id));
+    if (sub === "/test" && method === "GET") return json(await campaignTestView(deps, ctx, id));
+    if (sub === "/test" && method === "POST") {
+      // A test can ask the AI model for an answer, so it counts against `costly`.
+      await limits.enforce(policies.costly, subject);
+      const events = await prepareCampaignTest(deps, ctx, id, await body(request));
+      const delivered = events ? await deliverTestEvents(deps, "instagram", events) : null;
+      return json({ via: delivered?.via ?? null, ...(await campaignTestView(deps, ctx, id)) });
+    }
+  }
   if (method === "POST" && (match = path.match(/^\/providers\/([a-z0-9_]+)\/complete$/))) {
     // Finishing a sign-in trades its code with the platform, so it counts against `costly` too.
     await limits.enforce(policies.costly, subject);
@@ -377,7 +397,7 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
       // Sign-in credentials are refreshed first, so the posts due in this same run go out with ones that still work.
       // Publishing also asks providers about submitted posts (schedule.ts); webhook subscriptions are renewed where the engine holds them.
       const credentials = await refreshSocialCredentials(deps);
-      response = json({ swept: await sweepRenderJobs(deps), publishing: await processDuePublishJobs(deps), webhooks: await renewWebhookSubscriptions(deps), credentials });
+      response = json({ swept: await sweepRenderJobs(deps), publishing: await processDuePublishJobs(deps), webhooks: await renewWebhookSubscriptions(deps), credentials, messages: await sendDueCampaignMessages(deps) });
     } else if (pathname.startsWith("/v1/studio/")) response = await studio(deps, request, pathname.slice("/v1/studio".length), correlationId, limits);
     else if (pathname === "/v1/socials" || pathname.startsWith("/v1/socials/")) response = await socials(deps, request, pathname.slice("/v1/socials".length), correlationId, limits);
     else if (pathname.startsWith("/v1/worker/reel/")) response = await reelWorkerRoute(deps, request, pathname.slice("/v1/worker/reel".length), limits);

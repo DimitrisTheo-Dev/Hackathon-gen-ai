@@ -12,6 +12,8 @@ import { dirname, join } from "node:path";
  *     with a one-second silent audio clip standing in for a rendered file;
  *   • the video platforms: YouTube's oEmbed answers with a fixed title and author (video ID AAAAAAAAAAA is
  *     "not found"); every other outside call fails, as if the network were down;
+ *   • Instagram connected directly and Gemini, for Settings → Comment to DM: POST /__e2e/instagram-account places an
+ *     account in the workspace; messages to it and Gemini's answers come from stand-ins. Tests are signed deliveries.
  *   • Buffer, for Settings → Social accounts: the key BUFFER_KEY reaches one organization with an Instagram and a
  *     TikTok channel; any other key is refused the way Buffer refuses one.
  * The likeness capture ("Scan my face") can be tried by hand on it too:
@@ -25,7 +27,7 @@ import { dirname, join } from "node:path";
  * FACEFUL_E2E_TEMPLATES=<path to templates/_kit/library.json> loads the real rows and sample files at start.
  * Nothing here is imported by application code or by the deployed functions.
  */
-import { createHash } from "node:crypto";
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { basicClaims } from "../../../packages/contracts/src/index";
 import { loadConfig } from "../../../packages/engine/src/config";
 import { handleEngineRequest, type HttpDeps } from "../../../packages/engine/src/http";
@@ -40,6 +42,31 @@ const WORKER_TOKEN = "e2e-render-worker-token-not-a-real-credential-0001";
 /** A test-only stand-in for the key provider credentials are sealed with, so Buffer can be connected. */
 const SOCIALS_CREDENTIAL_KEY = "e2e0".repeat(16);
 const BUFFER_KEY = "e2e-buffer-key-not-a-credential";
+/** Signs "Try it" deliveries for comment-to-DM campaigns, so a test goes through the signed webhook address. */
+const SOCIALS_WEBHOOK_SECRET = "e2e-webhook-secret-not-a-credential-000";
+/** The Instagram account POST /__e2e/instagram-account places in the workspace, as if connected directly. */
+const INSTAGRAM_ID = "17841400000000099";
+
+/**
+ * Credentials sealed the way socials.ts seals them (AES-256-GCM, bound to the workspace and provider), so the engine
+ * opens them when a campaign sends a message. The stand-in Graph API below accepts this token.
+ */
+function sealedInstagram(orgId: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", Buffer.from(SOCIALS_CREDENTIAL_KEY, "hex"), iv);
+  cipher.setAAD(Buffer.from(`${orgId}:instagram`));
+  const credentials = { api: "facebook", accessToken: "e2e-instagram-token", igUserId: INSTAGRAM_ID, businessId: null, expiresAt: null };
+  const body = Buffer.concat([cipher.update(JSON.stringify(credentials), "utf8"), cipher.final()]);
+  return ["v1", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), body.toString("base64url")].join(".");
+}
+
+/** Stand-in for Gemini's generateContent (socials-campaigns.ts): a plain answer that names what the person last wrote. */
+function standInGemini(init: RequestInit | undefined) {
+  const body = JSON.parse(String(init?.body ?? "{}"));
+  const last = [...(body.contents ?? [])].reverse().find((content: any) => content.role === "user")?.parts?.[0]?.text ?? "";
+  const text = `Stand-in AI answer to “${String(last).slice(0, 80)}”: thanks for writing. Someone from the team will follow up with the details.`;
+  return Response.json({ candidates: [{ content: { parts: [{ text }] }, finishReason: "STOP" }] });
+}
 const AVATARS = JSON.stringify([{ id: "minas_kontis", name: "Minas", languages: ["en", "el"] }]);
 
 /** One second of silence. A <video> element can load it, which is all the player tests need. */
@@ -175,7 +202,7 @@ const PIXEL = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKD
 
 export function createMemoryEngine(origin: string) {
   const store = new E2EStore(origin);
-  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET, SOCIALS_CREDENTIAL_KEY });
+  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET, SOCIALS_CREDENTIAL_KEY, SOCIALS_WEBHOOK_SECRET, GEMINI_API_KEY: "e2e-not-a-gemini-key" });
   const memoryFiles = new E2EFiles(origin);
   const files: FileStore = settings.r2 ? new R2FileStore(settings.r2, () => new Date(), globalThis.fetch) : memoryFiles;
   // The Supabase client keeps its session under a key named after the project the app was built for.
@@ -199,6 +226,10 @@ export function createMemoryEngine(origin: string) {
     fetch: async (input, init) => {
       const url = new URL(String(input));
       if (url.origin === "https://api.buffer.com") return standInBuffer(init);
+      if (url.origin === "https://generativelanguage.googleapis.com") return standInGemini(init);
+      // Instagram through Unified login: a message or a public reply is accepted and given an ID.
+      if (url.origin === "https://graph.facebook.com" && init?.method === "POST" && /\/(messages|replies)$/.test(url.pathname))
+        return Response.json({ recipient_id: "e2e-igsid-1", message_id: `e2e-mid-${crypto.randomUUID()}`, id: `e2e-reply-${crypto.randomUUID()}` });
       if (url.origin === "https://www.youtube.com" && url.pathname === "/oembed") {
         if (url.searchParams.get("url")?.includes("AAAAAAAAAAA")) return new Response("Not Found", { status: 404 });
         return Response.json({ title: "Stand-in video: five tips in thirty seconds", author_name: "Stand-in Channel", author_url: "https://www.youtube.com/@standin", type: "video" });
@@ -298,6 +329,15 @@ export function createMemoryEngine(origin: string) {
       return json({ storage: settings.r2 ? `r2:${settings.r2.bucket}` : "memory", consents, files: stored });
     }
     if (pathname === "/__e2e/render-jobs") return json({ count: (await store.select("render_jobs", { org_id: org.id })).length });
+    if (pathname === "/__e2e/instagram-account" && request.method === "POST") {
+      // An Instagram account connected directly (it can send messages), for comment-to-DM campaigns in Settings.
+      const existing = await store.select("provider_connections", { org_id: org.id, provider: "instagram", external_account_id: INSTAGRAM_ID });
+      if (!existing.length) {
+        const now = new Date().toISOString();
+        await store.insert("provider_connections", { id: crypto.randomUUID(), org_id: org.id, platform: "instagram", provider: "instagram", external_account_id: INSTAGRAM_ID, provider_account_id: INSTAGRAM_ID, display_name: "@bewell.clinic", profile_url: "https://www.instagram.com/bewell.clinic/", state: "connected", scopes: [], credentials_ciphertext: sealedInstagram(org.id), webhook_renewed_at: now, created_by: user.sub, created_at: now, updated_at: now });
+      }
+      return json({ connected: true });
+    }
     return json({ error: "unknown test control" }, 404);
   }
 

@@ -89,10 +89,21 @@ export interface EngineConfig {
     /** Signs deliveries in the generic format to /v1/socials/:platform/webhook. Null: those are refused. */
     webhookSecret: string | null;
     /**
-     * The app people sign in to Instagram with (socials-instagram.ts): the Instagram app ID and secret from the Meta
-     * app's "Business login settings". Null: Instagram accounts cannot be connected directly.
+     * The app people connect Instagram with (socials-instagram.ts). Null: Instagram accounts cannot be connected directly.
+     *   instagram  "Instagram API with Instagram Login": the Instagram app ID and secret from "Business login settings".
+     *              Only Meta apps created before Unified login offer it.
+     *   unified    "Instagram API with Unified Login": the Meta app's own ID and secret (App settings → Basic) and the
+     *              Facebook Login for Business configuration the app dashboard creates for it. Newer apps get only this.
      */
-    instagramLogin: { appId: string; appSecret: string; scopes: string[] } | null;
+    instagramLogin:
+      | { mode: "instagram"; appId: string; appSecret: string; scopes: string[] }
+      | { mode: "unified"; appId: string; appSecret: string; configId: string }
+      | null;
+    /**
+     * The model that answers people in comment-to-DM conversations (socials-campaigns.ts): Gemini, with
+     * GEMINI_API_KEY. Null: campaigns still send their opening message and follow-ups, but nobody is answered by AI.
+     */
+    campaignAi: { apiKey: string; model: string } | null;
     /**
      * This deployment's partner login at Humanlike (socials-humanlike.ts), from Humanlike's Admin > Partners, and the
      * mail domain its per-workspace Humanlike workspaces are named under. Null: Humanlike is connected with a pasted
@@ -278,6 +289,13 @@ function socialsFrom(env: Record<string, string | undefined>): EngineConfig["soc
   const tiktokScopes = (env.TIKTOK_LOGIN_SCOPES ?? "user.info.basic,video.publish").split(",").map((scope) => scope.trim()).filter((scope) => /^[a-z_.]{3,80}$/.test(scope));
   const loginId = value("INSTAGRAM_LOGIN_APP_ID", 1);
   const loginSecret = value("INSTAGRAM_LOGIN_APP_SECRET");
+  // Unified login: the Meta app's own ID and secret (the secret also signs Instagram's webhook deliveries) and the
+  // login configuration. Preferred when present: it is what Meta gives every app created since late 2026.
+  const metaAppId = value("INSTAGRAM_APP_ID", 1);
+  const metaAppSecret = value("INSTAGRAM_APP_SECRET");
+  const configId = value("INSTAGRAM_LOGIN_CONFIG_ID", 1);
+  const gemini = env.GEMINI_API_KEY?.trim();
+  const campaignModel = env.CAMPAIGN_AI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   // What the person is asked to allow. Posting needs the first two; comments and messages are for the account's activity.
   const scopes = (env.INSTAGRAM_LOGIN_SCOPES ?? "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_messages").split(",").map((scope) => scope.trim()).filter((scope) => /^[a-z_]{3,80}$/.test(scope));
   return {
@@ -285,7 +303,14 @@ function socialsFrom(env: Record<string, string | undefined>): EngineConfig["soc
     humanlikePartner: humanlikePartnerFrom(env),
     tiktokLogin: tiktokKey && tiktok && /^[A-Za-z0-9_-]{4,64}$/.test(tiktokKey) ? { clientKey: tiktokKey, clientSecret: tiktok, scopes: tiktokScopes } : null,
     webhookSecret: secret && secret.length >= 32 ? secret : null,
-    instagramLogin: loginId && /^\d{1,32}$/.test(loginId) && loginSecret ? { appId: loginId, appSecret: loginSecret, scopes } : null,
+    instagramLogin:
+      metaAppId && /^\d{1,32}$/.test(metaAppId) && metaAppSecret && configId && /^\d{1,32}$/.test(configId)
+        ? { mode: "unified", appId: metaAppId, appSecret: metaAppSecret, configId }
+        : loginId && /^\d{1,32}$/.test(loginId) && loginSecret
+          ? { mode: "instagram", appId: loginId, appSecret: loginSecret, scopes }
+          : null,
+    // The model name becomes part of the request path, so only plain Gemini model names are accepted.
+    campaignAi: gemini && /^[a-z0-9][a-z0-9.-]{0,79}$/.test(campaignModel) ? { apiKey: gemini, model: campaignModel } : null,
     native: {
       instagram: meta("INSTAGRAM"),
       whatsapp: meta("WHATSAPP"),
