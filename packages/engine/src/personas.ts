@@ -26,8 +26,9 @@ import { parse } from "./studio.js";
  * one person's face scan and spoken consent and can appear in several looks (outfit, hair, setting, with an
  * optional reference photo). Tables: supabase/migrations/20261115130000_personas.sql.
  *
- *   • Every persona needs its own, new consent. The person records it at /face-scan?persona=<id>, and
- *     saveLikenessConsent links it here (linkPersonaConsent). A consent backs at most one persona.
+ *   • Every persona needs its own, new consent. The person records it in the Personas tab (or at
+ *     /face-scan?persona=<id> on their own device), and saveLikenessConsent links it here
+ *     (linkPersonaConsent). A consent backs at most one persona.
  *   • A withdrawn consent stays linked as the record, and the persona reads as consent_withdrawn until the
  *     person records a new one for it.
  *   • Writes are for signed-in members who can edit content, never agents. Agents with campaign:read can list

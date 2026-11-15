@@ -42,10 +42,14 @@ interface Props {
   defaultName?: string;
   onClose(): void;
   onComplete?(result: LikenessResult): void;
-  /** Shown on the last screen, e.g. a link back to the studio. */
-  doneAction?: { label: string; href: string };
+  /** Shown on the last screen: a link back (href) or an action in the page it is embedded in (onClick). */
+  doneAction?: { label: string; href?: string; onClick?: () => void };
   /** The persona this consent is recorded for, when the person came from the Personas tab. */
   personaId?: string;
+  /** Rendered in place, inside the page that hosts it (the studio's Personas tab), instead of over the whole screen. */
+  embedded?: boolean;
+  /** A short line above the title saying what the scan is for, e.g. "Persona · Dr. Maria". */
+  context?: string;
 }
 
 type Step = "intro" | "loading" | "scan" | "speech" | "review" | "saving" | "done";
@@ -192,7 +196,7 @@ function MirroredClip({ src, labels }: { src: string; labels: { play: string; pa
   );
 }
 
-export default function LikenessCapture({ open, api, defaultName = "", onClose, onComplete, doneAction, personaId }: Props) {
+export default function LikenessCapture({ open, api, defaultName = "", onClose, onComplete, doneAction, personaId, embedded = false, context }: Props) {
   // Greek for a Greek browser, from the first paint; the toggle on the intro changes it.
   const [language, setLanguage] = useState<LikenessLanguage>(() => (typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("el") ? "el" : "en"));
   const [name, setName] = useState(defaultName);
@@ -628,11 +632,11 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
   const direction: Turn | null = scanning && !scanView.hint && scanView.target !== "center" ? scanView.target : null;
   const fullCamera = step === "scan" || step === "loading";
 
-  return createPortal(
-    <div className="lk-root" role="dialog" aria-modal="true" aria-label={t.title} lang={language}>
+  const tree = (
+    <div className={embedded ? "lk-root embedded" : "lk-root"} role={embedded ? "region" : "dialog"} aria-modal={embedded ? undefined : true} aria-label={t.title} lang={language}>
       <header className="lk-header">
         <div className="lk-header-group">
-          {step !== "intro" && <span className="lk-header-title">{t.title}</span>}
+          {(step !== "intro" || (embedded && context)) && <span className="lk-header-title">{context ?? t.title}</span>}
           {stepNumber > 0 && step !== "done" && (
             <div className="lk-steps" role="img" aria-label={t.stepOf(stepNumber)}>
               {[1, 2, 3].map((n) => (
@@ -737,6 +741,7 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
 
         {step === "intro" && (
           <div className="lk-intro lk-in">
+            {context && !embedded && <p className="lk-context">{context}</p>}
             <h1 className="lk-title">{t.title}</h1>
             <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} placeholder={t.name} aria-label={t.name} autoComplete="name" className="lk-input" />
             <label className="lk-check">
@@ -810,11 +815,15 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
             </div>
             <h2 className="lk-heading">{t.doneTitle}</h2>
             <div className="lk-done-actions">
-              {doneAction && (
+              {doneAction?.onClick ? (
+                <button type="button" onClick={() => { releaseAll(); doneAction.onClick!(); }} className="lk-button primary">
+                  {doneAction.label}
+                </button>
+              ) : doneAction?.href ? (
                 <a href={doneAction.href} className="lk-button primary">
                   {doneAction.label}
                 </a>
-              )}
+              ) : null}
               <button type="button" onClick={close} className={doneAction ? "lk-button quiet" : "lk-button primary"}>
                 {t.close}
               </button>
@@ -822,7 +831,7 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
           </div>
         )}
       </main>
-    </div>,
-    document.body,
+    </div>
   );
+  return embedded ? tree : createPortal(tree, document.body);
 }

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 /**
  * The Personas tab end to end against the real engine on an in-memory store (support/memory-engine.ts).
@@ -7,6 +8,8 @@ import { createHash } from 'node:crypto';
  * Run with: corepack pnpm exec playwright test -c tests/browser/live.config.ts live-personas
  */
 test.skip(!process.env.FACEFUL_LIVE_E2E, 'Needs the in-memory engine server from tests/browser/live.config.ts');
+// A stand-in camera and microphone, granted without a prompt, for the face scan.
+test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] }, permissions: ['camera', 'microphone'] });
 
 const SUPABASE = 'https://hgsgvdujzatfhsjoojll.supabase.co';
 /** A 2×2 PNG, so photos render with a real size. */
@@ -32,11 +35,12 @@ async function signIn(page: Page) {
     expect(put.status()).toBe(200);
     return ticket.key as string;
   };
-  return { api, upload };
+  const list = async () => (await page.request.get('/v1/studio/personas', { headers: { Authorization: `Bearer ${token}` } })).json() as Promise<Array<{ id: string }>>;
+  return { api, upload, list };
 }
 
 test('a persona is created, gets a look with a photo, is backed by a consent, and can be withdrawn and deleted', async ({ page }, testInfo) => {
-  const { api, upload } = await signIn(page);
+  const { api, upload, list } = await signIn(page);
   await page.goto('/studio/?view=personas');
   await expect(page.getByRole('heading', { name: 'Personas', level: 1 })).toBeVisible();
   await expect(page.getByText('No personas yet.')).toBeVisible();
@@ -50,9 +54,8 @@ test('a persona is created, gets a look with a photo, is backed by a consent, an
 
   const detail = page.getByRole('dialog', { name: 'Dr. Maria' });
   await expect(detail.getByText('Needs consent')).toBeVisible();
-  const href = await detail.getByRole('link', { name: 'Record consent now' }).getAttribute('href');
-  expect(href).toMatch(/^\/face-scan\?persona=[0-9a-f-]{36}$/);
-  const personaId = new URL(href!, 'http://local').searchParams.get('persona')!;
+  await expect(detail.getByRole('button', { name: 'Record consent now' })).toBeVisible();
+  const [{ id: personaId }] = await list();
   await expect(detail.getByText('Greek (Ελληνικά)')).toBeVisible();
 
   await detail.getByRole('button', { name: 'Add a look' }).click();
@@ -98,7 +101,7 @@ test('a persona is created, gets a look with a photo, is backed by a consent, an
   await back.getByRole('button', { name: 'Withdraw consent' }).click();
   await back.getByRole('button', { name: 'Withdraw and delete recordings' }).click();
   await expect(back.getByText(/withdrew their consent/)).toBeVisible();
-  await expect(back.getByRole('link', { name: 'Record consent now' })).toBeVisible();
+  await expect(back.getByRole('button', { name: 'Record consent now' })).toBeVisible();
 
   await back.getByRole('button', { name: 'Delete persona' }).click();
   await back.getByRole('group', { name: 'Confirm deletion' }).getByRole('button', { name: 'Delete persona' }).click();
@@ -116,4 +119,58 @@ test('on a phone the Personas page and its detail fit the screen', async ({ page
   await expect(page.getByRole('dialog', { name: 'Nikos' }).getByText('Needs consent')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('4-phone.png') });
+});
+
+/** The headers vercel.json gives a path, for the rules this check needs (the studio page and the build files). */
+function deployedHeaders(source: string) {
+  const config = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8')) as { headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }> };
+  return Object.fromEntries((config.headers.find((rule) => rule.source === source)?.headers ?? []).map((entry) => [entry.key.toLowerCase(), entry.value]));
+}
+
+test.describe('the face scan inside the Personas tab', () => {
+  test('opens in the tab under the deployed security headers, tracks the camera, and returns to the persona', async ({ page }, testInfo) => {
+    // Serve the studio and its build files with the headers production sends, so the camera permission and the
+    // WebAssembly allowance are the real ones.
+    for (const [pattern, source] of [['**/studio/**', '/studio/'], ['**/assets/**', '/assets/(.*)']] as const)
+      await page.route(pattern, async (route) => {
+        const response = await route.fetch();
+        await route.fulfill({ response, headers: { ...response.headers(), ...deployedHeaders(source) } });
+      });
+    const violations: string[] = [];
+    page.on('console', (message) => { if (/Content Security Policy|Permissions policy/i.test(message.text())) violations.push(message.text()); });
+    const { api } = await signIn(page);
+    const persona = await api('/v1/studio/operations/create_persona', { name: 'Dr. Maria', description: '', language: 'en', operationKey: crypto.randomUUID() });
+    await page.goto(`/studio/?view=personas&persona=${persona.id}`);
+    await page.getByRole('dialog', { name: 'Dr. Maria' }).getByRole('button', { name: 'Record consent now' }).click();
+
+    // The capture replaces the persona list, inside the studio shell.
+    const scan = page.getByRole('region', { name: 'Scan your face' });
+    await expect(scan).toBeVisible();
+    await expect(scan.getByText('Persona · Dr. Maria')).toBeVisible();
+    await expect(scan.getByRole('heading', { name: 'Scan your face' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Studio' })).toBeVisible();
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector('.lk-root')!).position)).toBe('relative');
+    await page.screenshot({ path: testInfo.outputPath('5-scan-intro.png') });
+
+    await scan.getByRole('textbox').fill('Maria Papadopoulou');
+    // The real checkbox is visually hidden behind the drawn box; people click its label.
+    await scan.getByText(/I consent to an avatar/).click();
+    await expect(scan.getByRole('checkbox')).toBeChecked();
+    await scan.getByRole('button', { name: 'Start' }).click();
+    // The stand-in camera shows no face: once the tracker is running it says so.
+    await expect(scan.getByText('No face', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => page.evaluate(() => (document.querySelector('.lk-video') as HTMLVideoElement | null)?.videoWidth ?? 0)).toBeGreaterThan(0);
+    await page.screenshot({ path: testInfo.outputPath('6-scan-camera.png') });
+    // On a phone the stage still fits the screen.
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('7-scan-phone.png') });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    expect(violations).toEqual([]);
+
+    await scan.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog', { name: 'Dr. Maria' }).getByText('Needs consent')).toBeVisible();
+    // Leaving the scan turns the camera off.
+    await expect.poll(() => page.evaluate(() => document.querySelector('.lk-video') === null)).toBe(true);
+  });
 });
