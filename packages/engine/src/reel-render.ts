@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import {
   compositionSchema,
@@ -8,7 +7,7 @@ import {
   type ReelRender,
   type ResolvedMedia,
 } from "../../contracts/src/index.js";
-import { audit, idempotent, requireScope, type Ctx, type EngineDeps } from "./access.js";
+import { audit, bearerMatches, idempotent, requireScope, type Ctx, type EngineDeps } from "./access.js";
 import { COMPOSITIONS_TABLE } from "./composition.js";
 import { EngineError } from "./errors.js";
 import { FILES_TABLE, fileContract, fileKey, filesOf, resolveFiles } from "./files.js";
@@ -125,12 +124,8 @@ export async function cancelRender(deps: EngineDeps, ctx: Ctx, raw: unknown): Pr
 /* ───────────────────────── worker protocol ───────────────────────── */
 
 export function authenticateReelWorker(deps: EngineDeps, authorization: string | null) {
-  const expected = deps.config.reelWorkerToken;
-  const supplied = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
-  if (!expected || !supplied) throw new EngineError("unauthenticated", "A reel render worker credential is required.");
-  const a = Buffer.from(supplied);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) throw new EngineError("unauthenticated", "A reel render worker credential is required.");
+  // Compared as SHA-256 digests (bearerMatches, like the avatar render worker), so the token's length does not leak through timing.
+  if (!bearerMatches(authorization, deps.config.reelWorkerToken)) throw new EngineError("unauthenticated", "A reel render worker credential is required.");
 }
 
 const workerIdSchema = z.string().regex(/^[A-Za-z0-9._:-]{1,80}$/);
