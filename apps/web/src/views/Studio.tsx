@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowUp,
   ArrowUpRight,
@@ -36,9 +36,11 @@ import type {
   Campaign,
   ContentItem,
   DirectorTurnResult,
+  LibraryTemplate,
   ScheduleManifest,
   StudioContext,
 } from "@castroom/contracts";
+import { FormatsContext } from "../director/HomeFormats";
 import type { StudioClient } from "../data/client";
 import { ApiError } from "../data/client";
 import {
@@ -184,6 +186,15 @@ export function Studio({
   const homeAttempt=useRef<{text:string;key:string}|null>(null);
   const sampleKey=useRef(crypto.randomUUID());
   const [templatesOpen,setTemplatesOpen]=useState(false);
+  // Create offers the template library's formats; loaded once, live only (the local preview has no library).
+  const [libraryFormats,setLibraryFormats]=useState<LibraryTemplate[]|null>(null);
+  useEffect(()=>{
+    if(context?.capabilities.mode!=="live"||view!=="home"||libraryFormats)return;
+    let active=true;
+    client.listLibraryTemplates().then(list=>{if(active)setLibraryFormats(list);}).catch(()=>{if(active)setLibraryFormats([]);});
+    return()=>{active=false;};
+  },[context?.capabilities.mode,view,libraryFormats,client]);
+  const homeFormatsValue=useMemo(()=>({formats:libraryFormats,onAll:()=>go("templates")}),[libraryFormats]);
   const [focusDirector,setFocusDirector]=useState(false);
   const [playItem,setPlayItem]=useState<string|null>(null);
   const [errorBilling,setErrorBilling]=useState(false);
@@ -1222,6 +1233,7 @@ export function Studio({
           </nav>
         </div>
         {item && draft && (view === "canvas" || view === "home") && (
+          <FormatsContext.Provider value={homeFormatsValue}>
           <Editor
             home={view==="home"}
             open={view==="home" || !matchMedia("(max-width: 1000px)").matches || mobileChatOpen}
@@ -1276,6 +1288,7 @@ export function Studio({
             error={error}
             offline={offline}
           />
+          </FormatsContext.Provider>
         )}
       </div>
       {sidebar && <Modal title="Your projects" onClose={() => setSidebar(false)}>

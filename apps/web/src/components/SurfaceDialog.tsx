@@ -39,7 +39,9 @@ function returnTarget() {
 type Controls = { close: () => void; grip: ReactNode; mobile: boolean };
 /** Native dialog provides focus containment, inert background and focus restoration.
  * Only the explicit handle owns dragging; content keeps native scrolling/selection/zoom.
- * Editor is a non-modal complementary panel on desktop, the same DOM on mobile.
+ * Editor is a non-modal panel on desktop, the same DOM on mobile.
+ * No role override: a <dialog> may only carry its own role (or alertdialog), so the docked editor is exposed as a
+ * labelled non-modal dialog. Relabelling it "complementary" was invalid ARIA (Lighthouse, axe aria-allowed-role).
  */
 export function SurfaceDialog({ title, className, editor = false, inline = false, open = true, animateEntry = true, onClose, children }: {
   title: string; className: string; editor?: boolean; onClose: () => void;
@@ -182,7 +184,7 @@ export function SurfaceDialog({ title, className, editor = false, inline = false
   }
   const grip = <button type="button" className="sheet-grip" aria-label={`Dismiss ${title}`} onPointerDown={down} onPointerMove={move} onPointerUp={e => up(e)} onPointerCancel={e => up(e, true)} onClick={() => { if (!ignoreClick.current) close(); ignoreClick.current = false; }}><span /></button>;
 
-  return <dialog ref={ref} className={`surface-dialog ${className}`} aria-label={title} role={inline || editor && !mobile ? "complementary" : "dialog"} onCancel={event => { event.preventDefault(); finish(); }} onClick={event => {
+  return <dialog ref={ref} className={`surface-dialog ${className}`} aria-label={title} onCancel={event => { event.preventDefault(); finish(); }} onClick={event => {
     if (event.target !== ref.current || editor) return;
     const rect = ref.current.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
