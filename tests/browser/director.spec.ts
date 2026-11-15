@@ -3,7 +3,7 @@ import { evidence } from './support/evidence';
 test('director plan → saved canvas revision → history → undo, with honest unavailable AI',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/dev/studio/?view=canvas');await expect(page.locator('.content-card')).toHaveCount(3);
- await expect(page.getByRole('button',{name:'AI Chat',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByRole('button',{name:'Details',exact:true})).toBeVisible();
  await expect(page.getByText('Development preview',{exact:true})).toHaveCount(0);
  // Empty chat: a short intro, one collapsed context chip, one quiet status by the composer. No zero-value counts.
  const chip=page.locator('.director-context-chip');await expect(chip).toHaveText('BeWell · 3 drafts · 1 source');await expect(chip).toHaveAttribute('aria-expanded','false');

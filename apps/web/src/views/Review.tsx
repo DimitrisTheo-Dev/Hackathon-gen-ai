@@ -45,8 +45,13 @@ export function Review({
   onClose,
   onRefresh,
   onOpenReview,
+  onOpenVideo,
+  onOpenSchedule,
 }: {
   campaign: Campaign;
+  /** Where each blocked step's fix happens: the video editor, and the schedule with its channels. */
+  onOpenVideo?: () => void;
+  onOpenSchedule?: () => void;
   manifest: ScheduleManifest;
   context: StudioContext;
   client: StudioClient;
@@ -144,17 +149,20 @@ export function Review({
     }
     if (step.id === "videos")
       return context.capabilities.canRender ? (
-        <button type="button" className="review-fix" onClick={onClose}>
+        <button type="button" className="review-fix" onClick={onOpenVideo ?? onClose}>
           Render from your drafts <ArrowRight size={13} aria-hidden="true" />
         </button>
       ) : (
-        <span className="review-why"><Lock size={12} aria-hidden="true" />{context.capabilities.renderBlocker ?? "Rendering isn’t connected yet"}</span>
+        <div className="review-fixes">
+          <span className="review-why"><Lock size={12} aria-hidden="true" />{context.capabilities.renderBlocker ?? "Rendering isn’t connected yet"}</span>
+          {onOpenVideo && <button type="button" className="review-fix secondary" onClick={onOpenVideo}>Preview it in the video editor <ArrowRight size={13} aria-hidden="true" /></button>}
+        </div>
       );
     if (step.id === "channels")
       return fixture ? (
         <span className="review-why"><Lock size={12} aria-hidden="true" />Publishing isn’t connected here</span>
       ) : (
-        <button type="button" className="review-fix" onClick={onClose}>
+        <button type="button" className="review-fix" onClick={onOpenSchedule ?? onClose}>
           Set times and channels <ArrowRight size={13} aria-hidden="true" />
         </button>
       );
