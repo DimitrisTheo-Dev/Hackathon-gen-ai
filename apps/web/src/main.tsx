@@ -19,8 +19,9 @@ const ClaudeVpsPage = lazy(() => import("./claude/ClaudeVpsPage"));
 const PitchPage = lazy(() => import("./pitch/PitchPage"));
 const pitchRoute = /^\/pitch(\/|$)/.test(location.pathname);
 const claudeRoute = /^\/claude-login-test(\/|$)/.test(location.pathname);
-// `/oauth/consent` is where an external agent's OAuth request is reviewed; it shares the signed-in shell.
-const privateRoute = /^\/(studio|dev|oauth)(\/|$)/.test(location.pathname);
+// `/oauth/consent` is where an external agent's OAuth request is reviewed, and `/face-scan` is the likeness
+// capture; both share the signed-in shell.
+const privateRoute = /^\/(studio|dev|oauth|face-scan)(\/|$)/.test(location.pathname);
 if (privateRoute) {
   // Decided here, synchronously, before the first render: skeleton (a studio is coming), sign-in card, or neither.
   // The static studio page has already made the same decision with the same function before its first paint.

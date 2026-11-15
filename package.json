@@ -24,6 +24,7 @@
     "@anthropic-ai/sdk": "^1.8.0",
     "@castroom/contracts": "workspace:*",
     "@js-temporal/polyfill": "^0.5.1",
+    "@mediapipe/tasks-vision": "1.0.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@supabase/supabase-js": "2.119.0",
     "@vercel/functions": "^3.11.3",

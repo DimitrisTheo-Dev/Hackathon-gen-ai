@@ -507,3 +507,81 @@ export const templateInputSchema = z
   .object({ templateId: idSchema, language: z.string().min(2).max(12), inputs: z.record(z.string(), z.string().max(400)), operationKey: z.uuid() })
   .strict();
 export type TemplateInput = z.infer<typeof templateInputSchema>;
+
+// ── Likeness capture ("Scan my face"): a guided face scan plus spoken consent, kept as private recordings. ──
+export const likenessLanguageSchema = z.enum(["en", "el"]);
+export type LikenessLanguage = z.infer<typeof likenessLanguageSchema>;
+export const likenessPoseSchema = z.enum(["center", "left", "right", "up", "down"]);
+export type LikenessPose = z.infer<typeof likenessPoseSchema>;
+
+/**
+ * The spoken permission, word for word as stored. Built here so the sentence a person reads in the
+ * browser is exactly the one the engine keeps with their recordings; the engine never trusts a supplied one.
+ */
+export function likenessConsentStatement(name: string, language: LikenessLanguage): string {
+  const who = name.trim().replace(/\s+/g, " ");
+  return language === "el"
+    ? `Εγώ, ${who}, συμφωνώ να δημιουργήσει η Faceful ένα avatar με το πρόσωπο και τη φωνή μου.`
+    : `I, ${who}, agree that Faceful may create an avatar of my face and voice.`;
+}
+
+export const LIKENESS_MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+export const LIKENESS_MAX_STILL_BYTES = 15 * 1024 * 1024;
+export const likenessUploadInputSchema = z
+  .object({
+    // What MediaRecorder produces: MP4 (Safari, current Chrome), WebM, or Matroska (Chrome's H.264 "WebM").
+    type: z.enum(["video/mp4", "video/webm", "video/x-matroska", "image/jpeg"]),
+    size: z.number().int().positive().max(LIKENESS_MAX_VIDEO_BYTES),
+    /** SHA-256 of the exact bytes. Storage refuses any other body, so an upload link is good for one file only. */
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type LikenessUploadInput = z.infer<typeof likenessUploadInputSchema>;
+export const likenessUploadTicketSchema = z.object({
+  key: z.string().min(1).max(512),
+  // https always. Plain http is accepted only for a loopback address, which is how local test storage is reached.
+  uploadUrl: z.url({ protocol: /^https?$/ }).refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  }, "Upload links must use https"),
+  /** Headers the PUT must send verbatim; they are part of the signature. */
+  headers: z.record(z.string(), z.string()),
+  expiresAt: instantSchema,
+});
+export type LikenessUploadTicket = z.infer<typeof likenessUploadTicketSchema>;
+
+export const likenessLiveTokenSchema = z.object({
+  /** Single use; opens one live transcription socket. */
+  token: z.string().min(1).max(200),
+  url: z.url({ protocol: /^wss?$/ }),
+  expiresInSeconds: z.number().int().positive(),
+});
+export type LikenessLiveToken = z.infer<typeof likenessLiveTokenSchema>;
+
+export const likenessCheckSchema = z.object({
+  id: z.string().min(1).max(40),
+  label: z.string().max(80),
+  passed: z.boolean(),
+  /** Whether a failure blocks saving. */
+  required: z.boolean(),
+  /** The measured value, kept with the consent for review. */
+  value: z.number(),
+});
+export const likenessReportSchema = z.object({ passed: z.boolean(), checks: z.array(likenessCheckSchema).min(1).max(20) });
+export type LikenessReport = z.infer<typeof likenessReportSchema>;
+export const likenessConsentInputSchema = z
+  .object({
+    subjectName: z.string().trim().min(2).max(120),
+    language: likenessLanguageSchema,
+    /** Two random phrases, then the consent statement. */
+    phrases: z.array(z.string().max(300)).length(3),
+    transcript: z.string().max(5000),
+    scanVideoKey: z.string().min(1).max(512),
+    speechVideoKey: z.string().min(1).max(512),
+    stills: z.partialRecord(likenessPoseSchema, z.string().min(1).max(512)),
+    report: likenessReportSchema,
+  })
+  .strict();
+export type LikenessConsentInput = z.infer<typeof likenessConsentInputSchema>;
+export const likenessConsentResultSchema = z.object({ id: idSchema, passed: z.boolean() });
+export type LikenessConsentResult = z.infer<typeof likenessConsentResultSchema>;

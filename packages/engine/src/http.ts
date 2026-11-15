@@ -6,6 +6,7 @@ import { readBoundedText } from "./body.js";
 import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.js";
 import { directorTurn } from "./director.js";
 import { EngineError } from "./errors.js";
+import { likenessLiveToken, likenessUploadUrl, revokeLikenessConsent, saveLikenessConsent } from "./likeness.js";
 import type { Planner } from "./llm.js";
 import { authenticateWithLimits, principalSubject, refuseCredential, RequestLimits } from "./ratelimit.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
@@ -140,6 +141,17 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     await limits.enforce(policies.director, subject);
     return json(await directorTurn(deps, ctx, await body(request), deps.planner));
   }
+  // Likeness capture ("Scan my face"). Signed-in people only; see likeness.ts.
+  if (post && path === "/likeness/upload-url") return json(await likenessUploadUrl(deps, ctx, await body(request)));
+  if (post && path === "/likeness/live-token") return json(await likenessLiveToken(deps, ctx));
+  if (post && path === "/likeness/consents") {
+    // Where the consent was given from is part of its record. Both values are length-capped, never trusted for access;
+    // the forwarded address is kept only behind a proxy that sets it (config.trustProxyHeaders), so a caller cannot choose it.
+    const forwarded = deps.config.trustProxyHeaders ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim().slice(0, 64) : null;
+    const client = { userAgent: request.headers.get("user-agent")?.trim().slice(0, 500) || null, ipAddress: forwarded || null };
+    return json(await saveLikenessConsent(deps, ctx, await body(request), client));
+  }
+  if (request.method === "DELETE" && (match = path.match(/^\/likeness\/consents\/([^/]+)$/))) return json(await revokeLikenessConsent(deps, ctx, decodeURIComponent(match[1])));
   if (post && (match = path.match(/^\/operations\/([a-z_]+)$/))) {
     const name = match[1];
     const operation = operations.get(name);
@@ -180,6 +192,8 @@ export function health(deps: HttpDeps) {
     database: Boolean(config.supabaseUrl),
     director: config.llm ? "ai" : "basic",
     rendering: { connected: Boolean(config.renderWorkerToken), provider: "humanlike", humanlikeKey: Boolean(config.humanlikeApiKey) },
+    files: { connected: Boolean(deps.files?.configured) },
+    likeness: { liveTranscription: Boolean(config.humanlikeTranscribeKey) },
     billing: { mode: config.stripe ? "sandbox" : "not_configured", problem: config.stripeProblem },
     publishing: { adapters: config.youtube ? ["youtube"] : ([] as string[]), problem: config.youtube ? null : config.youtubeProblem },
     scheduler: Boolean(config.cronSecret),

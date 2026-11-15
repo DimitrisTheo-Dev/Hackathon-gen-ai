@@ -39,6 +39,7 @@ corepack pnpm test:ui
 - `apps/web/src/data/client.ts`: one typed interface; `live.ts` is the route adapter.
 - `packages/public-api`: public read-only discovery API and OpenAPI. It reports what the current deployment has configured; it is separate from the authenticated domain API.
 - `packages/cli`: repository CLI for public reads and local plan validation. Run `corepack pnpm --silent castroom --help`.
+- `apps/web/src/likeness` + `packages/engine/src/likeness.ts`: "Scan my face" at `/face-scan/` — a guided face scan (head turns tracked on-device by MediaPipe), three phrases read aloud and followed by live transcription, and a spoken consent. Recordings go from the browser straight to private R2 (`FACEFUL_R2_*`); the consent is a row in `likeness_consents`. It is the only page whose headers allow the camera and microphone (`vercel.json`).
 - `apps/claude-runner`: Claude Code on your own VPS with your Claude subscription; the page is `/claude-login-test/`. See its README.
 - `docs/product/contract-handoff.md`: the earlier proposal, kept for history; `INTEGRATION_CONTRACTS.md` is the working contract.
 - `docs/demo/verification.md`: executed checks and live acceptance gaps.

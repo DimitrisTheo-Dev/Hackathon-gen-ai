@@ -7,12 +7,13 @@ import type { StudioClient } from "./data/client";
 import { createLiveClient } from "./data/live";
 const Studio = lazy(() => import("./views/Studio").then((m) => ({ default: m.Studio })));
 const OAuthConsent = lazy(() => import("./views/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
+const FaceScanPage = lazy(() => import("./likeness/FaceScanPage"));
 import { Mark, Notice } from "./components/ui";
 import { boot } from "./components/ShellSkeleton";
 
 declare const __FIXTURE_ENABLED__: boolean;
 
-/** Quiet full-screen state while an agent's connection request is checked. The studio itself never uses it:
+/** Quiet full-screen state while an agent's connection request is checked or the face scan opens. The studio itself never uses it:
  *  its one loading visual is the shell skeleton (components/ShellSkeleton.tsx). */
 function Entering({ label }: { label: string }) {
   return (
@@ -84,13 +85,15 @@ export default function AuthApp() {
   const verifySecondsRemaining = Math.max(0, Math.ceil((verifyRetryAt - now) / 1000));
   // An external agent's OAuth request lands here; the person signs in (if needed) and answers it.
   const isConsent = location.pathname.startsWith("/oauth/consent");
-  const isStudio = location.pathname.startsWith("/studio") || isFixture || isConsent;
+  // The likeness capture ("Scan my face") is its own page; it shares this sign-in and nothing else.
+  const isFaceScan = location.pathname.startsWith("/face-scan");
+  const isStudio = location.pathname.startsWith("/studio") || isFixture || isConsent || isFaceScan;
   const step = session ? "stuck" : pendingEmail ? "code" : "email";
   // The session has arrived and its client is created by the next effect; nothing else may flash in between.
-  const openingStudio = Boolean(session) && !client && !error && !isConsent && isStudio;
+  const openingStudio = Boolean(session) && !client && !error && !isConsent && !isFaceScan && isStudio;
   // One continuous skeleton from first paint until the studio is complete: while a stored session is restored,
-  // while the studio's code and data load, and after an interactive sign-in.
-  const covering = isStudio && !isConsent && (client ? !studioReady : loading ? boot.expectsStudio() : openingStudio);
+  // while the studio's code and data load, and after an interactive sign-in. Never over the consent page or the face scan.
+  const covering = isStudio && !isConsent && !isFaceScan && (client ? !studioReady : loading ? boot.expectsStudio() : openingStudio);
   useLayoutEffect(() => { boot.cover(covering); }, [covering]);
   useEffect(() => { if (!client) setStudioReady(false); }, [client]);
 
@@ -157,7 +160,7 @@ export default function AuthApp() {
   }, []);
 
   useEffect(() => {
-    if (!session || isFixture || isConsent) return;
+    if (!session || isFixture || isConsent || isFaceScan) return;
     // Same-origin by default: the studio and its API ship as one deployment. No fixture is ever substituted.
     const origin = import.meta.env.VITE_CASTROOM_API_URL || location.origin;
     if (origin)
@@ -169,7 +172,7 @@ export default function AuthApp() {
       } catch {
         setError("The studio API is not configured correctly. Contact the workspace owner.");
       }
-  }, [session, isFixture, isConsent]);
+  }, [session, isFixture, isConsent, isFaceScan]);
 
   // Each step hands focus to its one field, so the keyboard never has to hunt for it.
   useEffect(() => {
@@ -184,8 +187,8 @@ export default function AuthApp() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        // Return to the consent request when there is one; otherwise to the studio.
-        options: { redirectTo: isConsent ? location.href : `${location.origin}/studio/` },
+        // Return to the consent request or the face scan when that is where sign-in started; otherwise to the studio.
+        options: { redirectTo: isConsent || isFaceScan ? location.href : `${location.origin}/studio/` },
       });
       if (error) throw error;
       // The browser is leaving for Google. The button stays busy until it does.
@@ -257,6 +260,12 @@ export default function AuthApp() {
         <OAuthConsent authorizationId={new URLSearchParams(location.search).get("authorization_id") ?? ""} email={session.user.email ?? null} onSignOut={() => void signOut()} />
       </Suspense>
     );
+  if (isFaceScan && session)
+    return (
+      <Suspense fallback={<Entering label="Opening the face scan…" />}>
+        <FaceScanPage session={session} />
+      </Suspense>
+    );
   if (client)
     return <>
       {error && <div className="auth-feedback"><Notice error>{error}</Notice></div>}
@@ -267,6 +276,7 @@ export default function AuthApp() {
       </StudioBoundary>
     </>;
   if (loading && isConsent) return <Entering label="Opening your workspace…" />;
+  if (loading && isFaceScan) return <Entering label="Opening the face scan…" />;
   // The shell skeleton is over the page; rendering anything here would only flash underneath it.
   if (loading || openingStudio) return null;
 
@@ -338,8 +348,9 @@ export default function AuthApp() {
               <button className="ob-link" type="button" disabled={busy !== null} onClick={changeEmail}>Use a different email</button>
             </div>
           </> : <>
-            <h1><Mark />{isConsent ? "Sign in to connect your agent" : "Sign in to Faceful"}</h1>
+            <h1><Mark />{isConsent ? "Sign in to connect your agent" : isFaceScan ? "Sign in to scan your face" : "Sign in to Faceful"}</h1>
             {isConsent && <p className="ob-sub">An application asked to work in your workspace. Sign in to review its request.</p>}
+            {isFaceScan && <p className="ob-sub">Your scan and spoken consent are saved privately to your own workspace.</p>}
             <button className="ob-button ob-button-primary ob-google" type="button" disabled={busy !== null || !supabase} onClick={() => void signInWithGoogle()}>
               <span className="ob-google-chip">{busy === "google" ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <GoogleMark />}</span>
               {busy === "google" ? "Opening Google…" : "Continue with Google"}

@@ -65,6 +65,12 @@ export interface EngineConfig {
   avatarLanguages: string[];
   humanlikeApiKey: string | null;
   humanlikeApiUrl: string;
+  /**
+   * Signs single-use tokens for Humanlike's live transcription socket (`/transcribe/live`); it is the key
+   * Humanlike's server holds as TRANSCRIBE_ADMIN_KEY. Null when not configured: the likeness capture then
+   * falls back to the browser's own speech recognition.
+   */
+  humanlikeTranscribeKey: string | null;
   cronSecret: string | null;
   stripe: StripeConfig | null;
   /** Why billing is unavailable, in words safe to show an owner. Null when configured. */
@@ -77,6 +83,8 @@ export interface EngineConfig {
   /** Model-backed director turns allowed per organization per 24 hours. */
   directorDailyTurns: number;
   mediaUrlTtlSeconds: number;
+  /** Cloudflare R2 bucket for private files (likeness recordings and consent manifests). Null when not configured. */
+  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string } | null;
   /**
    * Whether forwarded headers (`x-forwarded-for`, `x-forwarded-host`, `x-forwarded-proto`) were set by a proxy we
    * trust. True on Vercel, whose edge overwrites them; false elsewhere unless TRUST_PROXY_HEADERS says otherwise.
@@ -92,6 +100,18 @@ const avatarsSchema = z.array(
 function integer(value: string | undefined, fallback: number, min: number, max: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+
+function r2From(env: Record<string, string | undefined>): EngineConfig["r2"] {
+  const accountId = env.FACEFUL_R2_ACCOUNT_ID?.trim();
+  const accessKeyId = env.FACEFUL_R2_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = env.FACEFUL_R2_SECRET_ACCESS_KEY?.trim();
+  if (!accountId || !accessKeyId || !secretAccessKey) return null;
+  if (!/^[a-f0-9]{32}$/.test(accountId)) {
+    console.error(JSON.stringify({ level: "error", event: "config_invalid", key: "FACEFUL_R2_ACCOUNT_ID" }));
+    return null;
+  }
+  return { accountId, accessKeyId, secretAccessKey, bucket: env.FACEFUL_R2_BUCKET?.trim() || "faceful-media" };
 }
 
 function stripeFrom(env: Record<string, string | undefined>): { stripe: StripeConfig | null; problem: string | null } {
@@ -204,6 +224,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     avatarLanguages: (env.AVATAR_LANGUAGES ?? "en,el").split(",").map((value) => value.trim()).filter(Boolean),
     humanlikeApiKey: env.HUMANLIKE_API_KEY?.trim().startsWith("hk_live_") ? env.HUMANLIKE_API_KEY.trim() : null,
     humanlikeApiUrl: humanlikeUrlFrom(env.HUMANLIKE_API_URL),
+    humanlikeTranscribeKey: env.HUMANLIKE_TRANSCRIBE_KEY && env.HUMANLIKE_TRANSCRIBE_KEY.trim().length >= 16 ? env.HUMANLIKE_TRANSCRIBE_KEY.trim() : null,
     cronSecret: env.CRON_SECRET?.trim() || null,
     stripe,
     stripeProblem: problem,
@@ -212,6 +233,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     youtubeProblem: channels.problem,
     directorDailyTurns: integer(env.DIRECTOR_DAILY_TURNS, 100, 1, 10_000),
     mediaUrlTtlSeconds: 3600,
+    r2: r2From(env),
     trustProxyHeaders,
     rateLimit: rateLimitFrom(env, trustProxyHeaders),
   };
