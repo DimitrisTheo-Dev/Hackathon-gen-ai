@@ -589,6 +589,9 @@ export function Editor({
           </div>
         ))}
 
+        {(isVideo && !avatar) || !times.length || !value.variants.some((variant) => variant.accountId) || reviewValue.tone === "attention" ? (
+          <p className="detail-key"><span className="detail-need" aria-hidden="true">Needed</span> marks what this video still needs before it can render or be scheduled. The other rows are optional.</p>
+        ) : null}
         <div className="detail-list">
           <DetailSection {...section("guidance")} label="Guidance" value={guidanceValue}>
             {context.brand.rules.length > 0 ? (
@@ -640,6 +643,7 @@ export function Editor({
             <DetailSection
               {...section("review")}
               label="Review"
+              need={reviewValue.tone === "attention" ? "Needed before scheduling" : null}
               value={
                 <>
                   {reviewValue.tone !== "none" && <span className="cr-dot" data-tone={reviewValue.tone} aria-hidden="true" />}
@@ -662,7 +666,7 @@ export function Editor({
             </DetailSection>
           )}
 
-          <DetailSection {...section("presenter")} label="Presenter & style" value={presenterValue}>
+          <DetailSection {...section("presenter")} label="Presenter & style" value={presenterValue} need={isVideo && !avatar ? "Needed to render" : null}>
             {!isVideo && (
               <p>
                 Presenter controls apply to avatar videos. This format has no
@@ -797,6 +801,7 @@ export function Editor({
           <DetailSection
             {...section("channels")}
             label="Channels"
+            need={value.variants.some((variant) => variant.accountId) ? null : "Needed to schedule"}
             value={
               value.variants.length ? (
                 <>
@@ -960,7 +965,7 @@ export function Editor({
             )}
           </DetailSection>
 
-          <DetailSection {...section("schedule")} label="Posting times" value={scheduleValue}>
+          <DetailSection {...section("schedule")} label="Posting times" value={scheduleValue} need={times.length ? null : "Needed to schedule"}>
             {value.variants.length === 0 && (
               <p>This item has no channel to schedule.</p>
             )}

@@ -11,6 +11,7 @@ export function DetailSection({
   id,
   label,
   value,
+  need,
   open,
   instant = false,
   onToggle,
@@ -19,6 +20,8 @@ export function DetailSection({
   id: string;
   label: string;
   value?: ReactNode;
+  /** Set when this row must be done before the draft can go further; the text says what for ("Needed to render"). */
+  need?: string | null;
   open: boolean;
   instant?: boolean;
   onToggle: (viaKeyboard: boolean) => void;
@@ -33,13 +36,14 @@ export function DetailSection({
             id={`${id}-trigger`}
             aria-expanded={open}
             aria-controls={open ? `${id}-panel` : undefined}
-            aria-describedby={value ? `${id}-value` : undefined}
+            aria-describedby={[need ? `${id}-need` : "", value ? `${id}-value` : ""].filter(Boolean).join(" ") || undefined}
             // A click with no pointer detail came from Enter or Space.
             onClick={(event) => onToggle(event.detail === 0)}
           >
             {label}
           </button>
         </h3>
+        {need && <span className="detail-need" id={`${id}-need`} title={need}><span aria-hidden="true">Needed</span><span className="sr-only">{need}</span></span>}
         {value && (
           <span className="detail-value" id={`${id}-value`}>
             {value}
