@@ -136,13 +136,17 @@ export async function prepareSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown):
       }
     }
     const createdAt = deps.now();
+    const hash = sha256Hex(canonical({ projectId: project.id, revision: project.revision, entries }));
+    // An approval already given to this exact schedule still stands: hand that manifest back instead of a fresh one.
+    const [approved] = await deps.store.select("schedule_manifests", { org_id: ctx.org.id, project_id: project.id, hash, state: "approved", expires_at: { gte: createdAt.toISOString() } }, { order: ["created_at", "desc"], limit: 1 });
+    if (approved && entries.length) return manifestContract(approved);
     const row = await deps.store.insert("schedule_manifests", {
       id: crypto.randomUUID(),
       org_id: ctx.org.id,
       project_id: project.id,
       project_revision: project.revision,
       // The hash binds approval to these exact versions, files, accounts, times and copy.
-      hash: sha256Hex(canonical({ projectId: project.id, revision: project.revision, entries })),
+      hash,
       entries,
       blockers,
       state: "required",
