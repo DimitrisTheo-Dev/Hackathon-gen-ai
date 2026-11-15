@@ -46,23 +46,32 @@
   .video-feedback .notice .text-button {
     margin-inline-start: 10px;
   }
+  /* Editor layout: preview top-left, the inspector beside it (scrolling within the preview's height), and the
+     timeline across the full width below both, so it is always one glance away from the preview. */
   .video-body {
+    --stage-height: min(58vh, 600px);
     display: grid;
-    grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
-    gap: 28px;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "stage inspector" "timeline timeline";
+    gap: 20px 28px;
     align-items: start;
   }
   .video-stage {
-    position: sticky;
-    top: 12px;
+    grid-area: stage;
     display: flex;
     flex-direction: column;
     gap: 12px;
     min-inline-size: 0;
   }
+  .video-timeline {
+    grid-area: timeline;
+    display: grid;
+    gap: 8px;
+    min-inline-size: 0;
+  }
   .video-player-frame {
     /* Short enough that the player and timeline fit together once the stage sticks. */
-    block-size: min(58vh, 600px);
+    block-size: var(--stage-height);
     aspect-ratio: 9 / 16;
     max-inline-size: 100%;
     margin-inline: auto;
@@ -222,15 +231,31 @@
 
   /* Inspector */
   .video-inspector {
+    grid-area: inspector;
     display: flex;
     flex-direction: column;
     gap: 14px;
     min-inline-size: 0;
+    max-block-size: var(--stage-height);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-inline-end: 4px;
+    scroll-padding-block-start: 56px;
   }
+  /* One row of tabs that scrolls sideways when narrow, pinned while the inspector scrolls. */
   .video-tabs {
-    align-self: flex-start;
-    flex-wrap: wrap;
+    position: sticky;
+    z-index: 2;
+    inset-block-start: 0;
+    align-self: stretch;
+    flex: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    box-shadow: 0 8px 12px -10px rgba(42, 42, 39, 0.18);
   }
+  .video-tabs::-webkit-scrollbar { display: none; }
+  .video-tabs > button { flex: none; white-space: nowrap; }
   .tab-count {
     margin-inline-start: 2px;
     font-size: 11px;
@@ -269,12 +294,12 @@
   .clip-row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
+    gap: 12px;
+    padding: 12px 14px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
     background: var(--surface);
-    scroll-margin: 16px;
+    scroll-margin: 64px;
   }
   .clip-row.selected {
     border-color: var(--accent);
@@ -293,6 +318,9 @@
     gap: 10px;
     flex-wrap: wrap;
   }
+  /* Fields share one rhythm: label above, 36px controls, equal widths that grow with the panel. */
+  .clip-times > .time-field { flex: 1 1 0; min-inline-size: 72px; }
+  .clip-row :is(input:not([type="range"]):not([type="checkbox"]):not([type="color"]), select) { box-sizing: border-box; min-block-size: 36px; padding: 6px 10px; border-radius: 9px; font-size: 13px; }
   .clip-seek {
     display: inline-flex;
     align-items: center;
@@ -310,9 +338,11 @@
   }
   .clip-fields {
     display: flex;
-    gap: 8px;
+    gap: 10px 12px;
     flex-wrap: wrap;
   }
+  .clip-fields > :is(.select-field, .range-field, .transition-field, .time-field) { flex: 1 1 140px; min-inline-size: 0; }
+  .clip-fields .select-field select, .clip-fields .time-field input { inline-size: 100%; }
   .clip-fields > select {
     flex: none;
   }
@@ -330,8 +360,13 @@
     font-size: 11px;
     color: var(--muted);
   }
+  .time-field > span, .range-field > span, .select-field > span, .transition-field > span, .color-field > span {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
   .time-field input {
-    inline-size: 88px;
+    inline-size: 100%;
     padding: 6px 8px;
     font-variant-numeric: tabular-nums;
   }
@@ -341,14 +376,19 @@
     padding: 2px;
   }
   .range-field input {
-    inline-size: 180px;
-    accent-color: var(--accent);
+    inline-size: 100%;
+    min-block-size: 36px;
+    accent-color: var(--ink);
   }
   .link-form {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    padding: 10px;
+    border: 1px dashed #D3D0C6;
+    border-radius: 12px;
   }
+  .link-form :is(input, select, .button) { min-block-size: 38px; }
   .link-form input {
     flex: 1 1 240px;
     min-inline-size: 0;
@@ -383,15 +423,16 @@
     flex-wrap: wrap;
   }
   .track-heading {
-    margin-block-start: 6px;
-    font-size: 12px;
+    margin-block-start: 8px;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--ink-secondary);
+    color: var(--ink);
   }
   .clip-source {
     overflow: hidden;
-    font-size: 12px;
-    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 550;
+    color: var(--ink-secondary, var(--ink));
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -409,8 +450,9 @@
     display: flex;
     gap: 6px;
   }
+  .transition-field > div > select { flex: 1 1 auto; min-inline-size: 0; }
   .transition-field input {
-    inline-size: 70px;
+    inline-size: 72px;
     padding: 6px 8px;
   }
   .check-field {
@@ -576,14 +618,16 @@
     .video-studio {
       padding: 16px;
     }
+    /* One column on tablets and phones: watch, then the timeline, then edit. */
     .video-body {
+      --stage-height: min(60vh, 560px);
       grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "stage" "timeline" "inspector";
     }
-    .video-stage {
-      position: static;
-    }
-    .video-player-frame {
-      block-size: min(60vh, 560px);
+    .video-inspector {
+      max-block-size: none;
+      overflow: visible;
+      padding-inline-end: 0;
     }
   }
 }

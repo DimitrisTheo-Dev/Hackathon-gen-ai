@@ -443,6 +443,9 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                 errorFallback={() => <div className="video-player-error">The preview could not draw this frame. Check the last change.</div>}
               />
             </div>
+          </section>
+          {/* The timeline runs the full width under the preview and the inspector, the way an editor's does. */}
+          <section className="video-timeline" aria-label="Timeline">
             <Timeline composition={composition} playerRef={playerRef} selection={selection} labelFor={labelFor} onSelect={select} />
             <p className="video-note">1080 × 1920 · {composition.fps} fps · {model.timeLabel(composition.durationSeconds)}. The preview and the MP4 render draw the same frames.</p>
           </section>
@@ -485,16 +488,22 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                         <div className="clip-source">{clip.layer === 0 ? "Main picture" : "Overlay"} · {clip.media === "image" ? "Image" : "Video"} · {sourceName(clip.source)}</div>
                         <div className="clip-times">{times("video", clip, clip.media === "video")}{remove("video", clip.id, `video clip ${index + 1}`)}</div>
                         <div className="clip-fields">
-                          <select aria-label="Layer" value={clip.layer} disabled={readOnly} onChange={(event) => set({ layer: Number(event.target.value) as 0 | 1, layout: Number(event.target.value) === 0 ? "full" : clip.layout })}>
-                            <option value={0}>Main picture</option>
-                            <option value={1}>Overlay</option>
-                          </select>
-                          {clip.layer === 1 && (
-                            <select aria-label="Layout" value={clip.layout} disabled={readOnly} onChange={(event) => set({ layout: event.target.value as VideoClip["layout"] })}>
-                              <option value="split">Split screen</option>
-                              <option value="full">Full frame</option>
-                              <option value="window">Window</option>
+                          <label className="select-field">
+                            <span>Layer</span>
+                            <select value={clip.layer} disabled={readOnly} onChange={(event) => set({ layer: Number(event.target.value) as 0 | 1, layout: Number(event.target.value) === 0 ? "full" : clip.layout })}>
+                              <option value={0}>Main picture</option>
+                              <option value={1}>Overlay</option>
                             </select>
+                          </label>
+                          {clip.layer === 1 && (
+                            <label className="select-field">
+                              <span>Layout</span>
+                              <select value={clip.layout} disabled={readOnly} onChange={(event) => set({ layout: event.target.value as VideoClip["layout"] })}>
+                                <option value="split">Split screen</option>
+                                <option value="full">Full frame</option>
+                                <option value="window">Window</option>
+                              </select>
+                            </label>
                           )}
                           {clip.media === "video" && <RangeField label="Sound" value={clip.volume} disabled={readOnly} onChange={(volume) => set({ volume })} />}
                         </div>
@@ -523,11 +532,14 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                         <div className="clip-source">{clip.role === "sfx" ? "SFX" : clip.role === "voice" ? "Voice" : "Music"} · {sourceName(clip.source)}</div>
                         <div className="clip-times">{times("audio", clip, true)}{remove("audio", clip.id, `audio clip ${index + 1}`)}</div>
                         <div className="clip-fields">
-                          <select aria-label="Role" value={clip.role} disabled={readOnly} onChange={(event) => set({ role: event.target.value as AudioClip["role"] })}>
-                            <option value="voice">Voice</option>
-                            <option value="music">Music</option>
-                            <option value="sfx">Sound effect</option>
-                          </select>
+                          <label className="select-field">
+                            <span>Role</span>
+                            <select value={clip.role} disabled={readOnly} onChange={(event) => set({ role: event.target.value as AudioClip["role"] })}>
+                              <option value="voice">Voice</option>
+                              <option value="music">Music</option>
+                              <option value="sfx">Sound effect</option>
+                            </select>
+                          </label>
                           <RangeField label="Volume" value={clip.volume} disabled={readOnly} onChange={(volume) => set({ volume })} />
                           <TimeField label="Fade in (s)" value={clip.fadeIn} max={10} disabled={readOnly} onChange={(fadeIn) => set({ fadeIn })} />
                           <TimeField label="Fade out (s)" value={clip.fadeOut} max={10} disabled={readOnly} onChange={(fadeOut) => set({ fadeOut })} />
