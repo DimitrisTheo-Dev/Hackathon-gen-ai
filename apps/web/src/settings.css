@@ -1,0 +1,58 @@
+/*
+ * Settings (views/Settings.tsx). The page frame matches Billing (onboarding.css); cards, chips, the confirmation
+ * and the status line are the channel ones (channels.css). Only rows and the credentials form are new.
+ */
+@layer views {
+  .settings-view {
+    box-sizing: border-box; inline-size: min(760px, calc(100% - 48px)); margin-inline: auto;
+    padding: clamp(28px, 6vh, 64px) 0 48px; display: grid; gap: 24px; align-content: start;
+  }
+  .settings-view h1 { margin: 0; font-size: clamp(26px, 4vw, 32px); font-weight: 550; line-height: 1.1; letter-spacing: -0.03em; text-wrap: balance; }
+  .settings-panel { display: grid; gap: 28px; }
+  .settings-view .channels { max-inline-size: none; }
+
+  /* One row per account or address: icon, what it is, its state, its actions. */
+  .settings-rows { list-style: none; display: grid; gap: 6px; margin: 0; padding: 0; }
+  .settings-rows > li {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 12px;
+    padding: 10px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--elev-1);
+  }
+  .settings-row-body { display: grid; gap: 1px; min-inline-size: 0; }
+  .settings-row-body strong, .settings-row-body a { font-size: 13.5px; font-weight: 550; line-height: 1.35; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .settings-row-body a { text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; justify-self: start; max-inline-size: 100%; }
+  .settings-row-body span { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); overflow-wrap: anywhere; }
+  .settings-row-side { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 12px; }
+  .settings-row-side .text-button { min-block-size: 32px; padding: 0; font-size: 12.5px; color: var(--text-secondary); }
+  .settings-empty { margin: 0; padding: 14px 12px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 55%, var(--background)); font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  .settings-skeleton { display: block; block-size: 52px; border-radius: 14px; background: rgba(42,42,39,.05); }
+
+  /* Whether the account's activity comes in: connected on its own, nothing to set up. */
+  .settings-row-body .settings-activity { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+  .settings-activity[data-state="on"] svg { color: var(--positive-ink); }
+
+  /* Credentials for a provider (a Buffer API key): one field, its hint, two buttons. */
+  .settings-form { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .settings-form > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+  .settings-form .button { min-block-size: 36px; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .settings-row-side .text-button:hover { color: var(--ink); }
+    .settings-row-body a:hover { text-decoration-color: currentColor; }
+  }
+  @media (pointer: coarse) {
+    .settings-row-side .text-button { min-block-size: 44px; }
+    .settings-form .button { min-block-size: 44px; flex: 1; }
+  }
+  @media (max-width: 640px) {
+    .settings-view { inline-size: calc(100% - 32px); }
+    /* The state and actions drop under the name instead of squeezing it. */
+    .settings-rows > li { grid-template-columns: auto minmax(0, 1fr); }
+    .settings-row-side { grid-column: 2; justify-content: flex-start; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .settings-skeleton { animation: skeleton-breathe 1.4s ease-in-out infinite alternate; }
+  }
+  @media (prefers-contrast: more) {
+    .settings-rows > li, .settings-form { box-shadow: 0 0 0 1px var(--ink); }
+  }
+}
