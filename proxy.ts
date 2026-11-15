@@ -71,6 +71,116 @@ export default function proxy(request: Request): Response {
     return response;
   }
   if (files.has(path)) return next();
-  if (wantsMd) return markdownResponse(request, "# Page not found\n\nThis public page is not available. See [Faceful documentation](/docs/) or the [agent index](/llms.txt).\n",404);
-  return new Response(request.method === "HEAD" ? null : '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/design.css"><link rel="stylesheet" href="/docs/docs.css"><title>Page not found · Faceful</title></head><body><main><h1>Page not found</h1><p>This public page is not available. Start with our public documentation to find supported routes and current capabilities.</p><a href="/docs/">Faceful documentation</a> · <a href="/llms.txt">Agent index</a></main></body></html>', { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", Vary: "Accept", "Cache-Control": "no-store", Link: publicDiscoveryLinkHeader } });
+  const suggestion = closestPage(normalized);
+  if (wantsMd) return markdownResponse(request, notFoundMarkdown(path, suggestion), 404);
+  return new Response(request.method === "HEAD" ? null : notFoundHtml(path, suggestion), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", Vary: "Accept", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", Link: publicDiscoveryLinkHeader } });
+}
+
+/* ── 404 ──────────────────────────────────────────────────────────────────────────────────────── */
+
+/** Where a lost person or agent can go next. Every entry is a real, public route on this origin. */
+const agentRoutes: Array<[path: string, what: string]> = [
+  ["/llms.txt", "Agent instructions"],
+  ["/api/public/status", "What this deployment has configured"],
+  ["/openapi.json", "Public API, OpenAPI 3.1"],
+  ["/docs/mcp/", "Connect over MCP"],
+  ["/.well-known/mcp/server-card.json", "MCP server card"],
+];
+const suggestable = [...new Set([...publicPages, "/about/", "/contact/", "/privacy/", "/studio/", "/pitch/"])];
+
+function distance(a: string, b: string) {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    let previous = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const kept = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
+      previous = kept;
+    }
+  }
+  return row[b.length];
+}
+/** The public page a mistyped address most likely meant, or null when nothing is close. */
+export function closestPage(path: string): string | null {
+  const wanted = path.toLowerCase().replace(/\/+$/, "");
+  if (!wanted || wanted.length > 80) return null;
+  let best: { page: string; score: number } | null = null;
+  for (const page of suggestable) {
+    const candidate = page.replace(/\/+$/, "");
+    const score = distance(wanted, candidate);
+    if (score <= Math.max(2, Math.floor(candidate.length / 4)) && (!best || score < best.score)) best = { page, score };
+  }
+  return best?.page ?? null;
+}
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+const shown = (path: string) => (path.length > 64 ? `${path.slice(0, 61)}…` : path);
+
+function notFoundMarkdown(path: string, suggestion: string | null) {
+  return [
+    "# Page not found",
+    "",
+    `Nothing is published at \`${shown(path).replace(/`/g, "")}\` on this origin.${suggestion ? ` Did you mean [${suggestion}](${suggestion})?` : ""}`,
+    "",
+    "## For agents",
+    ...agentRoutes.map(([route, what]) => `- [${what}](${route})`),
+    "",
+    "Private studio routes (`/studio/`) require a signed-in person. The domain API is under `/v1`, the MCP endpoint is `/mcp`.",
+    "",
+  ].join("\n");
+}
+
+function notFoundHtml(path: string, suggestion: string | null) {
+  const routes = agentRoutes.map(([route, what]) => `<li><a href="${route}"><code>${route}</code><span>${what}</span></a></li>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><meta name="theme-color" content="#FAFAF7"><title>Page not found · Faceful</title><link rel="icon" href="/favicon.svg"><link rel="alternate" type="text/markdown" href="/llms.txt" title="Agent instructions">
+<style>
+@font-face{font-family:InterVariable;src:url(/fonts/InterVariable.woff2) format("woff2");font-weight:100 900;font-display:swap}
+:root{color-scheme:light;--ink:#2A2A27;--muted:#6E6C66;--faint:#75736C;--bg:#FAFAF7;--surface:#FFFFFF;--line:#E4E2DA;--subtle:#F1F0EB;--gold:#FFB000;--gold-edge:#B47A00;--ease:cubic-bezier(.23,1,.32,1)}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{min-height:100dvh;display:grid;place-items:center;padding:max(40px,env(safe-area-inset-top)) 16px max(40px,env(safe-area-inset-bottom));background:var(--bg);color:var(--ink);font:16px/1.55 InterVariable,Inter,system-ui,-apple-system,"Segoe UI",sans-serif;font-feature-settings:"cv11","ss01";-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:-20vh -10vw auto;height:70vh;background:url(/art/grainient-sunlit.webp) center/cover;opacity:.55;filter:saturate(1.05);-webkit-mask-image:radial-gradient(ellipse 60% 60% at 50% 0%,#000 0%,transparent 72%);mask-image:radial-gradient(ellipse 60% 60% at 50% 0%,#000 0%,transparent 72%);pointer-events:none;z-index:-1}
+main{width:100%;max-width:34rem;animation:rise .6s var(--ease) both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+@media (prefers-reduced-motion:reduce){main{animation:none}}
+.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;font-weight:600;letter-spacing:-.01em}
+.brand svg{width:32px;height:32px;border-radius:9px}
+.code{margin:48px 0 0;color:var(--ink);font-size:clamp(4.5rem,18vw,7.5rem);line-height:.9;font-weight:650;letter-spacing:-.06em;font-variant-numeric:tabular-nums}
+.code span{background:linear-gradient(transparent 62%,rgba(255,176,0,.38) 62% 90%,transparent 90%)}
+h1{margin:20px 0 8px;font-size:1.625rem;line-height:1.15;font-weight:600;letter-spacing:-.025em;text-wrap:balance}
+p{margin:0;color:var(--muted);text-wrap:pretty}
+.path{display:inline-block;max-width:100%;margin-top:14px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);overflow-wrap:anywhere}
+.suggest{margin-top:18px;color:var(--ink)}
+.suggest a{color:var(--ink);font-weight:600;text-decoration-color:var(--gold-edge);text-underline-offset:3px;text-decoration-thickness:2px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
+.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;font-weight:550;text-decoration:none;touch-action:manipulation;transition:transform .12s var(--ease),background-color .16s var(--ease)}
+.button:active{transform:scale(.97)}
+.primary{background:var(--ink);color:var(--bg)}
+.primary:hover{background:#141413}
+.secondary{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.secondary:hover{background:var(--subtle)}
+section{margin-top:44px;padding:20px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+h2{margin:0 0 4px;font-size:.8125rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+section>p{font-size:.9375rem}
+ul{list-style:none;margin:14px 0 0;padding:0}
+li+li{border-top:1px solid var(--line)}
+li a{display:flex;align-items:baseline;justify-content:space-between;gap:16px;min-height:44px;padding:10px 2px;color:var(--ink);text-decoration:none}
+li a:hover code{text-decoration:underline;text-decoration-color:var(--gold-edge);text-underline-offset:3px}
+li code{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+li span{flex:none;color:var(--muted);font-size:.875rem;text-align:right}
+.hint{margin-top:14px;font-size:.8125rem;color:var(--faint)}
+.hint code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink)}
+a:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:8px}
+.button:focus-visible{border-radius:999px}
+@media (max-width:480px){li a{flex-direction:column;gap:2px}li span{text-align:left}}
+</style></head><body><main>
+<a class="brand" href="/"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#F1F0EB"/><g fill="#2A2A27" transform="rotate(-9 24 24)"><rect x="12" y="15" width="6" height="23" rx="3"/><rect x="22" y="8" width="6" height="31" rx="3"/><rect x="32" y="18" width="6" height="16" rx="3"/></g></svg>Faceful</a>
+<p class="code" aria-hidden="true"><span>404</span></p>
+<h1>This page isn’t here</h1>
+<p>Nothing is published at this address. It may have moved, or the link was mistyped.</p>
+<code class="path">${escapeHtml(shown(path))}</code>
+${suggestion ? `<p class="suggest">Did you mean <a href="${suggestion}">${suggestion}</a>?</p>` : ""}
+<div class="actions"><a class="button primary" href="/studio/">Open the studio</a><a class="button secondary" href="/docs/">Read the docs</a></div>
+<section aria-labelledby="agents"><h2 id="agents">For agents</h2><p>Machine-readable entry points on this origin. None need credentials.</p><ul>${routes}</ul><p class="hint">Send <code>Accept: text/markdown</code> to get this page as Markdown. The domain API is under <code>/v1</code>, MCP at <code>/mcp</code>.</p></section>
+</main></body></html>`;
 }
