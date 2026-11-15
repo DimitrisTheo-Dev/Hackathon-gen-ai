@@ -76,7 +76,7 @@ export function deploymentFacts(env: PublicEnv): DeploymentFacts {
     engine,
     rendering: engine && value("RENDER_WORKER_TOKEN").length >= 32,
     billing: engine && stripeSandbox ? "sandbox" : "not_configured",
-    director: engine && Boolean(value("ANTHROPIC_API_KEY") || value("AI_GATEWAY_API_KEY")) ? "ai" : "basic",
+    director: engine && Boolean(value("ANTHROPIC_API_KEY") || value("GEMINI_API_KEY") || value("AI_GATEWAY_API_KEY")) ? "ai" : "basic",
   };
 }
 function runtimeEnv(): PublicEnv {

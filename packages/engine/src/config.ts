@@ -14,11 +14,13 @@ export interface StripeConfig {
   creditsPerPeriod: Record<string, number>;
 }
 export interface LlmConfig {
-  provider: "anthropic" | "gateway";
+  provider: "anthropic" | "gateway" | "gemini";
   /** Null means "use the deployment's Vercel OIDC token" (AI Gateway only). */
   apiKey: string | null;
   model: string;
 }
+/** Gemini model the director uses when DIRECTOR_MODEL is unset. */
+export const DEFAULT_GEMINI_MODEL = "gemini-4-hydrogen";
 export interface YoutubeConfig {
   clientId: string;
   clientSecret: string;
@@ -157,6 +159,17 @@ function stripeFrom(env: Record<string, string | undefined>): { stripe: StripeCo
 
 function llmFrom(env: Record<string, string | undefined>): LlmConfig | null {
   const anthropic = env.ANTHROPIC_API_KEY?.trim();
+  const gemini = env.GEMINI_API_KEY?.trim();
+  // Google's Gemini API, called directly with a Gemini API key. Chosen when it is the only model key, or by name.
+  if (gemini && (!anthropic || env.DIRECTOR_PROVIDER?.trim() === "gemini")) {
+    const model = env.DIRECTOR_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+    // The model name becomes part of the request path, so only plain Gemini model names are accepted.
+    if (!/^[a-z0-9][a-z0-9.-]{0,79}$/.test(model)) {
+      console.error(JSON.stringify({ level: "error", event: "config_invalid", key: "DIRECTOR_MODEL" }));
+      return { provider: "gemini", apiKey: gemini, model: DEFAULT_GEMINI_MODEL };
+    }
+    return { provider: "gemini", apiKey: gemini, model };
+  }
   if (anthropic) return { provider: "anthropic", apiKey: anthropic, model: env.DIRECTOR_MODEL?.trim() || "claude-opus-5-5" };
   // Vercel AI Gateway speaks the same Messages API; its model slugs use dots (anthropic/claude-opus-5.5).
   const gatewayModel = env.DIRECTOR_MODEL?.trim() || "anthropic/claude-opus-5.5";

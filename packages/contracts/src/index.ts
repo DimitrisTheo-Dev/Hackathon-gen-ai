@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productSchema } from "./quality.js";
 
 /** Proposed boundary v0.1. Minas agreement pending; see docs/product/contract-handoff.md. */
 export const httpUrlSchema = z.url({ protocol: /^https?$/ }).refine((value) => {
@@ -230,6 +231,8 @@ export const contextSchema = z.object({
       state: z.enum(["connected", "expired", "unavailable"]),
     }),
   ),
+  /** Brand kit products: photo, description and approved facts. Defaults to [] for engines that predate products. */
+  products: z.array(productSchema).default([]),
   capabilities: z.object({
     mode: z.enum(["live", "fixture"]),
     canCreateCampaign: z.boolean().default(false),
@@ -712,6 +715,8 @@ export const libraryTemplateSchema = z.object({
 export type LibraryTemplate = z.infer<typeof libraryTemplateSchema>;
 /* Video compositions previewed with Remotion. */
 export * from "./composition.js";
+export * from "./quality.js";
+export * from "./quality-rules.js";
 // ── Clone a video: a short video posted on YouTube, TikTok or Instagram becomes the model for a new one. ──
 /** What a clone may borrow from the source video. Only what the person ticks is carried over. */
 export const CLONE_TRAITS = ["structure", "pacing", "transitions", "captions", "graphics", "sound", "music", "voice", "colours"] as const;

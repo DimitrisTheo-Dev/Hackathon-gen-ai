@@ -47,14 +47,13 @@ Everything below is merged (PRs #13 and #14) and live on <https://faceful.vercel
    - Record the voice-over and cut the footage using the cut list, then replace the placeholder link in `SUBMISSION.md`.
    - Blur the demo account's email on Stripe's page in clip 09.
    - Submit by 18:00.
-3. **A model credential.** It turns the first thing a judge types into real drafts. Either `ANTHROPIC_API_KEY` on Vercel, or a card on the Vercel AI Gateway plus `DIRECTOR_PROVIDER=vercel-gateway`. Without it the studio says plainly that AI writing isn't connected and offers the Claude Code hand-off.
+3. **Enable "YouTube Data API v3" on Google Cloud project `741725865286`** (the project that owns the Google sign-in client), then click "Connect YouTube" again. Google consent already works. On 15 Nov both attempts reached the engine and stopped at Google's `accessNotConfigured` when looking up the channel (HTTP 422, "The YouTube Data API is not enabled for this Google project").
 4. **Optional: a real presenter clip for the pitch opening** (Minas, Humanlike). Put it at `apps/web/public/pitch/presenter.mp4` with `presenter.json` stating the true credit. Without it the page uses the drawn presenter, labelled "Illustration".
 5. **Run the two scans I was not permitted to run:**
    - `corepack pnpm dlx is-agentic faceful.vercel.app --json`
    - `corepack pnpm dlx lighthouse@13.6.0 https://faceful.vercel.app/ --preset=desktop`
 6. **Five minutes on a real iPhone and an Android phone:** landing, sign-in, studio, `/pitch`.
-7. **Optional:** click "Connect YouTube" once and enable the YouTube Data API on the Google project.
-8. **Decisions:** the €19 price is a placeholder; whether to connect Minas's runner to Faceful's MCP server (his code was not changed).
+7. **Decisions:** the €19 price is a placeholder; whether to connect Minas's runner to Faceful's MCP server (his code was not changed).
 9. **After the hackathon:** rotate the secrets pasted in chat (Supabase secret key, Google client secret, Stripe sandbox key) and the other server keys (see "Failures found by testing").
 
 ### State to know before presenting
@@ -76,8 +75,8 @@ Labels: **VERIFIED LIVE** — exercised on production with real services. **IMPL
 | Sign-in (email code via Resend, Google) and first-run workspace provisioning | Email code + provisioning: **VERIFIED LIVE** (provisioning through real sessions). Google button: **IMPLEMENTED, NOT VERIFIED LIVE** (provider enabled, Google accepts the redirect; no person has clicked through) | `docs/demo/evidence/engine/smoke-live-supabase.txt` |
 | Domain API on production (`/v1`): projects, drafts, immutable versions, restore, idempotency, tenant isolation, RLS | **VERIFIED LIVE** | 32 live checks; production calls in `evidence/production/` |
 | Studio wired to the engine: first-run composer, labelled sample project, billing view | **VERIFIED LIVE** in a real browser on production with a real session (no console errors) | `evidence/production/studio-*.png` |
-| Studio: prompt → written drafts → docked chat, edit proposals, versions, templates | **IMPLEMENTED, NOT VERIFIED LIVE** (10 browser tests against the real engine logic with an in-memory store and a stubbed model; on production the prompt correctly answers "AI writing isn’t connected") | `tests/browser/live-engine.spec.ts` |
-| AI Creative Director writing drafts from a prompt | **BLOCKED — no model credential.** Runs in honest "basic" mode: finds/opens content, credits, schedule review, exact edits, templates | Add `ANTHROPIC_API_KEY` on Vercel, **or** add a card to the Vercel team's AI Gateway and set `DIRECTOR_PROVIDER=vercel-gateway` (the gateway answered `customer_verification_required`) |
+| Studio: prompt → written drafts → docked chat, edit proposals, versions, templates | Engine path: **VERIFIED LIVE** (real create and edit turns on production, 15 Nov). The studio UI itself: browser tests against the real engine logic with a stubbed model | `evidence/production/director-gemini.md`, `tests/browser/live-engine.spec.ts` |
+| AI Creative Director writing drafts from a prompt | **VERIFIED LIVE** on Gemini (`gemini-4-hydrogen`, `GEMINI_API_KEY` on Vercel). Production: a prompt created 2 drafts in 7.1 s; an edit turn proposed a Greek rewrite in 7.0 s | `evidence/production/director-gemini.md` |
 | Remote MCP server (21 tools: 13 for drafting, rendering, schedule and billing, plus 8 for reel production), scoped workspace tokens | **VERIFIED LIVE** — Claude Code 2.1.325 against production; Codex CLI 0.169.0 and Claude Code against a local engine on the real database | `evidence/production/mcp-and-oauth.md`, `evidence/engine/mcp-client-trials.md` |
 | MCP OAuth 2.1 (discovery, dynamic registration, consent page, PKCE, refresh) | **VERIFIED LIVE with a scripted client**; not yet through a host's own OAuth UI | `evidence/production/mcp-and-oauth.md` |
 | UI ↔ MCP parity (same projects, same rules) | **VERIFIED LIVE**. On 15 Nov, a nine-step Claude Code run against production MCP was followed by the studio showing the same project, credited to the agent, with the same three blockers | `evidence/production/terminal-and-interface-e2e.md` |
@@ -128,16 +127,15 @@ Mocked vs real: Stripe network calls are faked in unit tests (signature verifica
 
 | Needed | Who | Unlocks |
 | --- | --- | --- |
-| A model credential (Anthropic key, or a card on Vercel AI Gateway) | Dimitris | Prompt → written drafts, conversational rewrites, schedule suggestions — the hero flow |
 | Humanlike key + LiveKit + voice + recorder | Minas | Real presenter videos, then scheduling and YouTube upload |
-| One person clicking "Connect YouTube"; YouTube Data API enabled on the Google project | Dimitris / Minas | A real connected channel |
+| "YouTube Data API v3" enabled on Google project `741725865286`, then "Connect YouTube" once | Dimitris | A real connected channel |
 | A phone | anyone | Checking the installed app and touch behaviour |
 | Repository access for judges (it is private) | Dimitris | Judges reading the code |
 | A recorded voice-over and the cut demo video | Dimitris | The submission's demo video |
 
 ## Honest summary
 
-**Working:** accounts and workspaces, the engine and its API, versioned drafting by template or by hand, the agent connection over MCP with tokens and OAuth, credits and Stripe sandbox billing, and the review/approval boundary.
-**Needs credentials or external approval:** AI drafting, presenter-video rendering, YouTube (one consent), Instagram/TikTok.
+**Working:** accounts and workspaces, the engine and its API, AI drafting and edits (Gemini), versioned drafting by template or by hand, the agent connection over MCP with tokens and OAuth, credits and Stripe sandbox billing, and the review/approval boundary.
+**Needs credentials or external approval:** presenter-video rendering, YouTube (enable the YouTube Data API, then one consent), Instagram/TikTok.
 **Known limitations:** five-second polling instead of push; rate limits are per account or connection, not per workspace; OAuth tokens are bound to the Supabase project rather than to `/mcp`; faceful.dtheo.dev remains an alias of the same deployment; everything canonical (docs, OAuth consent, emails, Stripe, MCP) uses faceful.vercel.app.
-**Next best action:** add the model credential — it turns the first thing a judge types into a real result.
+**Next best action:** enable the YouTube Data API on the Google project and connect a channel.

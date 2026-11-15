@@ -6,7 +6,7 @@ Origin: <https://faceful.vercel.app>. Pitch surface: <https://faceful.vercel.app
 
 ## Before the demo (once)
 
-1. **Deploy with server environment variables** (Vercel → Project → Settings → Environment Variables; names in `.env.example`). Minimum for the live studio: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_BASE_URL`, `CRON_SECRET`. For AI drafting add `ANTHROPIC_API_KEY`. For billing add the three `STRIPE_*` values (`STRIPE_SANDBOX_SETUP.md`). For rendering add `RENDER_WORKER_TOKEN` and start the recorder worker (`INTEGRATION_CONTRACTS.md` §7).
+1. **Deploy with server environment variables** (Vercel → Project → Settings → Environment Variables; names in `.env.example`). Minimum for the live studio: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_BASE_URL`, `CRON_SECRET`. For AI drafting add `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`). For billing add the three `STRIPE_*` values (`STRIPE_SANDBOX_SETUP.md`). For rendering add `RENDER_WORKER_TOKEN` and start the recorder worker (`INTEGRATION_CONTRACTS.md` §7).
 2. **Check what is live**: open `<origin>/v1/health`. It reports `director` (`ai`/`basic`), `rendering.connected`, `billing.mode` and `scheduler` for that deployment. Say only what this endpoint confirms.
 3. **Prepare the demo workspace** with the seed script. It goes through the same engine operations the studio uses and touches only that person's personal workspace:
    ```bash
