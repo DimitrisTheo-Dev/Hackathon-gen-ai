@@ -1,6 +1,6 @@
 /*
  * Settings (views/Settings.tsx). The page frame matches Billing (onboarding.css); cards, chips, the confirmation
- * and the status line are the channel ones (channels.css). Only rows, the credentials form and addresses are new.
+ * and the status line are the channel ones (channels.css). Only rows and the credentials form are new.
  */
 @layer views {
   .settings-view {
@@ -26,8 +26,9 @@
   .settings-empty { margin: 0; padding: 14px 12px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 55%, var(--background)); font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
   .settings-skeleton { display: block; block-size: 52px; border-radius: 14px; background: rgba(42,42,39,.05); }
 
-  /* An address is read and copied, never edited. */
-  .settings-address { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; color: var(--ink-secondary); overflow-wrap: anywhere; }
+  /* Whether the account's activity comes in: connected on its own, nothing to set up. */
+  .settings-row-body .settings-activity { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+  .settings-activity[data-state="on"] svg { color: var(--positive-ink); }
 
   /* Credentials for a provider (a Buffer API key): one field, its hint, two buttons. */
   .settings-form { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }

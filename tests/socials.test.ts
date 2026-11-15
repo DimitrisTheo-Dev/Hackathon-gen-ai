@@ -9,7 +9,7 @@ import { instagramTiming } from "../packages/engine/src/socials-instagram";
 import { MemoryStore } from "../packages/engine/src/store-memory";
 import { ApiError } from "../apps/web/src/data/client";
 import { createSocialsApi } from "../apps/web/src/socials/api";
-import { accountSource, cancelledNote, managedHere, settingsTabFrom, webhookAcceptance } from "../apps/web/src/socials/model";
+import { accountSource, activity, cancelledNote, managedHere } from "../apps/web/src/socials/model";
 
 /** /v1/socials on the real engine, with an in-memory store and a stand-in for Buffer's GraphQL API. "user:<id>" stands in for a verified session. */
 const BASE = "https://faceful.test";
@@ -75,6 +75,8 @@ function instagram() {
     /** "lost": the publish goes through but its answer never arrives. */
     publishAnswer: "normal" as "normal" | "lost",
     revoked: false,
+    /** True: Instagram refuses to send the account's activity (an app not yet approved for it, say). */
+    refuseSubscription: false,
     subscribed: [] as string[],
     requests: [] as Array<{ method: string; path: string; token: string | null; body: any }>,
   };
@@ -99,6 +101,7 @@ function instagram() {
     if (path === "/refresh_access_token") return Response.json({ access_token: `long-token-${Number(token.split("-")[2]) + 1}`, token_type: "bearer", expires_in: 5183944 });
     if (path === "/me") return Response.json({ data: [{ user_id: INSTAGRAM_ID, username: "faceful" }] });
     if (path === "/me/subscribed_apps") {
+      if (state.refuseSubscription) return oauth(10, "Application does not have permission for this action");
       state.subscribed.push(target.searchParams.get("subscribed_fields") ?? "");
       return Response.json({ success: true });
     }
@@ -819,6 +822,30 @@ test("the scheduler keeps the 60-day sign-in alive, and marks the account expire
   assert.deepEqual(await tick(), { refreshed: 0, expired: 0, failed: 0 });
 });
 
+test("an Instagram account whose activity Instagram did not take at sign-in is asked again by the scheduler, then left alone", async () => {
+  const { call, signIn, store, meta, advance } = engine({ ...LOGIN, CRON_SECRET: "cron-secret" });
+  meta.state.refuseSubscription = true;
+  const connected = await (await signIn("code-1")).finish();
+  assert.deepEqual([connected.status, connected.body.accounts[0].webhookSubscribedAt], [200, null]);
+  const tick = async () => (await call("/v1/cron/tick", { headers: { authorization: "Bearer cron-secret" } })).body.webhooks;
+  const asks = () => meta.state.requests.filter((request) => request.path.endsWith("/me/subscribed_apps")).length;
+
+  // Not on every tick: a refused account waits six hours. Then it is asked, and refused again, and waits again.
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 0 }, 1]);
+  advance(6 * 60 + 1);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 1 }, 2]);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 0 }, 2]);
+
+  // Once Instagram takes it, the account says so, and a subscription that does not lapse is not asked for again.
+  meta.state.refuseSubscription = false;
+  advance(6 * 60 + 1);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 1, failed: 0 }, 3]);
+  assert.equal(typeof (await call("/v1/socials", { as: "user:u1" })).body.platforms.find((platform: any) => platform.id === "instagram").accounts[0].webhookSubscribedAt, "string");
+  advance(7 * 24 * 60);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 0 }, 3]);
+  assert.ok((await store.select("provider_connections", {}))[0].webhook_renewed_at);
+});
+
 test("Settings in the studio: the browser's own client reads and changes accounts through the real routes", async () => {
   const { deps, signIn, own } = engine({ ...NATIVE, ...LOGIN });
   // The browser's fetch, answered by the engine. Whatever the studio's client cannot read fails here.
@@ -830,7 +857,7 @@ test("Settings in the studio: the browser's own client reads and changes account
   try {
     const api = createSocialsApi(BASE, async () => "user:u1");
     const empty = await api.catalog();
-    assert.deepEqual([empty.canManage, empty.webhooks, empty.platforms.flatMap((platform) => platform.accounts)], [true, { generic: true }, []]);
+    assert.deepEqual([empty.canManage, empty.platforms.flatMap((platform) => platform.accounts)], [true, []]);
     assert.deepEqual(empty.platforms.map((platform) => [platform.label, platform.kind]), [["TikTok", "social"], ["Instagram", "social"], ["LinkedIn", "social"], ["YouTube", "social"], ["WhatsApp", "messaging"]]);
     assert.deepEqual(empty.providers.map((provider) => [provider.label, provider.connect, provider.available, provider.connected]), [["Buffer", "credentials", true, false], ["Instagram", "sign_in", true, false]]);
     // An agent acting for the same person sees the accounts but is not offered the buttons.
@@ -856,10 +883,17 @@ test("Settings in the studio: the browser's own client reads and changes account
     ]);
     assert.deepEqual(catalog.providers.map((provider) => provider.connected), [true, true]);
 
-    // What each address accepts, as the Webhooks sub tab words it.
-    const instagram = catalog.platforms.find((platform) => platform.id === "instagram")!;
-    assert.deepEqual([instagram.webhookUrl, webhookAcceptance(instagram, catalog.webhooks.generic)], [`${BASE}/v1/socials/instagram/webhook`, "Accepts Instagram’s own deliveries and Faceful’s signed format."]);
-    assert.deepEqual([webhookAcceptance({ label: "TikTok", nativeWebhook: false }, true), webhookAcceptance({ label: "TikTok", nativeWebhook: false }, false)], ["Accepts Faceful’s signed format only.", "Not accepting deliveries yet."]);
+    // Activity is connected without a setting: each row only says where it stands. Instagram directly was subscribed
+    // with its sign-in; Buffer carries no activity; a YouTube channel waits for the hub, which this deployment holds
+    // (the one Buffer reports as unavailable says so in its own chip instead).
+    const incoming = catalog.platforms.flatMap((platform) => platform.accounts.map((account) => `${account.displayName}: ${activity(account, platform)?.label ?? "-"}`));
+    assert.deepEqual(incoming, [
+      "Faceful on instagram: -",
+      "@faceful: Comments and messages come in automatically",
+      "linkedin-handle: -",
+      "Faceful on youtube: -",
+      "youtube account: New uploads are connecting",
+    ]);
 
     // Removing. The engine's refusal reaches the page as its own sentence; a channel connected with Google is not removable here.
     const direct = catalog.platforms.find((platform) => platform.id === "instagram")!.accounts.find((account) => account.provider === "instagram")!;
@@ -872,7 +906,5 @@ test("Settings in the studio: the browser's own client reads and changes account
     globalThis.fetch = browserFetch;
   }
 
-  // The sub tab comes from the address; anything unknown opens the first one.
-  assert.deepEqual([settingsTabFrom("?view=settings&tab=webhooks"), settingsTabFrom("?view=settings"), settingsTabFrom("?tab=nonsense")], ["webhooks", "accounts", "accounts"]);
   assert.deepEqual([cancelledNote(0), cancelledNote(1), cancelledNote(3)], ["", " 1 unsent post was cancelled.", " 3 unsent posts were cancelled."]);
 });

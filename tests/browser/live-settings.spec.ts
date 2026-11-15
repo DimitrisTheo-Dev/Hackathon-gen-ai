@@ -30,14 +30,17 @@ async function noBlockingViolations(page: Page) {
   expect(report, report.join('\n')).toEqual([]);
 }
 
-test('Settings connects Buffer, lists and removes its accounts, and shows the webhook addresses', async ({ page, baseURL }) => {
+test('Settings connects Buffer, lists and removes its accounts, and has no webhook settings to fill in', async ({ page }) => {
   await signIn(page);
   await page.goto('/studio/');
   await page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Settings' }).click();
-  await expect(page).toHaveURL(/view=settings&tab=accounts/);
+  await expect(page).toHaveURL(/view=settings/);
   await expect(page).toHaveTitle('Settings · Faceful');
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
   await expect(page.getByText('No accounts are connected yet.')).toBeVisible();
+  // Webhooks are connected by the engine on its own: no tab, no address to copy, nothing to register.
+  await expect(page.locator('.settings-view').getByRole('radio')).toHaveCount(0);
+  await expect(page.locator('.settings-view')).not.toContainText(/webhook/i);
 
   const add = page.getByRole('region', { name: 'Add an account' });
   // Instagram's own sign-in needs the Meta app, which this deployment does not have; YouTube is connected in Schedule.
@@ -68,6 +71,8 @@ test('Settings connects Buffer, lists and removes its accounts, and shows the we
   await expect(rows.filter({ hasText: 'BeWell on TikTok' })).toContainText('TikTok · through Buffer');
   await expect(rows.filter({ hasText: 'Instagram · through Buffer' }).getByRole('link', { name: 'BeWell' })).toHaveAttribute('href', 'https://www.instagram.com/bewell.app');
   await expect(add.getByRole('listitem').filter({ hasText: 'Buffer' })).toContainText('2 accounts connected');
+  // Buffer only posts: its accounts carry no comments or messages, so their rows promise none.
+  await expect(connected.locator('.settings-activity')).toHaveCount(0);
 
   await add.getByRole('button', { name: 'Refresh Buffer accounts' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Buffer accounts are up to date.' })).toBeVisible();
@@ -83,27 +88,13 @@ test('Settings connects Buffer, lists and removes its accounts, and shows the we
   await expect(page.getByRole('status').filter({ hasText: 'Removed BeWell on TikTok.' })).toBeVisible();
   await expect(rows).toHaveCount(1);
 
-  // Webhooks: the sub tab is in the address, so a reload opens it again.
-  await page.getByRole('radio', { name: 'Webhooks' }).check();
-  await expect(page).toHaveURL(/view=settings&tab=webhooks/);
-  await expect(page.getByRole('heading', { name: 'Webhook addresses' })).toBeVisible();
-  const instagram = page.locator('.settings-rows > li').filter({ hasText: 'Instagram' });
-  await expect(instagram.locator('code')).toHaveText(`${baseURL}/v1/socials/instagram/webhook`);
-  await expect(instagram).toContainText('Accepts Faceful’s signed format only.');
-  await expect(instagram.getByRole('button', { name: 'Copy the Instagram address' })).toBeVisible();
   await noBlockingViolations(page);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Webhook addresses' })).toBeVisible();
+  await expect(rows).toHaveCount(1);
 
   // Disconnecting the provider removes what is left of it.
-  await page.getByRole('radio', { name: 'Social accounts' }).check();
   await add.getByRole('button', { name: 'Disconnect Buffer' }).click();
   await page.getByRole('group', { name: 'Disconnect Buffer' }).getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Disconnected Buffer.' })).toBeVisible();
   await expect(page.getByText('No accounts are connected yet.')).toBeVisible();
-
-  // The sub tab leaves the address with the view.
-  await page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Schedule' }).click();
-  await expect(page).toHaveURL(/view=schedule/);
-  expect(new URL(page.url()).searchParams.has('tab')).toBe(false);
 });

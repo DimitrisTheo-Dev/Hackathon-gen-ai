@@ -85,6 +85,11 @@ export interface SocialProvider<Credentials = any> {
     /** Trades the one-time code the platform sent back for credentials, and names the account they belong to. */
     complete(deps: EngineDeps, input: { code: string; redirectUri: string }): Promise<{ credentials: Credentials; account: ProviderAccount; subscribed?: boolean }>;
   };
+  /**
+   * Asks the platform to send the account's activity (comments, messages) to this deployment. True once it will.
+   * Asked when the account is connected, and again by the scheduler until it takes (subscribeProviderAccounts).
+   */
+  subscribe?(deps: EngineDeps, credentials: Credentials): Promise<boolean>;
   /** Keeps credentials that run out alive: the credentials to store from now on, or null when there is nothing to do yet. */
   refresh?(deps: EngineDeps, credentials: Credentials): Promise<Credentials | null>;
   /** Submits one approved post. Must not post twice for the same `attemptKey`. */
@@ -184,8 +189,6 @@ export async function listSocials(deps: EngineDeps, ctx: Ctx) {
       available: usable(deps, provider),
       connected: accounts.some((row) => row.provider === provider.id),
     })),
-    // Whether deliveries in the generic signed format are accepted at the platforms' webhook addresses.
-    webhooks: { generic: Boolean(deps.config.socials.webhookSecret) },
     /** Whether THIS caller may connect or remove accounts (a signed-in owner or admin). */
     canManage: ctx.principal.kind === "human" && ctx.scopes.has("connections:manage"),
   };
@@ -376,6 +379,34 @@ export async function refreshSocialCredentials(deps: EngineDeps) {
           outcome.expired++;
         } else outcome.failed++;
       }
+    }
+  }
+  return outcome;
+}
+
+/** How long an account whose activity was refused waits before it is asked again. */
+const SUBSCRIBE_RETRY_HOURS = 6;
+
+/**
+ * Activity is connected without anyone setting it up: an account whose provider asks the platform for it (Instagram
+ * directly) is subscribed when it connects, and one where that did not take is asked again here, on the scheduler
+ * tick, at most every few hours, until it does. That subscription does not lapse, so a subscribed account is left
+ * alone. (Subscriptions that lapse, like YouTube's, are renewed in socials-events.ts.)
+ */
+export async function subscribeProviderAccounts(deps: EngineDeps, orgId?: string) {
+  const outcome = { subscribed: 0, failed: 0 };
+  const key = deps.config.socials.credentialKey;
+  if (!key) return outcome;
+  const due = deps.now().getTime() - SUBSCRIBE_RETRY_HOURS * 3600_000;
+  for (const provider of Object.values(socialProviders)) {
+    if (!provider.subscribe) continue;
+    for (const account of await deps.store.select("provider_connections", { provider: provider.id, state: "connected", ...(orgId ? { org_id: orgId } : {}) })) {
+      // `updated_at` doubles as the time of the last ask, so an account the platform refuses is not asked on every tick.
+      if (account.webhook_renewed_at || new Date(account.updated_at).getTime() > due) continue;
+      const now = deps.now().toISOString();
+      const subscribed = await provider.subscribe(deps, parse(provider.credentialsSchema, open(key, account))).catch(() => false);
+      await deps.store.update("provider_connections", { id: account.id }, subscribed ? { webhook_renewed_at: now, updated_at: now } : { updated_at: now });
+      outcome[subscribed ? "subscribed" : "failed"]++;
     }
   }
   return outcome;

@@ -23,14 +23,11 @@ const catalogSchema = z.object({
       label: z.string(),
       kind: z.enum(["social", "messaging"]),
       accounts: z.array(accountSchema),
-      /** Where the platform's activity is delivered. Null when the deployment has no public address configured. */
-      webhookUrl: z.string().nullable(),
-      /** Whether the platform's own delivery format is accepted there. */
+      /** Whether this deployment takes the platform's own deliveries (YouTube: whether channels are subscribed at all). */
       nativeWebhook: z.boolean(),
     }),
   ),
   providers: z.array(z.object({ id: z.string(), label: z.string(), platforms: z.array(z.string()), connect: z.enum(["credentials", "sign_in"]), available: z.boolean(), connected: z.boolean() })),
-  webhooks: z.object({ generic: z.boolean() }),
   canManage: z.boolean(),
 });
 // Only an https address is ever followed out of the studio.

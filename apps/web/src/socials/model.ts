@@ -1,19 +1,6 @@
 /** What Settings shows and says about social accounts, kept apart from the view so it can be tested without a browser. */
 import type { SocialAccount, SocialProviderInfo } from "./api";
 
-/** The sub tabs of Settings, in order. A new one is an entry here and a panel in views/Settings.tsx. */
-export const SETTINGS_TABS = [
-  { value: "accounts", label: "Social accounts" },
-  { value: "webhooks", label: "Webhooks" },
-] as const;
-export type SettingsTab = (typeof SETTINGS_TABS)[number]["value"];
-
-/** The sub tab named in the address (`?view=settings&tab=webhooks`); the first one when none or an unknown one is. */
-export function settingsTabFrom(search: string): SettingsTab {
-  const named = new URLSearchParams(search).get("tab");
-  return SETTINGS_TABS.find((entry) => entry.value === named)?.value ?? SETTINGS_TABS[0].value;
-}
-
 /** True when the account was connected through one of the providers listed here, so it is removed here too. */
 export function managedHere(account: Pick<SocialAccount, "provider">, providers: Array<Pick<SocialProviderInfo, "id">>): boolean {
   return providers.some((provider) => provider.id === account.provider);
@@ -29,10 +16,19 @@ export function accountSource(account: Pick<SocialAccount, "provider" | "platfor
   return account.platform === "youtube" ? "connected with Google" : "connected directly";
 }
 
-/** What a platform's webhook address accepts right now. */
-export function webhookAcceptance(platform: { label: string; nativeWebhook: boolean }, generic: boolean): string {
-  if (platform.nativeWebhook) return `Accepts ${platform.label}’s own deliveries${generic ? " and Faceful’s signed format" : ""}.`;
-  return generic ? "Accepts Faceful’s signed format only." : "Not accepting deliveries yet.";
+/**
+ * Whether the account's activity reaches Faceful. Nobody sets this up: the engine subscribes an account when it
+ * connects and asks again until the platform agrees. Null where the connection carries no activity (Buffer posts only).
+ */
+export function activity(account: Pick<SocialAccount, "provider" | "platform" | "state" | "webhookSubscribedAt">, platform: { nativeWebhook: boolean }): { state: "on" | "connecting"; label: string } | null {
+  // An account that needs reconnecting, or that its provider no longer reaches, says so in its own chip instead.
+  if (account.state !== "connected") return null;
+  // YouTube's hub announces new uploads; Instagram sends comments and messages.
+  const what = account.platform === "youtube" ? "New uploads" : "Comments and messages";
+  if (account.webhookSubscribedAt) return { state: "on", label: `${what} come in automatically` };
+  // Instagram connected directly is subscribed with its own sign-in; any YouTube channel, where the deployment holds the hub.
+  if (account.provider === account.platform || (account.platform === "youtube" && platform.nativeWebhook)) return { state: "connecting", label: `${what} are connecting` };
+  return null;
 }
 
 export const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;

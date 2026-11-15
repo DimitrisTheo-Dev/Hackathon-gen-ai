@@ -1,21 +1,20 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { Check, Instagram, Linkedin, LoaderCircle, MessageCircle, Music2, Share2, Youtube, type LucideIcon } from "lucide-react";
+import { Check, Instagram, Linkedin, LoaderCircle, CircleDashed, MessageCircle, Music2, Share2, Youtube, type LucideIcon } from "lucide-react";
 import { Notice } from "../components/ui";
 import { ApiError } from "../data/client";
 import { supabase } from "../lib/supabase";
 import { createSocialsApi, type SocialCatalog, type SocialProviderInfo } from "../socials/api";
-import { accountSource, cancelledNote, managedHere, plural, SETTINGS_TABS, settingsTabFrom, webhookAcceptance, type SettingsTab } from "../socials/model";
-import { CopyAction, Segmented } from "./onboarding-parts";
+import { accountSource, activity, cancelledNote, managedHere, plural } from "../socials/model";
 import "../channels.css";
 import "../settings.css";
 
 /**
- * Settings, in sub tabs (socials/model.ts lists them):
- *   Social accounts  what is connected, and connecting more: Instagram by signing in, Buffer with its API key.
- *                    A YouTube channel is connected with Google in the Schedule view and only listed here.
- *   Webhooks         the address each platform delivers comments, messages and post updates to.
+ * Settings: the social accounts Faceful posts to, and connecting more (Instagram by signing in, Buffer with its API
+ * key). A YouTube channel is connected with Google in the Schedule view and only listed here.
  *
- * Nothing here is "connected" unless the engine says so; every action is the engine's (packages/engine/src/socials.ts).
+ * Webhooks are not something a person sets up. The engine subscribes each account to its platform's activity when it
+ * connects and keeps asking until the platform agrees (socials.ts, socials-events.ts); each row only says where that
+ * stands. Nothing here is "connected" unless the engine says so; every action is the engine's.
  */
 
 const PLATFORM_ICON: Record<string, LucideIcon> = { instagram: Instagram, tiktok: Music2, youtube: Youtube, linkedin: Linkedin, whatsapp: MessageCircle };
@@ -53,7 +52,6 @@ type Confirming = { kind: "provider" | "account"; id: string; label: string } | 
 
 export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
   const api = useMemo(() => createSocialsApi(import.meta.env.VITE_CASTROOM_API_URL || location.origin, async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null), []);
-  const [tab, setTab] = useState<SettingsTab>(() => settingsTabFrom(location.search));
   const [catalog, setCatalog] = useState<SocialCatalog | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -67,7 +65,6 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
   const fieldInput = useRef<HTMLInputElement>(null);
   const accountsHeading = useId();
   const addHeading = useId();
-  const webhooksHeading = useId();
   const fieldId = useId();
 
   const load = useCallback(async () => {
@@ -88,20 +85,6 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
     };
   }, [load]);
 
-  // The sub tab is part of the address, so a link or a reload opens the same one. It leaves the address with this view.
-  useEffect(() => {
-    const url = new URL(location.href);
-    url.searchParams.set("tab", tab);
-    if (url.href !== location.href) history.replaceState(history.state, "", url);
-  }, [tab]);
-  useEffect(
-    () => () => {
-      const url = new URL(location.href);
-      url.searchParams.delete("tab");
-      history.replaceState(history.state, "", url);
-    },
-    [],
-  );
   useEffect(() => {
     if (confirming) keepButton.current?.focus();
   }, [confirming]);
@@ -188,10 +171,9 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
       <header className="ob-page-head">
         <div>
           <h1>Settings</h1>
-          <p>The accounts Faceful can post to, and where their activity is delivered.</p>
+          <p>The accounts Faceful can post to. Where a platform allows it, their comments and messages connect on their own.</p>
         </div>
       </header>
-      <Segmented label="Settings section" value={tab} options={[...SETTINGS_TABS]} onChange={setTab} />
 
       {loadFailed ? (
         <p className="channels-failed" role="alert">
@@ -201,7 +183,7 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
             {retrying ? "Retrying…" : "Retry"}
           </button>
         </p>
-      ) : tab === "accounts" ? (
+      ) : (
         <div className="settings-panel">
           <section className="channels" aria-labelledby={accountsHeading} aria-busy={working || !catalog}>
             <header className="channels-head">
@@ -232,12 +214,19 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
                   const Icon = PLATFORM_ICON[account.platform] ?? Share2;
                   // A channel connected with its platform elsewhere is disconnected there, where that access is withdrawn too.
                   const removable = managedHere(account, providers);
+                  const incoming = activity(account, platform);
                   return (
                     <li key={account.id}>
                       <span className="channel-icon" aria-hidden="true"><Icon size={17} /></span>
                       <div className="settings-row-body">
                         {account.profileUrl?.startsWith("https://") ? <a href={account.profileUrl} target="_blank" rel="noreferrer">{account.displayName}</a> : <strong>{account.displayName}</strong>}
                         <span>{platform.label} · {accountSource(account, providers)}</span>
+                        {incoming && (
+                          <span className="settings-activity" data-state={incoming.state}>
+                            {incoming.state === "on" ? <Check size={12} aria-hidden="true" /> : <CircleDashed size={12} aria-hidden="true" />}
+                            {incoming.label}
+                          </span>
+                        )}
                       </div>
                       <div className="settings-row-side">
                         <span className={`channel-chip ${account.state}`}>
@@ -349,40 +338,6 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
             )}
           </section>
         </div>
-      ) : (
-        <section className="channels" aria-labelledby={webhooksHeading} aria-busy={!catalog}>
-          <header className="channels-head">
-            <h2 id={webhooksHeading}>Webhook addresses</h2>
-            <p>Where each platform sends comments, messages and post updates.</p>
-          </header>
-          {!catalog ? (
-            <p className="settings-skeleton" role="status"><span className="sr-only">Checking the addresses…</span></p>
-          ) : (
-            <ul className="settings-rows">
-              {catalog.platforms.map((platform) => {
-                const Icon = PLATFORM_ICON[platform.id] ?? Share2;
-                const accepts = webhookAcceptance(platform, catalog.webhooks.generic);
-                return (
-                  <li key={platform.id}>
-                    <span className="channel-icon" aria-hidden="true"><Icon size={17} /></span>
-                    <div className="settings-row-body">
-                      <strong>{platform.label}</strong>
-                      {platform.webhookUrl ? <code className="settings-address">{platform.webhookUrl}</code> : <span>This deployment has no public address set, so there is nothing to register yet.</span>}
-                      <span>{accepts}{platform.id === "youtube" && platform.nativeWebhook ? " Connected channels are subscribed automatically." : ""}</span>
-                    </div>
-                    <div className="settings-row-side">
-                      {platform.webhookUrl && <CopyAction value={platform.webhookUrl} label={`Copy the ${platform.label} address`} iconOnly />}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p className="ob-fine">
-            To receive a platform’s own deliveries, register its address in that platform’s developer settings. Instagram, WhatsApp, TikTok and LinkedIn only send
-            activity for accounts that allowed your own app; YouTube needs no registration.
-          </p>
-        </section>
       )}
     </div>
   );

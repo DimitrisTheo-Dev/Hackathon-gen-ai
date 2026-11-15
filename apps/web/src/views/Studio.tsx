@@ -403,11 +403,10 @@ export function Studio({
   useEffect(() => {
     if (loading) return;
     const url = new URL(location.href);
-    // An old Clone a video link becomes the Templates page's Clone tab. Templates and Settings keep their own sub tab
-    // in the address; another view keeps no tab.
+    // An old Clone a video link becomes the Templates page's Clone tab; another view keeps no tab.
     if (url.searchParams.get("view") === "clone") url.searchParams.set("tab", "clone");
     url.searchParams.set("view", view);
-    if (view !== "templates" && view !== "settings") url.searchParams.delete("tab");
+    if (view !== "templates") url.searchParams.delete("tab");
     if (campaign) url.searchParams.set("campaign", campaign.id);
     else url.searchParams.delete("campaign");
     if (selected) url.searchParams.set("item", selected);

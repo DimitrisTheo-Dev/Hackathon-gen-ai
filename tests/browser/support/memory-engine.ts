@@ -37,9 +37,8 @@ import { MemoryMedia, MemoryStore } from "../../../packages/engine/src/store-mem
 import { handleMcpRequest } from "../../../packages/engine/src/mcp";
 
 const WORKER_TOKEN = "e2e-render-worker-token-not-a-real-credential-0001";
-/** Test-only stand-ins for the socials secrets, so Buffer can be connected and the generic webhook format is on. */
+/** A test-only stand-in for the key provider credentials are sealed with, so Buffer can be connected. */
 const SOCIALS_CREDENTIAL_KEY = "e2e0".repeat(16);
-const SOCIALS_WEBHOOK_SECRET = "e2e-socials-webhook-secret-not-a-credential";
 const BUFFER_KEY = "e2e-buffer-key-not-a-credential";
 const AVATARS = JSON.stringify([{ id: "minas_kontis", name: "Minas", languages: ["en", "el"] }]);
 
@@ -176,7 +175,7 @@ const PIXEL = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKD
 
 export function createMemoryEngine(origin: string) {
   const store = new E2EStore(origin);
-  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET, SOCIALS_CREDENTIAL_KEY, SOCIALS_WEBHOOK_SECRET });
+  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET, SOCIALS_CREDENTIAL_KEY });
   const memoryFiles = new E2EFiles(origin);
   const files: FileStore = settings.r2 ? new R2FileStore(settings.r2, () => new Date(), globalThis.fetch) : memoryFiles;
   // The Supabase client keeps its session under a key named after the project the app was built for.
