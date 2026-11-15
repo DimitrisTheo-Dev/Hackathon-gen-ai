@@ -49,7 +49,10 @@
     let current = sections[0];
     for (const section of sections) if (section.getBoundingClientRect().top <= line) current = section;
     if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) current = sections[sections.length - 1];
-    for (const [id, link] of links) id === current.id ? link.setAttribute("aria-current", "location") : link.removeAttribute("aria-current");
+    for (const [id, link] of links) {
+      if (id === current.id) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    }
   };
   const schedule = () => {
     if (queued) return;

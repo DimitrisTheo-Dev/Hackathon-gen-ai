@@ -141,7 +141,7 @@ test("requests without a credential are limited per client network, only when th
 });
 
 test("refused credentials are limited per network, while a valid credential from the same network keeps working", async () => {
-  const { call } = engine({ ...{ RENDER_WORKER_TOKEN: WORKER }, TRUST_PROXY_HEADERS: "true", RATE_LIMIT_FAILED_AUTH_PER_MINUTE: "2" });
+  const { call } = engine({ RENDER_WORKER_TOKEN: WORKER, TRUST_PROXY_HEADERS: "true", RATE_LIMIT_FAILED_AUTH_PER_MINUTE: "2" });
   const ip = "192.0.2.5";
   assert.equal((await call("/v1/studio/context", bearer("garbage", { "x-forwarded-for": ip }))).status, 401);
   assert.equal((await call("/v1/studio/context", bearer("fct_not-a-real-token", { "x-forwarded-for": ip }))).status, 401);

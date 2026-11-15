@@ -84,7 +84,10 @@ export function corsHeaders(origin: string | undefined, allowed: string[]): Reco
 
 // The CLI prints the sign-in link plainly when piped, or wrapped in OSC 8 hyperlink codes in a terminal.
 export function extractLoginUrl(output: string): string | null {
+  // Terminal output: strip OSC 8 hyperlinks and ANSI escapes, which are control characters by design.
+  // oxlint-disable-next-line no-control-regex
   const clean = output.replace(/\u001b\]8;;[^\u0007]*\u0007/g, "").replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
+  // oxlint-disable-next-line no-control-regex
   const match = /https:\/\/[^\s\u0007\u001b]*\/oauth\/authorize\?[^\s\u0007\u001b]+/.exec(clean);
   return match ? match[0] : null;
 }
