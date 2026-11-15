@@ -91,7 +91,9 @@ export function NewProject({
   const [draft, setDraft] = useState<Draft>(() => {
     const saved = loadDraft(workspaceId);
     // A saved project keeps the settings it was made with; anything earlier takes what was just picked.
-    if (saved && (!initialBrief.trim() || saved.brief.trim() === initialBrief.trim())) return saved.project ? saved : withSettings(saved, initialSettings, initialTemplateId);
+    // A format cloned from Templates (a format, no description yet) always starts a new draft, never an earlier one.
+    const cloning = Boolean(initialTemplateId) && !initialBrief.trim();
+    if (saved && !cloning && (!initialBrief.trim() || saved.brief.trim() === initialBrief.trim())) return saved.project ? saved : withSettings(saved, initialSettings, initialTemplateId);
     return withSettings(emptyDraft(context.brand.color, initialBrief), initialSettings, initialTemplateId);
   });
   const [step, setStep] = useState<StepId>("describe");
@@ -162,6 +164,13 @@ export function NewProject({
 
   /** The face offered first: the one used last time if it still exists, else the first ready persona or stock avatar. */
   function defaultFace(): Face {
+    // A format already picked (cloned from Templates) decides whether there is a presenter at all.
+    if (template?.family === "no_face") return { kind: "none" };
+    if (template?.family === "face" && lastFace?.kind === "none") {
+      const persona = allPersonas.find((entry) => entry.status === "ready");
+      if (persona) return { kind: "persona", personaId: persona.id, lookId: null };
+      if (avatars[0]) return { kind: "avatar", avatarId: avatars[0].id };
+    }
     const usable = (face: Face | null) =>
       face && (face.kind === "none" || (face.kind === "persona" && allPersonas.some((entry) => entry.id === face.personaId && entry.status === "ready")) || (face.kind === "avatar" && avatars.some((entry) => entry.id === face.avatarId)));
     if (usable(lastFace)) return lastFace!;

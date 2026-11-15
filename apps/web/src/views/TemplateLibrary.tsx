@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type SyntheticEvent } from "react";
-import { CircleAlert, CopyPlus, LayoutTemplate, LoaderCircle, Maximize, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { CircleAlert, Clock, CopyPlus, LayoutTemplate, LoaderCircle, Maximize, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import type { LibraryTemplate, StudioContext } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
 import { Modal } from "../components/ui";
 import "../templates.css";
+import { languageOf } from "../create/languages";
 import { CloneVideo } from "./CloneVideo";
 import { TEMPLATES_INTRO, TEMPLATES_TABS, TemplateGridSkeleton, templatesTab, type TemplatesTab } from "./page-skeletons";
 
@@ -34,7 +35,7 @@ const TAB_ICONS: Record<TemplatesTab, typeof LayoutTemplate> = { formats: Layout
  * The open tab lives in the address (`?view=templates&tab=clone`), so a refresh or a shared link opens it again.
  * A tab's panel stays mounted once opened, so a half-written brief survives a look at the formats.
  */
-export function TemplateLibrary({ client, context }: { client: StudioClient; context: StudioContext }) {
+export function TemplateLibrary({ client, context, onClone }: { client: StudioClient; context: StudioContext; /** Opens the New project flow with this format already picked. */ onClone?: (template: LibraryTemplate) => void }) {
   const ids = useId();
   const [tab, setTab] = useState<TemplatesTab>(templatesTab);
   const [visited, setVisited] = useState<Set<TemplatesTab>>(() => new Set([tab]));
@@ -95,7 +96,7 @@ export function TemplateLibrary({ client, context }: { client: StudioClient; con
       </header>
       {TEMPLATES_TABS.map(({ key }) => (
         <div key={key} className="tl-panel" role="tabpanel" id={`${ids}-panel-${key}`} aria-labelledby={`${ids}-tab-${key}`} hidden={tab !== key}>
-          {visited.has(key) && (key === "formats" ? <FormatLibrary client={client} /> : <CloneVideo client={client} context={context} />)}
+          {visited.has(key) && (key === "formats" ? <FormatLibrary client={client} onClone={onClone} /> : <CloneVideo client={client} context={context} />)}
         </div>
       ))}
     </div>
@@ -106,7 +107,7 @@ export function TemplateLibrary({ client, context }: { client: StudioClient; con
  * The format library: short-form formats with a rendered sample each, read from the engine
  * (`GET /v1/templates/library`). Media links are signed and short-lived; a link that stops playing reloads the list.
  */
-function FormatLibrary({ client }: { client: StudioClient }) {
+function FormatLibrary({ client, onClone }: { client: StudioClient; onClone?: (template: LibraryTemplate) => void }) {
   const [templates, setTemplates] = useState<LibraryTemplate[] | null>(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -159,30 +160,37 @@ function FormatLibrary({ client }: { client: StudioClient }) {
               </div>
               <ul className="tl-grid">
                 {list.map((t, index) => (
-                  <li key={t.id}>
-                    <button className="tl-card" onClick={() => setOpenId(t.id)} aria-label={`${t.name}: ${t.useFor}`}>
+                  <li key={t.id} className="tl-item">
+                    {/* The card says only its name; length and languages are symbols, the rest is in the detail. */}
+                    <button className="tl-card" onClick={() => setOpenId(t.id)} aria-label={`${t.name}: ${t.useFor}`} title={t.useFor}>
                       <span className="tl-poster">
                         {t.posterUrl ? <img src={t.posterUrl} alt="" loading={index < 5 ? "eager" : "lazy"} decoding="async" onLoad={shown} onError={refresh} /> : null}
                         <span className="tl-poster-play" aria-hidden="true"><Play size={15} /></span>
+                        <span className="tl-chips" aria-hidden="true">
+                          <span className="tl-chip"><Clock size={11} strokeWidth={2.25} />{t.durationRange[0]}–{t.durationRange[1]}s</span>
+                          <span className="tl-chip">{t.languages.map((code) => languageOf(code).flag).join(" ")}</span>
+                        </span>
                       </span>
-                      <span className="tl-card-text">
-                        <strong>{t.name}</strong>
-                        <span>{t.useFor}</span>
-                        <small>{seconds(t.durationRange)}</small>
-                      </span>
+                      <span className="tl-card-name">{t.name}</span>
                     </button>
+                    {onClone && (
+                      <button type="button" className="tl-clone" onClick={() => onClone(t)} aria-label={`Clone ${t.name} into a new project`} title="Clone into a new project">
+                        <CopyPlus size={14} aria-hidden="true" />
+                        <span>Clone</span>
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             </section>
           );
         })}
-      {open && <TemplateDetail template={open} onClose={() => setOpenId(null)} onExpired={refresh} />}
+      {open && <TemplateDetail template={open} onClose={() => setOpenId(null)} onExpired={refresh} onClone={onClone ? () => { setOpenId(null); onClone(open); } : undefined} />}
     </>
   );
 }
 
-function TemplateDetail({ template: t, onClose, onExpired }: { template: LibraryTemplate; onClose: () => void; onExpired: () => void }) {
+function TemplateDetail({ template: t, onClose, onExpired, onClone }: { template: LibraryTemplate; onClose: () => void; onExpired: () => void; onClone?: () => void }) {
   const sources = [{ language: t.language, url: t.videoUrl }, ...t.variants];
   const [language, setLanguage] = useState(t.language);
   const src = sources.find((s) => s.language === language)?.url ?? t.videoUrl;
@@ -206,6 +214,11 @@ function TemplateDetail({ template: t, onClose, onExpired }: { template: Library
           )}
         </div>
         <div className="tl-facts">
+          {onClone && (
+            <button type="button" className="button primary tl-detail-clone" onClick={onClone}>
+              <CopyPlus size={15} aria-hidden="true" /> Clone into a new project
+            </button>
+          )}
           <p className="tl-summary">{t.summary}</p>
           <dl>
             <div><dt>Use it for</dt><dd>{t.useFor}</dd></div>

@@ -966,7 +966,7 @@ export function Studio({
                 <button className="text-button" onClick={()=>go("brand")}><Palette size={13} aria-hidden="true"/>{context.brand.name ? `${context.brand.name} brand kit` : "Brand kit"}</button>
               </div>
             </div>) : view === "home" ? null : view === "templates" ? (
-              <Suspense fallback={<TemplatesSkeleton />}><TemplateLibrary client={client} context={context} /></Suspense>
+              <Suspense fallback={<TemplatesSkeleton />}><TemplateLibrary client={client} context={context} onClone={(template) => startNewProject("", { templateId: template.id })} /></Suspense>
             ) : view === "personas" ? (
               <Suspense fallback={<ViewSkeleton />}><Personas client={client} role={context.workspace.role} /></Suspense>
             ) : view === "billing" ? (
