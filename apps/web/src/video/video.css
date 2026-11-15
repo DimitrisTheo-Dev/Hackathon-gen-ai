@@ -63,7 +63,8 @@
     gap: 12px;
     min-inline-size: 0;
   }
-  .video-timeline {
+  /* The wrapper only places the timeline; .video-timeline (Timeline.tsx's own root) draws its frame. */
+  .video-timeline-area {
     grid-area: timeline;
     display: grid;
     gap: 8px;
