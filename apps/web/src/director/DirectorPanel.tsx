@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { ArrowDown, ArrowRight, ArrowUp, CalendarDays, Check, ChevronDown, CreditCard, FileText, LayoutGrid, LayoutTemplate, Paperclip, PenLine, RotateCcw, Search, UserRound, Video } from 'lucide-react';
-import type { Campaign, ContentItem, DirectorTurnResult, StudioContext } from '@castroom/contracts';
+import type { Campaign, ContentItem, DirectorTurnResult, LibraryTemplate, StudioContext } from '@castroom/contracts';
 import { ApiError } from '../data/client';
 import { Mark, Notice } from '../components/ui';
 import { useAutoGrow } from '../lib/use-auto-grow';
 import { agentSeenRecently, changedFields, handoffPrompt, withPreferences, writingDeclined, type DirectorAction, type DirectorEntry, type DirectorScope, type PromptPreferences } from './model';
 import { AgentHandoff } from './AgentHandoff';
 import { PromptCycle, PromptTokens } from './HomeComposer';
+import { FormatPill, FormatStrip, FormatsContext, formatBrief, homeFormats, withFormat } from './HomeFormats';
 import { AttachmentPills, SourceTray, ViewLink } from './Sources';
 import { Preview } from '../components/ui';
 import { planDirection, recentHistory, type DirectorTurn } from './planner';
@@ -26,6 +27,8 @@ function Thinking({children}:{children:string}){return <p className="director-wo
 
 export function DirectorPanel({instruction,setInstruction,home=false,focusOnMount=false,onStart,onCreate,onShowContent,onInspect,onTurn,onCreated,onOpen,onTemplates,onVersions,onPresenter,onAgents,onSources,onBilling,onBusy,item,campaign,context,entries,syncError,onRecord,onRetrySync,onExecute,onDetails,busy,offline,dirty}:Props){
   const [scope,setScope]=useState<DirectorScope>('item');
+  const [format,setFormat]=useState<LibraryTemplate|null>(null);
+  const {formats,onAll:onAllFormats}=useContext(FormatsContext);
   const [sourceIds,setSourceIds]=useState<string[]>([]);
   const [attachments,setAttachments]=useState(false);
   const [exactEdit,setExactEdit]=useState(false);
@@ -98,7 +101,8 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
   }
   const presenters=context.avatars.filter(a=>a.permission==='authorized');
   /** Home requests carry the picked preferences as plain words; docked requests are sent as typed. */
-  const outgoing=(text:string)=>home?withPreferences(text,prefs,presenters.find(a=>a.id===prefs.presenter)?.name):text;
+  const outgoing=(text:string)=>home?withPreferences(withFormat(text,format),prefs,presenters.find(a=>a.id===prefs.presenter)?.name):text;
+  function pickFormat(next:LibraryTemplate){setFormat(next);setInstruction(formatBrief(next));requestAnimationFrame(()=>{const field=input.current;if(!field)return;field.focus();field.setSelectionRange(field.value.length,field.value.length);});}
   function submit(event:FormEvent){event.preventDefault();void plan(outgoing(instruction));}
   function suggest(prompt:string){
     if(prompt==='Choose a template'&&onTemplates){onTemplates();return;}
@@ -198,6 +202,7 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
       {exactEdit?<form className="director-exact-edit" onSubmit={e=>{e.preventDefault();void plan(`Set script: ${replacement}`);}}><label htmlFor="director-script">Your replacement script<span>{replacement.length.toLocaleString('en')} / 5,000</span></label><textarea id="director-script" value={replacement} maxLength={5000} rows={4} onChange={e=>setReplacement(e.target.value)}/><div><button className="text-button" type="button" onClick={()=>setExactEdit(false)}>Cancel</button><button className="button primary" disabled={active||offline||!replacement.trim()}>Review script change</button></div></form>:<>
         {!home&&!entries.length&&<div className="director-suggestions">{starters.map(prompt=><button key={prompt} onClick={()=>suggest(prompt)}>{prompt}</button>)}</div>}
         <form className="director-composer" onSubmit={submit} aria-busy={planning}>
+          {home&&format&&<FormatPill format={format} onRemove={()=>{if(instruction===formatBrief(format))setInstruction('');setFormat(null);input.current?.focus();}}/>}
           <AttachmentPills sources={campaign.sources} selected={sourceIds} onRemove={id=>setSourceIds(ids=>ids.filter(other=>other!==id))}/>
           <div className="composer-field">
             <label className="sr-only" htmlFor="director-instruction">Direction for your content</label>
@@ -220,8 +225,18 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
             {/* Where the conversation is kept is said once, in the docked panel; home keeps one line. */}
             {limit&&<p className="director-status" title={limit.detail}><i aria-hidden="true"/><span>{limit.homeShort}</span><span className="sr-only">. {limit.detail}</span><ViewLink view="connect" onOpen={onAgents} className="director-status-link">Use your own agent</ViewLink></p>}
           </div>
-          <div className="director-suggestions home-chips">{starters.map((prompt,index)=>{const Icon=starterIcon[prompt];return <button key={prompt} style={{'--i':index} as CSSProperties} onClick={()=>suggest(prompt)}>{Icon&&<Icon size={15} aria-hidden="true"/>}<span>{prompt}</span></button>;})}</div>
-          <div className="director-quick-actions"><button className="text-button" onClick={onCreate}><PenLine size={13} aria-hidden="true"/>Create with my own script</button></div>
+          {/* With the Director writing and the library loaded, Create starts from a real format; otherwise the plain starters. */}
+          {live&&!limit&&formats&&formats.length>0?<>
+            <FormatStrip formats={homeFormats(formats)} total={formats.length} selected={format?.id??null} onPick={pickFormat} onAll={onAllFormats}/>
+            <div className="home-more">
+              <button type="button" className="text-button" onClick={()=>suggest('Plan a campaign')}><CalendarDays size={14} aria-hidden="true"/>Plan a campaign</button>
+              <button type="button" className="text-button" onClick={()=>suggest('Find existing content')}><Search size={14} aria-hidden="true"/>Find existing content</button>
+              <button type="button" className="text-button" onClick={onCreate}><PenLine size={14} aria-hidden="true"/>Write my own script</button>
+            </div>
+          </>:<>
+            <div className="director-suggestions home-chips">{starters.map((prompt,index)=>{const Icon=starterIcon[prompt];return <button key={prompt} style={{'--i':index} as CSSProperties} onClick={()=>suggest(prompt)}>{Icon&&<Icon size={15} aria-hidden="true"/>}<span>{prompt}</span></button>;})}</div>
+            <div className="director-quick-actions"><button className="text-button" onClick={onCreate}><PenLine size={13} aria-hidden="true"/>Create with my own script</button></div>
+          </>}
           {/* The way back to this project's drafts and its conversation. */}
           {campaign.items.length>0&&<button type="button" className="home-continue" onClick={onShowContent}>
             <span className="home-continue-thumbs" aria-hidden="true">{campaign.items.slice(0,3).map((other,index)=><span key={other.id}><Preview item={other} index={index} compact passive brandName={brand}/></span>)}</span>

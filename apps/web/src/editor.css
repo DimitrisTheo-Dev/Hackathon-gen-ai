@@ -635,7 +635,51 @@
 .director-panel.is-home .home-chips button > svg { color: var(--text-secondary); transition: color 160ms ease; }
 .director-panel.is-home .director-quick-actions { display: flex; justify-content: center; margin: 14px 0 0; }
 .director-panel.is-home .director-quick-actions .text-button { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; color: var(--text-secondary); font-size: 13px; }
-.home-continue { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; inline-size: min(100%, 420px); margin: 28px auto 0; padding: 10px 16px 10px 12px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); color: var(--ink); text-align: start; transition: box-shadow 200ms ease, transform 120ms var(--ease-out); }
+/* Create: start from one of the template library's formats. Posters are the library's own; hovering or focusing
+   one plays its rendered sample, muted. Choosing one only writes a brief into the composer. */
+.home-formats { inline-size: min(100%, 640px); margin: 20px auto 0; }
+.home-formats-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-block-end: 10px; padding-inline: 2px; }
+.home-formats-head h4 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.005em; }
+.home-formats-head .text-button { display: inline-flex; align-items: center; gap: 4px; min-block-size: 28px; color: var(--text-secondary); font-size: 12.5px; }
+.home-formats-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.home-format { display: grid; gap: 7px; inline-size: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: transform var(--dur-press) var(--ease-out); }
+.home-format:active { transform: scale(.97); }
+.home-format-poster { position: relative; display: block; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 12px; background: var(--muted-surface); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); transition: transform 200ms var(--ease-out), box-shadow 200ms ease; }
+.home-format-poster :is(img, video) { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; }
+.home-format-poster img { opacity: 0; transition: opacity 240ms var(--ease-out); }
+.home-format-poster img[data-loaded] { opacity: 1; }
+.home-format-poster video { opacity: 0; transition: opacity 200ms ease-out; }
+.home-format-poster video[data-on] { opacity: 1; }
+.home-format[aria-pressed="true"] .home-format-poster { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ink); }
+.home-format:focus-visible { outline: none; }
+.home-format:focus-visible .home-format-poster { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--focus); }
+.home-format-text { display: grid; gap: 1px; padding-inline: 2px; line-height: 1.3; }
+.home-format-text strong { overflow: hidden; font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.home-format-text small { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.home-more { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin: 12px 0 0; }
+.home-more .text-button { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; color: var(--text-secondary); font-size: 13px; }
+/* The chosen format, inside the composer like an attachment. */
+.format-pill-row { display: flex; margin: 0 0 8px; }
+.format-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 9px; border-radius: 999px; background: rgba(255,176,0,.14); box-shadow: inset 0 0 0 1px rgba(180,122,0,.22); color: var(--ink); font-size: 12.5px; font-weight: 550; }
+.format-pill button { display: grid; place-items: center; inline-size: 22px; block-size: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-secondary); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) {
+  .home-format:hover .home-format-poster { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06), 0 10px 24px -12px rgba(42,42,39,.45); }
+  .home-format[aria-pressed="true"]:hover .home-format-poster { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ink), 0 10px 24px -12px rgba(42,42,39,.45); }
+  .home-more .text-button:hover, .home-formats-head .text-button:hover { color: var(--ink); }
+  .format-pill button:hover { background: rgba(42,42,39,.08); color: var(--ink); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .home-formats-row > li { animation: home-rise 280ms var(--ease-out) calc(240ms + var(--i, 0) * 40ms) both; }
+}
+html[data-booting] .home-formats-row > li { animation-duration: 0s !important; animation-delay: 0s !important; }
+/* Phones: the formats scroll sideways, with room for the focus ring at both ends. */
+@media (max-width: 760px) {
+  .home-formats-row { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 88px; overflow-x: auto; scroll-snap-type: x mandatory; margin-inline: -4px; padding: 4px; scrollbar-width: none; }
+  .home-formats-row > li { scroll-snap-align: start; }
+  .home-formats-row::-webkit-scrollbar { display: none; }
+}
+
+.home-continue { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; inline-size: min(100%, 420px); margin: 20px auto 0; padding: 10px 16px 10px 12px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--elev-1); color: var(--ink); text-align: start; transition: box-shadow 200ms ease, transform 120ms var(--ease-out); }
 .home-continue > svg { color: var(--text-secondary); transition: transform 200ms var(--ease-out), color 160ms ease; }
 .home-continue-thumbs { display: flex; padding-inline-start: 2px; }
 .home-continue-thumbs > span { container-type: inline-size; inline-size: 26px; block-size: 38px; overflow: hidden; border-radius: 6px; box-shadow: 0 0 0 2px var(--surface), 0 1px 3px rgba(42,42,39,.12); }
@@ -685,7 +729,8 @@
 }
 html[data-booting] .director-panel.is-home :is(.director-intro > *, .director-composer, .home-chips button, .home-continue) { animation-duration: 0s !important; animation-delay: 0s !important; }
 @keyframes home-rise { from { opacity: 0; transform: translateY(8px); } }
-@keyframes cycle-in { from { opacity: 0; transform: translateY(6px); filter: blur(2px); } }
+/* Transform and opacity only, so it stays on the compositor (a blur filter here was a non-composited animation). */
+@keyframes cycle-in { from { opacity: 0; transform: translateY(6px); } }
 
 @media (min-width: 1001px) {
   .app-frame .editor-home.surface-dialog { padding-block-end: 6vh; }

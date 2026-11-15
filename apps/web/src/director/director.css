@@ -86,7 +86,7 @@
   .editor-home.surface-dialog { position:absolute; inset:90px 24px 32px 284px; width:auto; max-width:740px; height:auto; max-height:none; margin:auto; border:0; border-radius:0; background:transparent; box-shadow:none; }
   .editor-home .editor-heading,.editor-home .director-tabs,.editor-home .director-selected { display:none; }
   .editor-home .director-conversation { flex:initial; overflow:auto; max-height:55%; padding:28px 24px 12px; }
-  .editor-home .director-intro { text-align:center; padding:36px 0 20px; }
+  .editor-home .director-intro { text-align:center; padding:28px 0 16px; }
   .editor-home .director-intro h3 { font-size:clamp(28px,3.2vw,40px); line-height:1.1; font-weight:500; letter-spacing:-.035em; }
   .editor-home .director-intro p { font-size:16px; margin-top:14px; }
   .editor-home .director-symbol { display:none; }
@@ -98,7 +98,7 @@
   .editor-home .director-suggestions button { min-height:44px; padding:8px 12px; }
   .editor-home .director-storage { text-align:center; }
   .director-preview-switch { display:none; }
-  .editor:not([open]) { display:none!important; }
+  .editor:not([open]):not([data-open]) { display:none!important; }
   .home-idea-form { width:min(100%,640px); padding:16px; border:1px solid var(--border); border-radius:18px; background:var(--surface); text-align:right; }
   .home-idea-form textarea { display:block; width:100%; resize:vertical; padding:12px; border:1px solid transparent; font-size:16px; margin-bottom:12px; }
   .studio-first p { max-width:560px; }
@@ -116,6 +116,10 @@
     .editor-home .director-context { display:none; }
     .editor-home .director-suggestions { display:grid; grid-template-columns:1fr 1fr; }
     .editor-home .director-suggestions button { text-align:center; }
+  }
+  /* 761–1000px: the icon rail stays on screen, so the Create panel starts after it instead of covering it. */
+  @media(min-width:761px) and (max-width:1000px) {
+    .editor-home.surface-dialog { left:60px; width:auto; }
   }
   @media(max-width:360px) { .editor-home .director-intro h3 { font-size:28px; } }
   @media(prefers-reduced-motion:reduce) { .editor-home,.director-panel { animation:none; } }

@@ -1,3 +1,5 @@
+// First: zod must be configured before any schema is built (see lib/zod-setup.ts).
+import "./lib/zod-setup";
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { LandingPage } from "./landing/LandingPage";

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject, type PointerEvent as ReactPointerEvent } from "react";
 import { stepSpring, shouldDismiss } from "../lib/sheet-motion";
 
 export function useMedia(query: string) {
@@ -39,7 +39,10 @@ function returnTarget() {
 type Controls = { close: () => void; grip: ReactNode; mobile: boolean };
 /** Native dialog provides focus containment, inert background and focus restoration.
  * Only the explicit handle owns dragging; content keeps native scrolling/selection/zoom.
- * Editor is a non-modal complementary panel on desktop, the same DOM on mobile.
+ * Docked surfaces (the desktop editor, the inline Create panel) are an <aside>: a labelled complementary region
+ * beside the page, open while `data-open` is set. Sheets and modals are a native <dialog>. A <dialog> relabelled
+ * role="complementary" is invalid ARIA (Lighthouse, axe aria-allowed-role), and an unlabelled non-modal dialog
+ * would read as a second dialog beside any real one.
  */
 export function SurfaceDialog({ title, className, editor = false, inline = false, open = true, animateEntry = true, onClose, children }: {
   title: string; className: string; editor?: boolean; onClose: () => void;
@@ -48,7 +51,8 @@ export function SurfaceDialog({ title, className, editor = false, inline = false
 }) {
   const mobile = useMedia(editor ? "(max-width: 1000px)" : "(max-width: 760px)");
   const reduced = useMedia("(prefers-reduced-motion: reduce)");
-  const ref = useRef<HTMLDialogElement>(null);
+  const ref = useRef<HTMLElement>(null);
+  const docked = inline || (editor && !mobile);
   const dismiss = useRef(onClose); dismiss.current = onClose;
   const id = useId();
   const motion = useRef({ position: 0, velocity: 0, target: 0, frame: 0, last: 0, closing: false });
@@ -92,12 +96,16 @@ export function SurfaceDialog({ title, className, editor = false, inline = false
   // A layout effect: the surface is open in the same frame it mounts, so a panel never pops in one frame late.
   useLayoutEffect(() => {
     const dialog = ref.current!;
+    // Only a real <dialog> has show/close; a docked <aside> is shown by its data-open attribute.
+    const native = dialog instanceof HTMLDialogElement ? dialog : null;
     finished.current = false;
     priorFocus.current = returnTarget();
-    if (!open) { if(dialog.open)dialog.close(); return; }
+    if (!open) { if(native?.open)native.close(); return; }
     const modal = !inline && (!editor || mobile);
-    if (dialog.open) dialog.close();
-    if (modal) dialog.showModal(); else dialog.show();
+    if (native) {
+      if (native.open) native.close();
+      if (modal) native.showModal(); else native.show();
+    }
     const unlock = modal ? lockPage() : () => {};
     if(insideFocus.current?.isConnected&&dialog.contains(insideFocus.current))insideFocus.current.focus({preventScroll:true});
     else if(inline){dialog.tabIndex=-1;dialog.focus({preventScroll:true});}
@@ -124,7 +132,7 @@ export function SurfaceDialog({ title, className, editor = false, inline = false
       }
       historyEntry.current = false;
       insideFocus.current=dialog.contains(document.activeElement)&&document.activeElement instanceof HTMLElement?document.activeElement:null;
-      dialog.close(); unlock();
+      native?.close(); unlock();
       if (modal && priorFocus.current?.isConnected) priorFocus.current.focus({ preventScroll: true });
       dialog.style.transform = "";
       motion.current.position = 0; motion.current.velocity = 0;
@@ -182,7 +190,8 @@ export function SurfaceDialog({ title, className, editor = false, inline = false
   }
   const grip = <button type="button" className="sheet-grip" aria-label={`Dismiss ${title}`} onPointerDown={down} onPointerMove={move} onPointerUp={e => up(e)} onPointerCancel={e => up(e, true)} onClick={() => { if (!ignoreClick.current) close(); ignoreClick.current = false; }}><span /></button>;
 
-  return <dialog ref={ref} className={`surface-dialog ${className}`} aria-label={title} role={inline || editor && !mobile ? "complementary" : "dialog"} onCancel={event => { event.preventDefault(); finish(); }} onClick={event => {
+  if (docked) return <aside ref={ref} className={`surface-dialog ${className}`} aria-label={title} data-open={open ? "" : undefined}>{children({ close, grip, mobile })}</aside>;
+  return <dialog ref={ref as RefObject<HTMLDialogElement>} className={`surface-dialog ${className}`} aria-label={title} onCancel={event => { event.preventDefault(); finish(); }} onClick={event => {
     if (event.target !== ref.current || editor) return;
     const rect = ref.current.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
