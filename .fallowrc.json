@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "minimumVersion": "3.41.0",
+  "entry": [
+    "apps/machines/src/index.ts",
+    "workers/reel-render/src/worker.ts",
+    "workers/reel-render/src/entry.tsx"
+  ],
+  "supportEntry": [
+    "scripts/*.{ts,mjs}",
+    "apps/*/mint-token.mjs",
+    "tests/browser/*.config.ts",
+    "tests/browser/support/*.ts"
+  ],
+  "ignorePatterns": [
+    "apps/web/public/**",
+    "docs/**",
+    "demo-footage/**"
+  ],
+  "ignoreBinaries": [
+    "psql"
+  ],
+  "ignoreUnresolvedImports": [
+    "/design.css"
+  ],
+  "rules": {
+    "unused-exports": "warn",
+    "unused-types": "warn",
+    "unused-class-members": "warn",
+    "duplicate-exports": "warn"
+  }
+}

@@ -1,0 +1,46 @@
+# Checks every pull request and every push to main. No secrets, read-only token, actions pinned to full SHAs
+# (the same pins as DimitrisTheo-Dev/product-engineering-quality-gate v1.0.1). Oxfmt joins once the one-time
+# reformat lands; until then a format check would fail on almost every file.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, dead code, typecheck, test, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.22.2
+          package-manager-cache: false
+      - name: Set up pnpm
+        run: npm install --global corepack@0.36.0 && corepack enable pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm quality:lint
+      - name: Dead code and import cycles
+        run: pnpm quality:deadcode
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit and contract tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build
