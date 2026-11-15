@@ -4,14 +4,23 @@ import { audit, constantTimeEqual, hashToken, newAgentToken, requireHuman, requi
 import { createCheckout, createPortal, getBillingStatus, handleStripeWebhook } from "./billing.js";
 import { readBoundedText } from "./body.js";
 import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.js";
+import { getComposition, saveComposition } from "./composition.js";
 import { directorTurn } from "./director.js";
+import { archiveFile, completeUpload, listFiles, requestUpload, saveTextFile } from "./files.js";
+import { authenticateReelWorker, cancelRender, listRenders, queueRender, reelWorker } from "./reel-render.js";
 import { EngineError } from "./errors.js";
+import { likenessLiveToken, likenessUploadUrl, revokeLikenessConsent, saveLikenessConsent } from "./likeness.js";
+import { createPersona, createPersonaLook, deletePersona, deletePersonaLook, listPersonas, personaConsentToWithdraw, personaImageUploadUrl, updatePersona, updatePersonaLook } from "./personas.js";
 import type { Planner } from "./llm.js";
 import { authenticateWithLimits, principalSubject, refuseCredential, RequestLimits } from "./ratelimit.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
+import { completeSocialSignIn, connectSocialProvider, disconnectSocialProvider, getSocialPlatform, listSocials, refreshSocialCredentials, removeSocialAccount, socialSignInReturn, syncSocialProvider, usableProviders } from "./socials.js";
+import { listSocialEvents, receiveSocialWebhook, renewWebhookSubscriptions, socialWebhookHandshake } from "./socials-events.js";
 import { addDraft, addSource, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, removeSource, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign, updateBrand } from "./studio.js";
 import { createFromTemplate, createSampleProject, listTemplates } from "./templates.js";
+import { listLibraryTemplates } from "./template-library.js";
+import { createCloneJob, listCloneJobs, lookupCloneSource } from "./clone.js";
 
 export interface HttpDeps extends EngineDeps {
   planner: Planner | null;
@@ -91,16 +100,33 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   revoke_agent_connection: revokeConnection,
   create_from_template: createFromTemplate,
   create_sample_project: createSampleProject,
+  create_clone_job: createCloneJob,
   create_checkout: createCheckout,
   create_portal: createPortal,
+  // Personas (personas.ts): signed-in members who can edit content; the consent itself is recorded at /face-scan.
+  create_persona: createPersona,
+  update_persona: updatePersona,
+  delete_persona: deletePersona,
+  withdraw_persona_consent: async (deps, ctx, raw) => revokeLikenessConsent(deps, ctx, await personaConsentToWithdraw(deps, ctx, raw)),
+  persona_image_upload_url: personaImageUploadUrl,
+  create_persona_look: createPersonaLook,
+  update_persona_look: updatePersonaLook,
+  delete_persona_look: deletePersonaLook,
   connect_channel: connectChannel,
   disconnect_channel: disconnectChannel,
+  save_composition: saveComposition,
+  request_file_upload: requestUpload,
+  complete_file_upload: completeUpload,
+  save_text_file: saveTextFile,
+  archive_file: archiveFile,
+  queue_reel_render: queueRender,
+  cancel_reel_render: cancelRender,
   create_run_grant: async () => {
     throw new EngineError("unsupported", "Unattended publishing grants are not available in this build. Approve each schedule in the studio.");
   },
 } satisfies Record<string, OperationHandler>));
 /** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
-export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel"]);
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job"]);
 
 async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
   const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
@@ -124,9 +150,20 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     return json(await getCampaign(deps, ctx, campaignId));
   }
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/items\/([^/]+)\/composition$/))) return json(await getComposition(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/items\/([^/]+)\/renders$/))) return json(await listRenders(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/campaigns\/([^/]+)\/files$/))) return json(await listFiles(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
+  if (read && path === "/personas") return json(await listPersonas(deps, ctx));
+  if (read && path === "/templates/library") return json(await listLibraryTemplates(deps));
   if (read && path === "/billing") return json(await getBillingStatus(deps, ctx));
+  if (read && path === "/clone/jobs") return json(await listCloneJobs(deps, ctx));
+  if (read && path === "/clone/source") {
+    // Asks the platform's oEmbed endpoint (or follows a TikTok short link), so it counts as a costly call.
+    await limits.enforce(policies.costly, subject);
+    return json(await lookupCloneSource(deps, ctx, new URL(request.url).searchParams.get("url")));
+  }
   if (read && path === "/channels") return json(await getChannelStatus(deps, ctx));
   if (post && path === "/workspace/select") {
     // resolveContext has already proven membership of the requested workspace.
@@ -140,6 +177,17 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     await limits.enforce(policies.director, subject);
     return json(await directorTurn(deps, ctx, await body(request), deps.planner));
   }
+  // Likeness capture ("Scan my face"). Signed-in people only; see likeness.ts.
+  if (post && path === "/likeness/upload-url") return json(await likenessUploadUrl(deps, ctx, await body(request)));
+  if (post && path === "/likeness/live-token") return json(await likenessLiveToken(deps, ctx));
+  if (post && path === "/likeness/consents") {
+    // Where the consent was given from is part of its record. Both values are length-capped, never trusted for access;
+    // the forwarded address is kept only behind a proxy that sets it (config.trustProxyHeaders), so a caller cannot choose it.
+    const forwarded = deps.config.trustProxyHeaders ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim().slice(0, 64) : null;
+    const client = { userAgent: request.headers.get("user-agent")?.trim().slice(0, 500) || null, ipAddress: forwarded || null };
+    return json(await saveLikenessConsent(deps, ctx, await body(request), client));
+  }
+  if (request.method === "DELETE" && (match = path.match(/^\/likeness\/consents\/([^/]+)$/))) return json(await revokeLikenessConsent(deps, ctx, decodeURIComponent(match[1])));
   if (post && (match = path.match(/^\/operations\/([a-z_]+)$/))) {
     const name = match[1];
     const operation = operations.get(name);
@@ -172,6 +220,76 @@ async function worker(deps: HttpDeps, request: Request, path: string, limits: Re
   throw new EngineError("not_found", "Unknown worker route.");
 }
 
+/** Social accounts and their activity: /v1/socials, /v1/socials/:platform, and the per-platform webhook address. */
+async function socials(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
+  const { method } = request;
+  const query = new URL(request.url).searchParams;
+  // Added by the platform rewrite (vercel.json); never part of the caller's query.
+  query.delete("__path");
+  const policies = deps.config.rateLimit;
+  let match: RegExpMatchArray | null;
+  // Deliveries are signed by their sender instead of carrying a member session, and need the exact bytes sent.
+  if ((match = path.match(/^\/([a-z0-9_]+)\/webhook$/))) {
+    if (method === "POST") {
+      // Like the Stripe webhook, a genuine delivery is not rate limited: a platform retries what is refused, and a
+      // dropped delivery loses activity. A delivery whose signature is refused counts as a failed credential.
+      try {
+        return json(await receiveSocialWebhook(deps, match[1], request.headers, await readBoundedText(request)));
+      } catch (error) {
+        if (error instanceof EngineError && error.code === "unauthenticated") await refuseCredential(limits, policies, error);
+        throw error;
+      }
+    }
+    // The check a platform makes when the address is registered carries no credential.
+    await limits.enforceNetwork(policies.anonymous);
+    const answer = method === "GET" ? await socialWebhookHandshake(deps, match[1], query) : null;
+    if (answer === null) throw new EngineError("not_found", "Unknown socials route.");
+    return new Response(answer.body, { headers: { "Content-Type": answer.contentType, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+  }
+  // A platform sending the person's browser back after they signed in there. It carries no member session, so it
+  // only passes them on to the studio's connect page, where they complete the connection signed in.
+  if (method === "GET" && (match = path.match(/^\/providers\/([a-z0-9_]+)\/callback$/))) {
+    await limits.enforceNetwork(policies.anonymous);
+    return new Response(null, { status: 302, headers: { Location: socialSignInReturn(deps, match[1], query), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+  }
+  const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
+  const subject = principalSubject(principal);
+  await limits.enforce(policies.principal, subject);
+  const ctx = await resolveContext(deps, principal, request.headers.get("x-faceful-workspace"), correlationId);
+  if (method === "GET" && (path === "" || path === "/")) return json(await listSocials(deps, ctx));
+  if (method === "GET" && path === "/events") return json(await listSocialEvents(deps, ctx, Object.fromEntries(query)));
+  if (method === "POST" && (match = path.match(/^\/providers\/([a-z0-9_]+)\/complete$/))) {
+    // Finishing a sign-in trades its code with the platform, so it counts against `costly` too.
+    await limits.enforce(policies.costly, subject);
+    return json(await completeSocialSignIn(deps, ctx, match[1], await body(request)));
+  }
+  if (method === "POST" && (match = path.match(/^\/providers\/([a-z0-9_]+)\/(connect|sync)$/))) {
+    // Connecting or syncing calls the provider (or starts a sign-in with it), so it also counts against `costly`.
+    await limits.enforce(policies.costly, subject);
+    const result = match[2] === "connect" ? await connectSocialProvider(deps, ctx, match[1], await body(request)) : await syncSocialProvider(deps, ctx, match[1]);
+    // Where the engine holds a platform's subscription itself (YouTube), new accounts start receiving right away.
+    // Best effort: the scheduler tick asks again.
+    await renewWebhookSubscriptions(deps, ctx.org.id).catch(() => undefined);
+    return json(result);
+  }
+  if (method === "DELETE" && (match = path.match(/^\/providers\/([a-z0-9_]+)$/))) return json(await disconnectSocialProvider(deps, ctx, match[1]));
+  if (method === "DELETE" && (match = path.match(/^\/accounts\/([0-9a-f-]{36})$/))) return json(await removeSocialAccount(deps, ctx, match[1]));
+  if (method === "GET" && (match = path.match(/^\/([a-z0-9_]+)$/))) return json(await getSocialPlatform(deps, ctx, match[1]));
+  throw new EngineError("not_found", "Unknown socials route.");
+}
+
+/** Reel render worker routes: /v1/worker/reel/*. */
+async function reelWorkerRoute(deps: HttpDeps, request: Request, path: string, limits: RequestLimits): Promise<Response> {
+  // Like the avatar render worker: a trusted service credential that is not throttled; refused credentials are.
+  try {
+    authenticateReelWorker(deps, request.headers.get("authorization"));
+  } catch (error) {
+    if (error instanceof EngineError) await refuseCredential(limits, deps.config.rateLimit, error);
+    throw error;
+  }
+  return json(await reelWorker(deps, request, path, () => body(request)));
+}
+
 /** Which integrations are configured. Booleans and safe sentences only — never a key, a URL with credentials or an ID. */
 export function health(deps: HttpDeps) {
   const { config } = deps;
@@ -180,8 +298,19 @@ export function health(deps: HttpDeps) {
     database: Boolean(config.supabaseUrl),
     director: config.llm ? "ai" : "basic",
     rendering: { connected: Boolean(config.renderWorkerToken), provider: "humanlike", humanlikeKey: Boolean(config.humanlikeApiKey) },
+    files: { connected: Boolean(deps.files?.configured) },
+    likeness: { liveTranscription: Boolean(config.humanlikeTranscribeKey) },
+    reelRendering: { connected: Boolean(config.reelWorkerToken) },
     billing: { mode: config.stripe ? "sandbox" : "not_configured", problem: config.stripeProblem },
-    publishing: { adapters: config.youtube ? ["youtube"] : ([] as string[]), problem: config.youtube ? null : config.youtubeProblem },
+    // What can post: YouTube channels connected in the studio, and each social provider a workspace could connect here
+    // (SOCIALS_CREDENTIAL_KEY set; for Instagram directly, also this deployment's own Instagram app).
+    publishing: { adapters: [...(config.youtube ? ["youtube"] : []), ...usableProviders(deps)], problem: config.youtube ? null : config.youtubeProblem },
+    socials: {
+      connections: Boolean(config.socials.credentialKey),
+      webhooks: Boolean(config.socials.webhookSecret),
+      // Platforms whose own webhook format is accepted here.
+      nativeWebhooks: Object.entries(config.socials.native).flatMap(([platform, credentials]) => (credentials ? [platform] : [])),
+    },
     scheduler: Boolean(config.cronSecret),
   };
 }
@@ -206,8 +335,13 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
       if (!cronSecret || !constantTimeEqual(request.headers.get("authorization") ?? "", `Bearer ${cronSecret}`)) {
         await refuseCredential(limits, deps.config.rateLimit, new EngineError("unauthenticated", "Scheduler credential required."));
       }
-      response = json({ swept: await sweepRenderJobs(deps), publishing: await processDuePublishJobs(deps) });
+      // Sign-in credentials are refreshed first, so the posts due in this same run go out with ones that still work.
+      // Publishing also asks providers about submitted posts (schedule.ts); webhook subscriptions are renewed where the engine holds them.
+      const credentials = await refreshSocialCredentials(deps);
+      response = json({ swept: await sweepRenderJobs(deps), publishing: await processDuePublishJobs(deps), webhooks: await renewWebhookSubscriptions(deps), credentials });
     } else if (pathname.startsWith("/v1/studio/")) response = await studio(deps, request, pathname.slice("/v1/studio".length), correlationId, limits);
+    else if (pathname === "/v1/socials" || pathname.startsWith("/v1/socials/")) response = await socials(deps, request, pathname.slice("/v1/socials".length), correlationId, limits);
+    else if (pathname.startsWith("/v1/worker/reel/")) response = await reelWorkerRoute(deps, request, pathname.slice("/v1/worker/reel".length), limits);
     else if (pathname.startsWith("/v1/worker/")) response = await worker(deps, request, pathname.slice("/v1/worker".length), limits);
     else throw new EngineError("not_found", "Unknown API route.");
   } catch (error) {

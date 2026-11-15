@@ -1700,3 +1700,15 @@
 @layer responsive { @media (max-width: 600px) { .editor-preview { width: min(160px, calc(28dvh * 9 / 16)); } } }
 
 @layer views { .blocker-scope { display: block; color: var(--text-secondary); margin-top: 4px; } }
+@layer views {
+  /* Shown while the lazy video studio chunk (Remotion) loads; the rest of its styles ship with that chunk. */
+  .video-loading-shell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 64px 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+}

@@ -1,0 +1,38 @@
+{
+  // Faceful machines gateway: one Claude Code container per user.
+  // Deploy (needs Docker running): CLOUDFLARE_API_TOKEN=… npm run deploy
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "faceful-machines",
+  "account_id": "9c96bc186c40affb19ccb9fcc5ebc05f",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  // One container per user, awake only while they work. standard-1: 1/2 vCPU, 4 GiB memory, 8 GB disk.
+  // max_instances is the spend guard: the account itself allows 15,000 vCPU and 60 TiB at once.
+  "containers": [
+    {
+      "class_name": "UserMachine",
+      "image": "../claude-runner/Dockerfile",
+      "image_build_context": "../claude-runner",
+      "max_instances": 25,
+      "instance_type": "standard-1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "MACHINE", "class_name": "UserMachine" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserMachine"] }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "faceful-machines", "database_id": "236a0e56-c855-4941-8178-5495e5ac4876" }
+  ],
+  "vars": {
+    "SUPABASE_URL": "https://hgsgvdujzatfhsjoojll.supabase.co",
+    "STORE_URL": "https://faceful-workspace-store.mmkontis.workers.dev",
+    "ALLOWED_ORIGINS": "https://faceful.dtheo.dev,http://127.0.0.1:5173,http://localhost:5173",
+    "INSTANCE_TYPE": "standard-1"
+  }
+  // Secrets (never in this file):
+  //   wrangler secret put STORE_SIGNING_KEY     same value as the faceful-workspace-store Worker's
+  //   wrangler secret put GATEWAY_SIGNING_KEY   signs personal tokens (node mint-token.mjs <user-id>)
+}

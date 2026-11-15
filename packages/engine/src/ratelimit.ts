@@ -6,16 +6,18 @@ import { EngineError } from "./errors.js";
 import type { RateLimitHit, Store } from "./store.js";
 
 /**
- * Request rate limiting for `/v1/studio/*`, `/v1/worker/*` (failed credentials only) and `/mcp`.
+ * Request rate limiting for `/v1/studio/*`, `/v1/socials/*`, `/v1/worker/*` (failed credentials only) and `/mcp`.
  *
  * Authority: one Postgres function (`engine_rate_limit_hit`, migration 20261115010000) counts every request in
  * fixed windows, so limits hold across all function instances. Buckets:
  *   • principal  — every authenticated request, per user / OAuth agent / workspace token;
  *   • director   — model-backed Director turns, per principal (each costs money);
- *   • costly     — render, checkout and channel connection, per principal (spend money or call providers);
+ *   • costly     — render, checkout, channel connection and social provider connect/sync, per principal
+ *                  (spend money or call providers);
  *   • anonymous  — requests with no credential, per client network;
  *   • failed_auth — requests whose credential was refused, per client network.
- * Exempt: the Stripe webhook (signature-verified) and an authorized scheduler tick or render worker.
+ * Exempt: the Stripe webhook and social deliveries (signature-verified; a refused social signature counts as a
+ * failed credential) and an authorized scheduler tick or render worker.
  *
  * Degradation: if the limiter's database call fails, requests are let through (fail open) with a structured
  * log, so a broken limiter cannot take the product down. The failed-auth bucket is the exception: it falls back

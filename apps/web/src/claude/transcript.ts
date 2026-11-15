@@ -98,6 +98,13 @@ export function applyEvent(state: Transcript, event: StreamEvent): Transcript {
     }
     case "runner": {
       if (event.event === "error" && typeof event.message === "string") return addNotice(state, event.message);
+      if (event.event === "started" && event.restored === true) return addNotice(state, "Brought this project back from your cloud folder.", false);
+      if (event.event === "saved") {
+        const save = record(event.save);
+        const files = typeof save.files === "number" ? save.files : null;
+        return addNotice(state, `Saved to your cloud folder${files === null ? "" : ` · ${files} file${files === 1 ? "" : "s"}`}.`, false);
+      }
+      if (event.event === "save_failed") return addNotice(state, typeof event.message === "string" ? event.message : "Couldn't save the project to cloud storage.");
       if (event.event === "exit" && event.code !== 0) {
         const finished = state.items.at(-1)?.kind === "result";
         if (event.signal === "SIGTERM") return addNotice({ ...state, live: "" }, "Run stopped.", false);

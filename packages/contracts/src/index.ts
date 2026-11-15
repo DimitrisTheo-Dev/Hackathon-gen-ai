@@ -507,3 +507,376 @@ export const templateInputSchema = z
   .object({ templateId: idSchema, language: z.string().min(2).max(12), inputs: z.record(z.string(), z.string().max(400)), operationKey: z.uuid() })
   .strict();
 export type TemplateInput = z.infer<typeof templateInputSchema>;
+
+// ── Likeness capture ("Scan my face"): a guided face scan plus spoken consent, kept as private recordings. ──
+export const likenessLanguageSchema = z.enum(["en", "el"]);
+export type LikenessLanguage = z.infer<typeof likenessLanguageSchema>;
+export const likenessPoseSchema = z.enum(["center", "left", "right", "up", "down"]);
+export type LikenessPose = z.infer<typeof likenessPoseSchema>;
+
+/**
+ * The spoken permission, word for word as stored. Built here so the sentence a person reads in the
+ * browser is exactly the one the engine keeps with their recordings; the engine never trusts a supplied one.
+ */
+export function likenessConsentStatement(name: string, language: LikenessLanguage): string {
+  const who = name.trim().replace(/\s+/g, " ");
+  return language === "el"
+    ? `Εγώ, ${who}, συμφωνώ να δημιουργήσει η Faceful ένα avatar με το πρόσωπο και τη φωνή μου.`
+    : `I, ${who}, agree that Faceful may create an avatar of my face and voice.`;
+}
+
+export const LIKENESS_MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+export const LIKENESS_MAX_STILL_BYTES = 15 * 1024 * 1024;
+export const likenessUploadInputSchema = z
+  .object({
+    // What MediaRecorder produces: MP4 (Safari, current Chrome), WebM, or Matroska (Chrome's H.264 "WebM").
+    type: z.enum(["video/mp4", "video/webm", "video/x-matroska", "image/jpeg"]),
+    size: z.number().int().positive().max(LIKENESS_MAX_VIDEO_BYTES),
+    /** SHA-256 of the exact bytes. Storage refuses any other body, so an upload link is good for one file only. */
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type LikenessUploadInput = z.infer<typeof likenessUploadInputSchema>;
+export const likenessUploadTicketSchema = z.object({
+  key: z.string().min(1).max(512),
+  // https always. Plain http is accepted only for a loopback address, which is how local test storage is reached.
+  uploadUrl: z.url({ protocol: /^https?$/ }).refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  }, "Upload links must use https"),
+  /** Headers the PUT must send verbatim; they are part of the signature. */
+  headers: z.record(z.string(), z.string()),
+  expiresAt: instantSchema,
+});
+export type LikenessUploadTicket = z.infer<typeof likenessUploadTicketSchema>;
+
+export const likenessLiveTokenSchema = z.object({
+  /** Single use; opens one live transcription socket. */
+  token: z.string().min(1).max(200),
+  url: z.url({ protocol: /^wss?$/ }),
+  expiresInSeconds: z.number().int().positive(),
+});
+export type LikenessLiveToken = z.infer<typeof likenessLiveTokenSchema>;
+
+export const likenessCheckSchema = z.object({
+  id: z.string().min(1).max(40),
+  label: z.string().max(80),
+  passed: z.boolean(),
+  /** Whether a failure blocks saving. */
+  required: z.boolean(),
+  /** The measured value, kept with the consent for review. */
+  value: z.number(),
+});
+export const likenessReportSchema = z.object({ passed: z.boolean(), checks: z.array(likenessCheckSchema).min(1).max(20) });
+export type LikenessReport = z.infer<typeof likenessReportSchema>;
+export const likenessConsentInputSchema = z
+  .object({
+    subjectName: z.string().trim().min(2).max(120),
+    language: likenessLanguageSchema,
+    /** Two random phrases, then the consent statement. */
+    phrases: z.array(z.string().max(300)).length(3),
+    transcript: z.string().max(5000),
+    scanVideoKey: z.string().min(1).max(512),
+    speechVideoKey: z.string().min(1).max(512),
+    stills: z.partialRecord(likenessPoseSchema, z.string().min(1).max(512)),
+    report: likenessReportSchema,
+    /** The persona this consent is recorded for (the Personas tab sends people to /face-scan?persona=<id>). */
+    personaId: idSchema.optional(),
+  })
+  .strict();
+export type LikenessConsentInput = z.infer<typeof likenessConsentInputSchema>;
+export const likenessConsentResultSchema = z.object({
+  id: idSchema,
+  passed: z.boolean(),
+  /** The persona the consent now backs, or null when none was named or it could not take this consent. */
+  personaId: idSchema.nullable().optional(),
+});
+export type LikenessConsentResult = z.infer<typeof likenessConsentResultSchema>;
+
+// ── Personas: presenters made from one person's face scan and spoken consent, each with one or more looks. ──
+export const PERSONA_LIMIT = 50;
+export const PERSONA_LOOK_LIMIT = 20;
+export const PERSONA_MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+/** needs_consent: no scan yet; ready: backed by a live consent; consent_withdrawn: the person withdrew it. */
+export const personaStatusSchema = z.enum(["needs_consent", "ready", "consent_withdrawn"]);
+export type PersonaStatus = z.infer<typeof personaStatusSchema>;
+export const personaConsentSchema = z.object({
+  id: idSchema,
+  subjectName: z.string(),
+  language: likenessLanguageSchema,
+  createdAt: instantSchema,
+  revokedAt: instantSchema.nullable(),
+  /** Short-lived link to the straight-on still from the scan. Null once withdrawn, for agents, or without storage. */
+  photoUrl: z.url().nullable(),
+  /** The person who recorded it, and workspace owners and admins, can withdraw it. */
+  canWithdraw: z.boolean(),
+});
+export type PersonaConsent = z.infer<typeof personaConsentSchema>;
+export const personaLookSchema = z.object({
+  id: idSchema,
+  personaId: idSchema,
+  name: z.string(),
+  description: z.string(),
+  hasImage: z.boolean(),
+  /** Short-lived link to the reference photo; null when there is none, for agents, or without storage. */
+  imageUrl: z.url().nullable(),
+  position: z.number().int().nonnegative(),
+  createdAt: instantSchema,
+  updatedAt: instantSchema,
+});
+export type PersonaLook = z.infer<typeof personaLookSchema>;
+export const personaSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  description: z.string(),
+  language: likenessLanguageSchema,
+  status: personaStatusSchema,
+  consent: personaConsentSchema.nullable(),
+  looks: z.array(personaLookSchema),
+  createdAt: instantSchema,
+  updatedAt: instantSchema,
+});
+export type Persona = z.infer<typeof personaSchema>;
+
+const personaName = z.string().trim().min(1).max(80);
+const personaText = z.string().trim().max(1000);
+export const createPersonaInputSchema = z
+  .object({ name: personaName, description: personaText.default(""), language: likenessLanguageSchema.default("en"), operationKey: z.uuid() })
+  .strict();
+export type CreatePersonaInput = z.input<typeof createPersonaInputSchema>;
+export const updatePersonaInputSchema = z
+  .object({ personaId: idSchema, name: personaName.optional(), description: personaText.optional(), language: likenessLanguageSchema.optional() })
+  .strict();
+export type UpdatePersonaInput = z.infer<typeof updatePersonaInputSchema>;
+export const personaRefInputSchema = z.object({ personaId: idSchema }).strict();
+export type PersonaRefInput = z.infer<typeof personaRefInputSchema>;
+export const personaImageUploadInputSchema = z
+  .object({
+    personaId: idSchema,
+    type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+    size: z.number().int().positive().max(PERSONA_MAX_IMAGE_BYTES),
+    /** SHA-256 of the exact bytes; the link accepts this one file only. */
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type PersonaImageUploadInput = z.infer<typeof personaImageUploadInputSchema>;
+export const createPersonaLookInputSchema = z
+  .object({
+    personaId: idSchema,
+    name: personaName,
+    description: personaText.default(""),
+    /** A key from a persona image upload link for this persona, once the photo is stored. */
+    imageKey: z.string().min(1).max(512).nullable().default(null),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export type CreatePersonaLookInput = z.input<typeof createPersonaLookInputSchema>;
+export const updatePersonaLookInputSchema = z
+  .object({ lookId: idSchema, name: personaName.optional(), description: personaText.optional(), imageKey: z.string().min(1).max(512).nullable().optional() })
+  .strict();
+export type UpdatePersonaLookInput = z.infer<typeof updatePersonaLookInputSchema>;
+export const personaLookRefInputSchema = z.object({ lookId: idSchema }).strict();
+export type PersonaLookRefInput = z.infer<typeof personaLookRefInputSchema>;
+// ── Template library: first-party short-form video templates (built with OpenMontage), each with a rendered sample. ──
+/** One library template. Media URLs are short-lived signed links; null when a file is missing from storage. */
+export const libraryTemplateSchema = z.object({
+  id: idSchema,
+  version: z.number().int().positive(),
+  /** "face": a lip-synced presenter (a fictional person or an illustrated character). "no_face": type, diagrams, charts. */
+  family: z.enum(["face", "no_face"]),
+  name: z.string(),
+  summary: z.string(),
+  useFor: z.string(),
+  /** The sample's language; `languages` lists every language a sample exists in. */
+  language: z.string(),
+  languages: z.array(z.string()),
+  aspectRatio: z.literal("9:16"),
+  fps: z.number().int().positive(),
+  /** Seconds a video made from this template should last. */
+  durationRange: z.tuple([z.number().int().positive(), z.number().int().positive()]),
+  sampleTopic: z.string(),
+  sampleSeconds: z.number().positive(),
+  voice: z.string(),
+  fonts: z.array(z.string()),
+  /** What a new video needs, beyond topic, brand and call to action. */
+  inputs: z.array(z.object({ key: z.string(), label: z.string() })),
+  /** The sample's lines, as shown on screen. */
+  script: z.array(z.object({ id: z.string(), text: z.string() })),
+  videoUrl: httpUrlSchema.nullable(),
+  posterUrl: httpUrlSchema.nullable(),
+  stills: z.array(z.object({ beat: z.string(), url: httpUrlSchema.nullable() })),
+  variants: z.array(z.object({ language: z.string(), url: httpUrlSchema.nullable() })),
+  /** When the signed URLs stop working. */
+  expiresAt: instantSchema,
+});
+export type LibraryTemplate = z.infer<typeof libraryTemplateSchema>;
+/* Video compositions previewed with Remotion. */
+export * from "./composition.js";
+// ── Clone a video: a short video posted on YouTube, TikTok or Instagram becomes the model for a new one. ──
+/** What a clone may borrow from the source video. Only what the person ticks is carried over. */
+export const CLONE_TRAITS = ["structure", "pacing", "transitions", "captions", "graphics", "sound", "music", "voice", "colours"] as const;
+export const cloneTraitSchema = z.enum(CLONE_TRAITS);
+export type CloneTrait = z.infer<typeof cloneTraitSchema>;
+export const CLONE_BRIEF_MAX = 4000;
+
+/**
+ * A source link, understood without any network call. `embedUrl` is the platform's own player for the video;
+ * a TikTok short link (vm.tiktok.com) has none until the engine has followed it to the video it leads to.
+ */
+export interface CloneLink {
+  platform: Platform;
+  kind: "video" | "short" | "reel" | "post" | "short_link";
+  /** The platform's ID for the video (or the short link's code). */
+  sourceId: string;
+  /** Canonical address, without tracking parameters. */
+  url: string;
+  embedUrl: string | null;
+  orientation: "portrait" | "landscape";
+}
+export type CloneLinkResult = { ok: true; link: CloneLink } | { ok: false; reason: string };
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const TIKTOK_ID = /^\d{8,25}$/;
+const TIKTOK_CODE = /^[A-Za-z0-9]{5,20}$/;
+const TIKTOK_USER = /^@[A-Za-z0-9._]{1,40}$/;
+const INSTAGRAM_CODE = /^[A-Za-z0-9_-]{5,40}$/;
+
+function youtubeLink(id: string | null | undefined, short: boolean): CloneLinkResult {
+  if (!id || !YOUTUBE_ID.test(id)) return { ok: false, reason: "That YouTube link does not point to a video. Copy the link from the video's Share button." };
+  return {
+    ok: true,
+    link: {
+      platform: "youtube",
+      kind: short ? "short" : "video",
+      sourceId: id,
+      url: short ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}`,
+      // Privacy-enhanced mode: YouTube sets no cookies until the person plays the video.
+      embedUrl: `https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1`,
+      orientation: short ? "portrait" : "landscape",
+    },
+  };
+}
+/** A TikTok video by ID, through TikTok's embed player. */
+export function tiktokVideoLink(id: string, user?: string | null): CloneLink {
+  return {
+    platform: "tiktok",
+    kind: "video",
+    sourceId: id,
+    url: `https://www.tiktok.com/${user && TIKTOK_USER.test(user) ? user : "@"}/video/${id}`,
+    embedUrl: `https://www.tiktok.com/player/v1/${id}?music_info=1&description=1&rel=0`,
+    orientation: "portrait",
+  };
+}
+
+/**
+ * Reads a YouTube (videos and Shorts), TikTok (videos and short links) or Instagram (reels and posts) link.
+ * Shared by the studio, for an instant preview, and the engine, which never trusts the browser's reading.
+ */
+export function parseCloneLink(raw: string): CloneLinkResult {
+  const text = raw.trim();
+  if (!text) return { ok: false, reason: "Paste a link to a YouTube, TikTok or Instagram video." };
+  if (text.length > 2048) return { ok: false, reason: "That link is too long to be a video link." };
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`);
+  } catch {
+    return { ok: false, reason: "That does not look like a link. Paste the video's address." };
+  }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password || url.port)
+    return { ok: false, reason: "That does not look like a video link. Paste the address from the platform's Share button." };
+  const host = url.hostname.toLowerCase().replace(/\.$/, "").replace(/^(www|m)\./, "");
+  const parts = url.pathname.split("/").filter(Boolean);
+  const unsupported = { ok: false as const, reason: "Faceful can clone videos from YouTube, TikTok and Instagram. Paste a link from one of those." };
+
+  if (host === "youtu.be") return youtubeLink(parts[0], false);
+  if (host === "youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+    if (parts[0] === "watch") return youtubeLink(url.searchParams.get("v"), false);
+    if (parts[0] === "shorts") return youtubeLink(parts[1], true);
+    if (["live", "embed", "v"].includes(parts[0] ?? "")) return youtubeLink(parts[1], false);
+    return { ok: false, reason: "That YouTube link is not a single video. Open the video or Short and copy its link." };
+  }
+
+  if (host === "vm.tiktok.com" || host === "vt.tiktok.com" || (host === "tiktok.com" && parts[0] === "t")) {
+    const code = host === "tiktok.com" ? parts[1] : parts[0];
+    if (!code || !TIKTOK_CODE.test(code)) return { ok: false, reason: "That TikTok link looks cut short. Copy it again from the Share button." };
+    const base = host === "tiktok.com" ? "https://www.tiktok.com/t" : `https://${host}`;
+    return { ok: true, link: { platform: "tiktok", kind: "short_link", sourceId: code, url: `${base}/${code}/`, embedUrl: null, orientation: "portrait" } };
+  }
+  if (host === "tiktok.com") {
+    if (parts[1] === "photo") return { ok: false, reason: "That is a TikTok photo post. Paste a link to a video." };
+    if (parts[1] === "live") return { ok: false, reason: "Live streams cannot be cloned. Paste a link to a TikTok video." };
+    let id: string | undefined;
+    let user: string | null = null;
+    if (parts[0]?.startsWith("@") && parts[1] === "video") [user, id] = [parts[0], parts[2]];
+    else if (parts[0] === "embed") id = parts[1] === "v2" ? parts[2] : parts[1];
+    else if (parts[0] === "player" && parts[1] === "v1") id = parts[2];
+    else if (parts[0] === "v") id = parts[1]?.replace(/\.html$/, "");
+    else if (parts[0] === "video") id = parts[1];
+    if (id && TIKTOK_ID.test(id)) return { ok: true, link: tiktokVideoLink(id, user) };
+    if (parts[0]?.startsWith("@") && parts.length === 1) return { ok: false, reason: "That is a TikTok profile. Paste a link to one of its videos." };
+    return { ok: false, reason: "That TikTok link does not point to a video. Copy the link from the video's Share button." };
+  }
+
+  if (host === "instagram.com" || host === "instagr.am") {
+    if (parts[0] === "stories") return { ok: false, reason: "Stories cannot be cloned. Paste a link to a reel or a post." };
+    // Share links can start with the account name: instagram.com/<account>/reel/<code>/.
+    const at = ["p", "reel", "reels", "tv"].includes(parts[0] ?? "") ? 0 : ["p", "reel", "reels", "tv"].includes(parts[1] ?? "") ? 1 : -1;
+    const code = at >= 0 ? parts[at + 1] : undefined;
+    if (!code || !INSTAGRAM_CODE.test(code))
+      return { ok: false, reason: parts.length === 1 ? "That is an Instagram profile. Paste a link to one reel or post." : "That Instagram link does not point to a reel or a post." };
+    const reel = parts[at] !== "p";
+    const path = `${reel ? "reel" : "p"}/${code}`;
+    return { ok: true, link: { platform: "instagram", kind: reel ? "reel" : "post", sourceId: code, url: `https://www.instagram.com/${path}/`, embedUrl: `https://www.instagram.com/${path}/embed/`, orientation: "portrait" } };
+  }
+  return unsupported;
+}
+
+/** A source video as the engine resolved it. Title and author come from the platform's oEmbed when it gives them. */
+export const cloneSourceSchema = z.object({
+  platform: platformSchema,
+  kind: z.enum(["video", "short", "reel", "post"]),
+  sourceId: z.string().min(1).max(64),
+  url: httpUrlSchema,
+  embedUrl: httpUrlSchema,
+  orientation: z.enum(["portrait", "landscape"]),
+  title: z.string().max(300).nullable(),
+  author: z.string().max(200).nullable(),
+  authorUrl: httpUrlSchema.nullable(),
+  thumbnailUrl: httpUrlSchema.nullable(),
+});
+export type CloneSource = z.infer<typeof cloneSourceSchema>;
+
+export const cloneJobInputSchema = z
+  .object({
+    url: z.string().min(1).max(2048),
+    brief: z.string().trim().min(1).max(CLONE_BRIEF_MAX),
+    clone: z
+      .array(cloneTraitSchema)
+      .min(1)
+      .max(CLONE_TRAITS.length)
+      .refine((traits) => new Set(traits).size === traits.length, "Each trait once"),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export type CloneJobInput = z.infer<typeof cloneJobInputSchema>;
+
+/**
+ * One clone job. It is a request for work: a worker turns it into a project and a video later. Until then it
+ * stays `queued`; nothing is made, charged or published by creating it.
+ */
+export const cloneJobSchema = z.object({
+  id: idSchema,
+  source: cloneSourceSchema,
+  brief: z.string(),
+  clone: z.array(cloneTraitSchema),
+  state: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
+  /** Why a job failed, in words for people; null otherwise. */
+  error: z.string().nullable(),
+  /** The project the result lives in, once a worker has made one. */
+  projectId: idSchema.nullable(),
+  /** The finished video as a short-lived signed link; null until there is one. */
+  resultUrl: httpUrlSchema.nullable(),
+  createdAt: instantSchema,
+  updatedAt: instantSchema,
+});
+export type CloneJob = z.infer<typeof cloneJobSchema>;

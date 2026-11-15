@@ -26,6 +26,9 @@
     "packages/cli/src",
     "packages/engine/src",
     "api",
-    "apps/claude-runner"
+    "apps/claude-runner",
+    "apps/workspace-store/src",
+    "apps/machines/src/lib.ts",
+    "apps/claude-routine"
   ]
 }

@@ -1,0 +1,231 @@
+/* /logos: logo redesign proposals. Unlayered and scoped to .logos-page, like the landing page. */
+.logos-page {
+  --lg-gutter: 32px;
+  --lg-art: var(--art-image) center / cover, var(--art-wash);
+  min-block-size: 100dvh;
+  padding-block-end: 96px;
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-inter);
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: -.011em;
+  overflow-x: clip;
+}
+.logos-page *, .logos-page *::before, .logos-page *::after { box-sizing: border-box; }
+.logos-page :is(h1, h2, h3, p, figure, ol) { margin: 0; }
+.logos-page svg { display: block; flex-shrink: 0; }
+.lg-wrap {
+  inline-size: 100%;
+  max-inline-size: 1160px;
+  margin-inline: auto;
+  padding-inline: max(var(--lg-gutter), env(safe-area-inset-left, 0px)) max(var(--lg-gutter), env(safe-area-inset-right, 0px));
+}
+.lg-visually-hidden { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Header */
+.lg-header { position: sticky; inset-block-start: 0; z-index: 10; padding-block-start: env(safe-area-inset-top, 0px); background: var(--background); border-block-end: 1px solid var(--border); }
+.lg-header-inner { display: flex; align-items: center; gap: 14px; min-block-size: 64px; }
+.lg-home { display: inline-flex; align-items: center; min-block-size: 44px; color: var(--ink); text-decoration: none; }
+.lg-header-title { padding-inline-start: 14px; border-inline-start: 1px solid var(--border); color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
+.lg-status { margin-inline-start: auto; padding: 5px 11px; border-radius: 999px; background: var(--warning-surface); color: var(--warning-ink); font-size: 12px; line-height: 1.4; white-space: nowrap; }
+
+/* Logo pieces */
+.lg-lockup { display: inline-flex; align-items: center; gap: .08em; color: inherit; font-weight: 580; letter-spacing: -.045em; line-height: 1; white-space: nowrap; }
+.lg-favicon { display: inline-grid; place-items: center; flex-shrink: 0; background: var(--sidebar); color: var(--ink); }
+.lg-app-icon { display: inline-grid; place-items: center; flex-shrink: 0; border-radius: 22.5%; background: var(--sidebar); color: var(--ink); box-shadow: 0 1px 2px rgba(42, 42, 39, .08), 0 8px 20px rgba(42, 42, 39, .08); }
+.lg-app-icon.is-ink { background: var(--ink); color: var(--background); }
+.lg-app-icon.is-art { background: var(--lg-art); }
+
+/* Hero and sections */
+.lg-hero { padding-block: 80px 56px; }
+.lg-hero h1 { font-size: clamp(40px, 6.4vw, 76px); font-weight: 500; letter-spacing: -.03em; line-height: 1.02; text-wrap: balance; }
+.lg-hero p { margin-block-start: 22px; max-inline-size: 58ch; color: var(--text-secondary); font-size: 18px; line-height: 1.5; text-wrap: pretty; }
+.lg-section { padding-block: 56px; border-block-start: 1px solid var(--border); }
+.lg-section h2 { font-size: 28px; font-weight: 500; letter-spacing: -.025em; line-height: 1.15; }
+.lg-section-lead { margin-block-start: 8px; max-inline-size: 64ch; color: var(--text-secondary); text-wrap: pretty; }
+
+/* Tiles */
+.lg-fig { display: flex; flex-direction: column; gap: 8px; min-inline-size: 0; }
+.lg-fig > .lg-tile { flex: 1; }
+.lg-fig figcaption { color: var(--text-muted); font-size: 12.5px; }
+.lg-tile { display: grid; place-items: center; min-block-size: 168px; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); overflow: hidden; }
+.lg-tile.is-ink { background: var(--ink); border-color: var(--ink); color: var(--background); }
+.lg-tile.is-art { background: var(--lg-art); border-color: transparent; }
+.lg-tile.is-flush { padding: 20px; place-items: center stretch; background: var(--subtle); }
+
+/* Today */
+.lg-today { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: start; margin-block-start: 28px; }
+.lg-today-tile { gap: 28px; padding-block: 36px 28px; }
+.lg-today-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 28px; padding-block-start: 22px; border-block-start: 1px solid var(--border); inline-size: 100%; }
+.lg-findings { display: grid; gap: 24px; padding: 0; list-style: none; counter-reset: finding; }
+.lg-findings li { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 8px; counter-increment: finding; }
+.lg-findings li::before { content: counter(finding); grid-row: span 2; color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; line-height: 1.75; }
+.lg-findings strong { font-size: 17px; font-weight: 550; letter-spacing: -.02em; }
+.lg-findings p { max-inline-size: 56ch; color: var(--text-secondary); }
+
+/* Direction cards */
+.lg-concepts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-block-start: 28px; }
+.lg-concept { display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 16px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease); }
+.lg-concept:hover { border-color: var(--text-muted); }
+.lg-concept[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.lg-concept-art { display: grid; place-items: center; aspect-ratio: 4 / 3; margin-block-end: 10px; border-radius: 10px; background: var(--subtle); }
+.lg-concept[aria-pressed="true"] .lg-concept-art { background: var(--lg-art); }
+.lg-concept-meta { display: flex; align-items: baseline; gap: 8px; padding-inline: 6px; font-size: 17px; letter-spacing: -.02em; }
+.lg-concept-meta strong { font-weight: 550; }
+.lg-concept-number { color: var(--text-muted); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.lg-concept-pick { margin-inline-start: auto; padding: 2px 8px; border-radius: 999px; background: var(--positive-surface); color: var(--positive-ink); font-size: 11.5px; letter-spacing: 0; white-space: nowrap; }
+.lg-concept-idea { padding-inline: 6px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.45; }
+
+/* Stage */
+.lg-stage-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; }
+.lg-stage-head h2 .lg-concept-number { font-size: 14px; vertical-align: .35em; }
+.lg-stage-head p { margin-block-start: 10px; max-inline-size: 64ch; color: var(--text-secondary); text-wrap: pretty; }
+.lg-actions { display: flex; flex-shrink: 0; gap: 8px; }
+.lg-button { display: inline-flex; align-items: center; gap: 8px; min-block-size: 40px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 500; white-space: nowrap; transition: border-color 160ms var(--ease), background-color 160ms var(--ease); }
+.lg-button:hover { border-color: var(--text-muted); }
+.lg-button.is-primary { border-color: var(--ink); background: var(--ink); color: #fff; }
+.lg-button.is-primary:hover { background: var(--accent-dark); }
+.lg-stage-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px 16px; margin-block-start: 28px; }
+.lg-span-4 { grid-column: span 4; }
+.lg-span-5 { grid-column: span 5; }
+.lg-span-7 { grid-column: span 7; }
+.lg-icons { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 20px; padding-block: 8px; }
+.lg-ladder { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 16px 28px; }
+.lg-ladder-item { display: grid; justify-items: center; gap: 10px; }
+.lg-ladder-item small { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.lg-browser { border: 1px solid var(--border); border-radius: 12px; background: var(--background); overflow: hidden; box-shadow: var(--shadow); }
+.lg-browser-bar { display: flex; align-items: flex-end; gap: 14px; padding: 10px 14px 0; background: var(--muted-surface); }
+.lg-browser-dots { display: flex; gap: 6px; padding-block-end: 12px; }
+.lg-browser-dots i { inline-size: 9px; block-size: 9px; border-radius: 50%; background: #d3d0c6; }
+.lg-browser-tab { display: inline-flex; align-items: center; gap: 8px; min-inline-size: 0; padding: 8px 16px 9px 12px; border-radius: 9px 9px 0 0; background: var(--background); color: var(--ink-secondary); font-size: 12px; white-space: nowrap; }
+.lg-browser-page { display: flex; align-items: center; gap: 22px; padding: 18px 20px; }
+.lg-browser-links { display: flex; gap: 18px; margin-inline-start: 6px; color: var(--ink-secondary); font-size: 12.5px; white-space: nowrap; }
+.lg-browser-cta { margin-inline-start: auto; padding: 8px 15px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+
+.lg-construct { inline-size: 192px; block-size: 192px; outline: 1px solid var(--border); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 16px 16px; }
+
+/* Logo film. Sizes are in cqw so the whole sting scales with the stage. */
+/* CSS can only animate a custom property that is registered with a type. */
+@property --lg-fog { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+@property --lg-fog-fill { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+@property --lg-wipe { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+.lg-film-block { margin-block-start: 28px; }
+.lg-film { --face: 16cqw; --word-w: calc(var(--face) * .86 * var(--word-ratio)); --film-move: 1s cubic-bezier(.6, 0, .25, 1); position: relative; container-type: inline-size; aspect-ratio: 16 / 9; border-radius: 20px; background: #8fb9cb; color: var(--ink); overflow: hidden; isolation: isolate; }
+.lg-film-sky, .lg-film-art, .lg-film-center { position: absolute; inset: 0; }
+.lg-film-sky { background: linear-gradient(180deg, #78abc3 0%, #a9cbd8 100%); }
+/* The art arrives as fog from the corner the wash gradient starts in. The mask is three layers:
+   a wide soft front, cut into wisps by a drifting cloud texture, and a solid fill that follows behind. */
+.lg-film-art {
+  background: var(--lg-art);
+  mask-image:
+    radial-gradient(ellipse at 20% 0%, #000 calc(var(--lg-fog-fill) - 80%), transparent var(--lg-fog-fill)),
+    url('/art/fog.webp'),
+    radial-gradient(ellipse at 20% 0%, #000 calc(var(--lg-fog) - 70%), transparent var(--lg-fog));
+  mask-composite: add, intersect, add;
+  mask-size: auto, 75cqw 75cqw, auto;
+  mask-position: 0 0;
+  transition: --lg-fog 2.8s cubic-bezier(.25, .4, .35, 1), --lg-fog-fill 2.6s cubic-bezier(.4, 0, .4, 1) .7s, mask-position 3.4s linear;
+}
+.at-art .lg-film-art { --lg-fog: 175%; --lg-fog-fill: 190%; mask-position: 0 0, 14cqw 5cqw, 0 0; }
+.lg-film-center { display: grid; place-items: center; }
+.lg-film-lockup { display: flex; align-items: center; transform: translateX(calc(var(--face) * -.07)); transition: transform var(--film-move); }
+.lg-film-face { display: block; }
+.lg-film-face svg { inline-size: var(--face); block-size: var(--face); overflow: visible; }
+.lg-film-face .lg-eye { transform-box: fill-box; transform-origin: 50% 50%; transform: scaleY(0); transition: transform .5s cubic-bezier(.34, 1.56, .64, 1); }
+.lg-film-face .lg-eye-wink { transition-delay: .09s; }
+.lg-film-face .lg-smile { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset .6s cubic-bezier(.3, .7, .2, 1) .2s, opacity .01s linear .2s; }
+.at-logo .lg-film-face .lg-eye { transform: none; }
+.at-logo .lg-film-face .lg-smile { stroke-dashoffset: 0; opacity: 1; }
+/* The face erases the word: the two move toward each other, and the letters fade out in a soft zone
+   at the face's edge. The zone belongs to the wrapper, which travels with the face. */
+.lg-film-clip { display: block; margin-inline-start: calc(var(--face) * -.12); transition: --lg-wipe .3s ease-out; }
+.at-exit .lg-film-clip { --lg-wipe: 22%; mask-image: linear-gradient(90deg, transparent, #000 var(--lg-wipe)); }
+.lg-film-word { display: block; padding-inline-start: calc(var(--face) * .12); transition: transform var(--film-move); }
+.lg-film-word svg { inline-size: var(--word-w); block-size: calc(var(--face) * .86); overflow: visible; }
+.lg-film-word .lg-letter { opacity: 0; transform: translateY(9px); transition: opacity .35s ease, transform .55s cubic-bezier(.34, 1.56, .64, 1); transition-delay: calc(.45s + var(--i) * .055s); }
+.at-logo .lg-film-word .lg-letter { opacity: 1; transform: none; }
+.at-exit .lg-film-word { transform: translateX(-100%); }
+.at-exit .lg-film-lockup { transform: translateX(calc(var(--word-w) / 2)); }
+.at-wink .lg-film-face .lg-eye-wink { animation: lg-wink .62s cubic-bezier(.4, 0, .2, 1) .15s both; }
+.at-wink .lg-film-face svg { animation: lg-nod .62s cubic-bezier(.4, 0, .2, 1) .15s both; }
+@keyframes lg-wink { 0%, 100% { transform: none; } 30%, 58% { transform: scaleY(.16); } }
+@keyframes lg-nod { 0%, 100% { transform: none; } 40% { transform: rotate(5deg) scale(1.03); } }
+.lg-film-caption { position: absolute; inset-inline: 0; inset-block-start: calc(50% + var(--face) * .64); display: flex; justify-content: center; font-family: ui-rounded, "SF Pro Rounded", var(--font-inter); font-size: clamp(13px, 2.5cqw, 27px); font-weight: 500; letter-spacing: -.01em; line-height: 1.3; opacity: 0; transform: translateY(.5em); transition: opacity .45s ease, transform .6s var(--ease-out); }
+.at-speak .lg-film-line { opacity: 1; transform: none; }
+.at-exit .lg-film-line { opacity: 0; transform: translateY(-.3em); transition-duration: .3s; }
+.lg-film-url { inset-block: auto 8%; }
+.at-url .lg-film-url { opacity: 1; transform: none; }
+.lg-film-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block-start: 14px; }
+.lg-film-note { flex: 1 1 280px; margin-inline-start: 8px; color: var(--text-muted); font-size: 12.5px; }
+.lg-chips-label { margin-block-start: 18px; color: var(--text-secondary); font-size: 13px; }
+.lg-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 10px; }
+.lg-chip { display: inline-flex; align-items: baseline; gap: 7px; min-block-size: 36px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease); }
+.lg-chip small { color: var(--text-muted); font-size: 12px; font-weight: 400; }
+.lg-chip:hover { border-color: var(--text-muted); }
+.lg-chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.lg-chip:disabled { opacity: .5; cursor: default; }
+
+/* Wordmark alternatives, on the same cards as the directions */
+.lg-concepts.is-words { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lg-word-art { aspect-ratio: auto; min-block-size: 148px; padding: 16px; }
+
+/* Comparison */
+/* Positioned so the visually hidden labels inside the table stay within the scroller. */
+.lg-compare-scroll { position: relative; margin-block-start: 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow-x: auto; }
+.lg-compare { inline-size: 100%; min-inline-size: 680px; border-collapse: collapse; }
+.lg-compare :is(th, td) { padding: 14px 20px; border-block-end: 1px solid var(--border); text-align: start; vertical-align: middle; }
+.lg-compare thead th { color: var(--text-muted); font-size: 12.5px; font-weight: 450; white-space: nowrap; }
+.lg-compare tbody th { font-weight: 500; white-space: nowrap; }
+.lg-compare tbody tr:last-child > * { border-block-end: 0; }
+.lg-compare tr.is-selected { background: var(--subtle); }
+.lg-compare td:last-child { text-align: end; white-space: nowrap; }
+.lg-compare-current { color: var(--text-muted); font-size: 12.5px; }
+.lg-link { min-block-size: 32px; padding: 4px 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 4px; }
+.lg-link:hover { text-decoration-color: var(--ink); }
+
+/* Recommendation */
+.lg-pick { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 40px; align-items: center; margin-block-start: 28px; }
+.lg-pick p { max-inline-size: 66ch; text-wrap: pretty; }
+.lg-pick p + p { margin-block-start: 12px; }
+.lg-pick p:not(:first-child) { color: var(--text-secondary); }
+.lg-pick .lg-pick-note { font-size: 13.5px; }
+
+@media (pointer: coarse) {
+  .lg-button, .lg-link, .lg-chip { min-block-size: 44px; }
+}
+@media (max-width: 980px) {
+  .lg-today { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .lg-concepts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lg-stage-head { flex-direction: column; gap: 20px; }
+  .lg-span-4 { grid-column: span 6; }
+  .lg-span-4:nth-of-type(3) { grid-column: span 12; }
+  .lg-span-5, .lg-span-7 { grid-column: span 12; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lg-film *, .lg-film { transition-duration: .2s !important; transition-delay: 0s !important; animation: none !important; }
+}
+@media (max-width: 640px) {
+  .logos-page { --lg-gutter: 16px; padding-block-end: 64px; }
+  .lg-film { --face: 21cqw; aspect-ratio: 1; border-radius: 16px; }
+  .lg-film-caption { font-size: clamp(13px, 4.4cqw, 20px); }
+  .lg-film-note { margin-inline-start: 0; }
+  .lg-concepts.is-words { grid-template-columns: minmax(0, 1fr); }
+  .lg-header-title, .lg-status span { display: none; }
+  .lg-hero { padding-block: 48px 40px; }
+  .lg-hero p { font-size: 16.5px; }
+  .lg-section { padding-block: 40px; }
+  .lg-section h2 { font-size: 24px; }
+  .lg-concepts { gap: 10px; }
+  .lg-concept-meta { flex-wrap: wrap; row-gap: 2px; }
+  .lg-concept-pick { margin-inline-start: 0; }
+  .lg-span-4 { grid-column: span 12; }
+  .lg-tile { padding: 20px 16px; }
+  .lg-tile.is-flush { padding: 12px; }
+  .lg-browser-links { display: none; }
+  .lg-ladder { gap: 14px 18px; }
+  .lg-actions { inline-size: 100%; }
+  .lg-actions .lg-button { flex: 1; justify-content: center; }
+  .lg-pick { grid-template-columns: minmax(0, 1fr); gap: 24px; justify-items: start; }
+}

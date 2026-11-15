@@ -97,14 +97,16 @@ export async function getContext(deps: EngineDeps, ctx: Ctx): Promise<StudioCont
   const blocker = renderBlocker(deps);
   const canRender = !blocker && ctx.scopes.has("render:write");
   const noRenderReason = blocker ?? (ctx.scopes.has("render:write") ? null : "Your role cannot start renders in this workspace.");
-  const connected = new Set(providerConnections.map((row) => row.platform));
+  // The studio schedules to PLATFORMS only. Accounts on other platforms (socials.ts) are listed at /v1/socials.
+  const studioAccounts = providerConnections.filter((row) => PLATFORMS.includes(row.platform));
+  const connected = new Set(studioAccounts.map((row) => row.platform));
   return parse(contextSchema, {
     workspace: { id: ctx.org.id, name: ctx.org.name, timezone: ctx.org.timezone, role: ctx.role, type: ctx.org.type },
     principal: { id: ctx.actorId, kind: ctx.actorKind, scopes: [...ctx.scopes] },
     brand: brandContract(brand, ctx.org.name),
     avatars,
     channels: [
-      ...providerConnections.map((row) => ({ id: row.id, platform: row.platform, displayName: row.display_name, state: row.state })),
+      ...studioAccounts.map((row) => ({ id: row.id, platform: row.platform, displayName: row.display_name, state: row.state })),
       ...PLATFORMS.filter((platform) => !connected.has(platform)).map((platform) => ({
         id: `unavailable-${platform}`,
         platform,

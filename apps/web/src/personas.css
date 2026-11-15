@@ -1,0 +1,117 @@
+/*
+ * Personas (views/Personas.tsx). Tokens come from /design.css; the shared .button, .text-button, .icon-button,
+ * .field, .modal and .notice styles are reused. Loaded with the Personas chunk, in the studio's polish layer.
+ *
+ * The portraits are the focal element: plain 4:5 frames with the status under them, never on them.
+ * Motion: press 120ms (scale .98), a hover lift only on fine pointers, nothing that moves layout.
+ */
+@layer polish {
+  .pa { box-sizing: border-box; inline-size: 100%; max-inline-size: 1120px; padding: 26px 24px 64px; }
+  :where(.pa) :is(h1, h2, h3, p, ul, dl, dd) { margin: 0; }
+
+  .pa-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .pa-intro h1 { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; }
+  .pa-intro p { margin-block-start: 6px; max-inline-size: 62ch; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .pa-intro .button { flex: none; }
+  .pa > .notice { margin-block-start: 20px; }
+  .pa-loading { margin-block-start: 24px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+  .pa-empty { display: grid; justify-items: start; gap: 12px; margin-block-start: 28px; padding: 24px; border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--elev-1); max-inline-size: 560px; }
+  .pa-empty > span { display: grid; place-items: center; inline-size: 44px; block-size: 44px; border-radius: 50%; background: var(--subtle); color: var(--ink-secondary); }
+  .pa-empty p { font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+
+  .pa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 24px 18px; margin-block-start: 28px; padding: 0; list-style: none; }
+  .pa-card { display: grid; gap: 12px; inline-size: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: transform var(--dur-press) var(--ease-out); }
+  .pa-card:active { transform: scale(.98); }
+  .pa-portrait { display: grid; place-items: center; aspect-ratio: 4 / 5; overflow: hidden; border-radius: var(--radius-lg); background: var(--muted-surface); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) ease; }
+  .pa-portrait img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
+  .pa-initial { font-size: 44px; font-weight: 600; letter-spacing: -.03em; color: var(--text-muted); }
+  .pa-card:focus-visible { outline: none; }
+  .pa-card:focus-visible .pa-portrait { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--focus); }
+  .pa-card-text { display: grid; justify-items: start; gap: 5px; }
+  .pa-card-text strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .pa-card-text small { font-size: 12.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  @media (hover: hover) and (pointer: fine) {
+    .pa-card:hover .pa-portrait { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06), var(--shadow); }
+  }
+
+  .pa-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; background: var(--warning-surface); color: var(--warning-ink); font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .pa-status::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: 50%; background: currentColor; }
+  .pa-status.ready { background: var(--positive-surface); color: var(--positive-ink); }
+  .pa-status.consent_withdrawn { background: var(--danger-surface); color: var(--danger); }
+
+  /* ── detail ── */
+  /* Desktop only: under 761px the modal is a full-width bottom sheet (mobile.css). */
+  @media (min-width: 761px) {
+    .modal.wide:has(.pa-detail) { inline-size: min(760px, calc(100% - 32px)); }
+  }
+  .pa-detail { display: grid; gap: 4px; }
+  .pa-detail > .notice { margin-block-end: 8px; }
+  .pa-section { padding-block: 16px; border-block-start: 1px solid var(--line); }
+  .pa-section:first-of-type { border-block-start: 0; padding-block-start: 0; }
+  .pa-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-end: 10px; }
+  .pa-section-head h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .pa-note { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .pa-muted { color: var(--text-muted); }
+  .pa-error { font-size: 12.5px; color: var(--danger); }
+
+  .pa-consent { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .pa-consent p { font-size: 13.5px; line-height: 1.55; text-wrap: pretty; }
+  .pa-consent-photo { display: grid; place-items: center; inline-size: 72px; aspect-ratio: 4 / 5; overflow: hidden; border-radius: var(--radius-md); background: var(--subtle); color: var(--text-muted); }
+  .pa-consent-photo img { inline-size: 100%; block-size: 100%; object-fit: cover; }
+  .pa-consent-needed { display: grid; gap: 12px; }
+  .pa-consent-needed > p:first-child { font-size: 13.5px; line-height: 1.55; text-wrap: pretty; }
+  .pa-consent-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .pa-consent-actions .button { text-decoration: none; }
+  .pa-danger-text { color: var(--danger); }
+  .pa-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block-start: 10px; padding: 12px; border-radius: var(--radius-md); background: var(--danger-surface); }
+  .pa-confirm > span { flex: 1 1 240px; font-size: 12.5px; line-height: 1.5; color: var(--danger); }
+  .pa-confirm .button.danger { background: var(--danger); color: var(--surface); border-color: transparent; }
+  @media (hover: hover) and (pointer: fine) {
+    .pa-confirm .button.danger:hover:not(:disabled) { filter: brightness(.94); }
+  }
+
+  .pa-facts { display: grid; gap: 8px; }
+  .pa-facts > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; font-size: 13.5px; line-height: 1.5; }
+  .pa-facts dt { color: var(--text-secondary); }
+  .pa-facts dd { white-space: pre-line; text-wrap: pretty; }
+  .pa-form .field { margin-block: 12px; }
+  .pa-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-block-start: 4px; }
+
+  .pa-looks { display: grid; gap: 10px; margin-block-start: 12px; padding: 0; list-style: none; }
+  .pa-looks-empty { margin-block-start: 10px; font-size: 13.5px; }
+  .pa-look { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 10px; border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--elev-1); }
+  .pa-look-photo { display: grid; place-items: center; inline-size: 56px; aspect-ratio: 4 / 5; overflow: hidden; border-radius: var(--radius-sm); background: var(--subtle); color: var(--text-muted); }
+  .pa-look-photo img { inline-size: 100%; block-size: 100%; object-fit: cover; }
+  .pa-look-text { display: grid; gap: 3px; min-inline-size: 0; padding-block-start: 2px; }
+  .pa-look-text strong { font-size: 14px; font-weight: 600; }
+  .pa-look-text p { font-size: 13px; line-height: 1.5; color: var(--text-secondary); white-space: pre-line; text-wrap: pretty; }
+  .pa-look-actions { display: flex; gap: 2px; }
+
+  .pa-look-form { margin-block-start: 12px; padding: 14px; border-radius: var(--radius-md); background: var(--subtle); }
+  .pa-looks .pa-look-form { margin-block-start: 0; }
+  .pa-look-form-grid { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .pa-look-form-grid .field:first-child { margin-block-start: 0; }
+  .pa-photo-pick { position: relative; display: grid; place-items: center; align-content: center; gap: 6px; inline-size: 96px; aspect-ratio: 4 / 5; overflow: hidden; border-radius: var(--radius-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+  .pa-photo-pick img { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; }
+  .pa-photo-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .pa-photo-pick:focus-within { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--focus); }
+  .pa-check { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
+  .pa-delete { padding-block-end: 0; }
+
+  /* The face scan, in place of the persona list (likeness/likeness.css styles the capture itself). */
+  .pa.pa-scan { display: flex; flex-direction: column; max-inline-size: 960px; min-block-size: 100%; padding-block-end: 32px; }
+
+  @media (max-width: 760px) {
+    .pa { padding: 20px 16px 96px; }
+    .pa-intro { flex-direction: column; }
+    .pa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+    .pa-facts > div { grid-template-columns: 1fr; gap: 2px; }
+    .pa-look-form-grid { grid-template-columns: 1fr; }
+    /* Clear of the studio's mobile dock. */
+    .pa.pa-scan { padding: 16px 16px 88px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pa-card, .pa-portrait { transition: none; }
+    .pa-card:hover .pa-portrait { transform: none; }
+  }
+}

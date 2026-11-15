@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { StoreConflict } from "./errors.js";
 import type { Condition, Filter, MediaStorage, RateLimitHit, Row, SelectOptions, Store } from "./store.js";
 
-/** Mirrors the unique constraints in supabase/migrations/20261114190000_engine_core.sql. */
+/** Mirrors the unique constraints in supabase/migrations (engine core, socials, personas and video compositions). */
 const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => boolean }>> = {
   organizations: [{ columns: ["id"] }, { columns: ["personal_owner_id"], where: (r) => r.personal_owner_id != null }],
   memberships: [{ columns: ["org_id", "user_id"] }],
@@ -16,7 +16,8 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   ],
   operations: [{ columns: ["org_id", "key"] }],
   publish_jobs: [{ columns: ["item_id", "revision", "platform", "account_id", "scheduled_at"] }],
-  provider_connections: [{ columns: ["org_id", "platform", "external_account_id"] }],
+  provider_connections: [{ columns: ["org_id", "provider", "platform", "external_account_id"] }],
+  social_events: [{ columns: ["org_id", "platform", "type", "external_id"] }],
   agent_connections: [{ columns: ["token_sha256"] }],
   billing_customers: [{ columns: ["org_id"] }, { columns: ["stripe_customer_id"] }],
   billing_state: [{ columns: ["org_id"] }, { columns: ["stripe_subscription_id"], where: (r) => r.stripe_subscription_id != null }],
@@ -24,6 +25,12 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   stripe_events: [{ columns: ["event_id"] }],
   credit_ledger: [{ columns: ["org_id", "ref"] }],
   castroom_director_access: [{ columns: ["user_id", "workspace_id", "campaign_id"] }],
+  // supabase/migrations/20261115130000_personas.sql: one consent backs at most one persona.
+  personas: [{ columns: ["consent_id"], where: (r) => r.consent_id != null }],
+  video_compositions: [{ columns: ["org_id", "item_id"] }],
+  project_files: [{ columns: ["org_id", "project_id", "item_id", "name", "version"] }],
+  // supabase/migrations/20261115130500_clone_jobs.sql
+  clone_jobs: [{ columns: ["id"] }, { columns: ["org_id", "idempotency_key"] }],
 };
 
 function matches(row: Row, filter: Filter): boolean {

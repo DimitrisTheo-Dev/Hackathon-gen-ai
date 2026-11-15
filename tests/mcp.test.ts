@@ -18,7 +18,7 @@ import { creditBalance, getCampaign, listCampaigns, startCampaign } from "../pac
 const BASE = "https://faceful.test";
 const WORKER = "w".repeat(40);
 const AVATARS = JSON.stringify([{ id: "minas_kontis", name: "Minas", languages: ["en", "el"] }]);
-const TOOLS = ["approve_schedule", "create_checkout_link", "create_draft", "create_project", "get_asset", "get_billing_status", "get_render_status", "list_assets", "list_avatars", "list_projects", "propose_schedule", "revise_draft", "start_render"];
+const TOOLS = ["approve_schedule", "complete_file_upload", "create_checkout_link", "create_draft", "create_project", "get_asset", "get_billing_status", "get_render_status", "get_video_renders", "get_video_timeline", "list_assets", "list_avatars", "list_draft_files", "list_projects", "propose_schedule", "queue_video_render", "request_file_upload", "revise_draft", "save_text_draft", "save_video_timeline", "start_render"];
 
 function engine(env: Record<string, string> = {}) {
   const clock = Date.parse("2026-11-14T10:00:00.000Z");
@@ -154,7 +154,7 @@ test("initialize negotiates a protocol this SDK speaks and lists exactly the doc
     assert.ok(tool.description.length > 40, `${tool.name} is described`);
   }
   const readOnly = tools.filter((tool: any) => tool.annotations.readOnlyHint).map((tool: any) => tool.name).sort();
-  assert.deepEqual(readOnly, ["get_asset", "get_billing_status", "get_render_status", "list_assets", "list_avatars", "list_projects"]);
+  assert.deepEqual(readOnly, ["get_asset", "get_billing_status", "get_render_status", "get_video_renders", "get_video_timeline", "list_assets", "list_avatars", "list_draft_files", "list_projects"]);
   // No tool accepts a credential as an argument.
   assert.doesNotMatch(JSON.stringify(tools.map((tool: any) => Object.keys(tool.inputSchema.properties ?? {}))), /token|authorization|password|secret|card/i);
 });

@@ -6,3 +6,5 @@ Downloaded using the public Download button on 14 November 2026. No subscription
 License permits personal and commercial use and modification; standalone resale/redistribution is prohibited.
 Original 5120×2880 PNG optimized to a 1600px WebP for use as a decorative background in this application.
 This asset is not a reusable standalone download offering. Copyright remains with its creator.
+
+fog.webp is not third-party: it is a generated, tileable cloud texture made for the logo animation on /logos.

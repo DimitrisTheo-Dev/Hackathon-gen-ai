@@ -1,17 +1,18 @@
 // Claude Code runner: a small HTTP service that runs the official Claude Code CLI
-// on your own server (VPS), signed in with your own Claude subscription.
+// on your own server or a per-user cloud machine, signed in with your own Claude subscription.
+// With a workspace store it autosaves each project after every run and survives a fresh disk.
 // Zero dependencies; Node 24 runs this file directly (type stripping).
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse, Server } from "node:http";
 import { spawn, execFile } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const RUNNER_VERSION = "1";
+export const RUNNER_VERSION = "2";
 export const MODELS = ["fable", "opus", "sonnet", "haiku"] as const;
 export const PERMISSION_MODES = ["acceptEdits", "auto", "bypassPermissions", "plan"] as const;
 const MAX_BODY_BYTES = 256 * 1024;
@@ -27,6 +28,9 @@ export type RunnerConfig = {
   workspaceDir: string;
   dataDir: string;
   maxRunMinutes: number;
+  /** Workspace store (apps/workspace-store): saves land in this user's own R2 folder. */
+  storeUrl: string | null;
+  storeToken: string | null;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
@@ -43,8 +47,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     workspaceDir: resolve(env.WORKSPACE_DIR ?? join(home, "work")),
     dataDir: resolve(env.RUNNER_DATA_DIR ?? join(home, ".claude-runner")),
     maxRunMinutes: Number(env.RUNNER_MAX_RUN_MINUTES ?? 30),
+    storeUrl: env.STORE_URL ? env.STORE_URL.replace(/\/+$/, "") : null,
+    storeToken: env.STORE_TOKEN || null,
   };
 }
+
+export const isProjectName = (value: string) => /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(value);
+export const saveKeyFor = (project: string, savedAt: Date) => `projects/${project}/saves/${savedAt.toISOString().replace(/[:.]/g, "-")}.tar.gz`;
+export const autosaveKeyFor = (project: string) => `projects/${project}/autosave.tar.gz`;
+/** Claude's sign-in, settings and session history: what a fresh disk needs to carry on. */
+export const HOME_KEY = "private/claude-home.tar.gz";
+const HOME_EXCLUDES = ["downloads", "shell-snapshots", "statsig", "telemetry", "cache", "ide"].map((name) => `--exclude=.claude/${name}`);
+const WORKSPACE_EXCLUDES = ["--exclude=node_modules", "--exclude=.cache"];
+const MAX_SAVE_BYTES = 95 * 1024 * 1024;
+const isSaveKey = (project: string, key: string) => new RegExp(`^projects/${project}/saves/[0-9TZ-]+\\.tar\\.gz$`).test(key);
 
 // ---------- pure helpers (exported for tests) ----------
 
@@ -77,17 +93,19 @@ export const isSubscriptionToken = (token: string) => /^sk-ant-oat01-[A-Za-z0-9_
 export const isLoginCode = (code: string) => /^[\x21-\x7e]{8,2048}$/.test(code);
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-export type RunRequest = { prompt: string; sessionId?: string; model?: (typeof MODELS)[number]; permissionMode: (typeof PERMISSION_MODES)[number] };
+export type RunRequest = { prompt: string; project: string; sessionId?: string; model?: (typeof MODELS)[number]; permissionMode: (typeof PERMISSION_MODES)[number] };
 export function parseRunRequest(body: unknown): RunRequest {
   if (!body || typeof body !== "object") throw new RequestError(400, "invalid_body", "Send a JSON object.");
-  const { prompt, sessionId, model, permissionMode } = body as Record<string, unknown>;
+  const { prompt, project, sessionId, model, permissionMode } = body as Record<string, unknown>;
   if (typeof prompt !== "string" || !prompt.trim()) throw new RequestError(400, "invalid_prompt", "Write a prompt first.");
   if (prompt.length > MAX_PROMPT_CHARS) throw new RequestError(400, "invalid_prompt", `Prompts are limited to ${MAX_PROMPT_CHARS} characters.`);
+  const name = project === undefined || project === null || project === "" ? "default" : project;
+  if (typeof name !== "string" || !isProjectName(name)) throw new RequestError(400, "invalid_project", "Project names use letters, digits and dashes (up to 64).");
   if (sessionId !== undefined && (typeof sessionId !== "string" || !isUuid(sessionId))) throw new RequestError(400, "invalid_session", "That session id is not valid.");
   if (model !== undefined && !MODELS.includes(model as never)) throw new RequestError(400, "invalid_model", `Model must be one of: ${MODELS.join(", ")}.`);
   const mode = permissionMode ?? "acceptEdits";
   if (!PERMISSION_MODES.includes(mode as never)) throw new RequestError(400, "invalid_permission_mode", `Permission mode must be one of: ${PERMISSION_MODES.join(", ")}.`);
-  return { prompt, sessionId: sessionId as string | undefined, model: model as RunRequest["model"], permissionMode: mode as RunRequest["permissionMode"] };
+  return { prompt, project: name, sessionId: sessionId as string | undefined, model: model as RunRequest["model"], permissionMode: mode as RunRequest["permissionMode"] };
 }
 
 // The prompt goes in on stdin, never as an argument, so it can't be read as a flag.
@@ -130,14 +148,84 @@ export class RequestError extends Error {
   }
 }
 
+// ---------- cloud sync (module level so boot and the server share it) ----------
+
+export type SaveInfo = { key: string; project: string; kind: "auto" | "manual"; bytes: number; files: number; sha256: string; savedAt: string };
+const hasStore = (config: RunnerConfig) => Boolean(config.storeUrl && config.storeToken);
+const exists = (path: string) => stat(path).then(() => true, () => false);
+
+function tar(args: string[]): Promise<string> {
+  return new Promise((done, fail) => {
+    execFile("tar", args, { maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => error ? fail(new RequestError(500, "archive_failed", `Couldn't pack or unpack files: ${String(stderr).trim().slice(0, 300) || error.message}`)) : done(String(stdout)));
+  });
+}
+async function pack(dir: string, entries: string[], excludes: string[]) {
+  const scratch = await mkdtemp(join(tmpdir(), "runner-pack-"));
+  const file = join(scratch, "archive.tar.gz");
+  try {
+    await tar(["-czf", file, ...excludes, "-C", dir, ...entries]);
+    const files = (await tar(["-tzf", file])).split("\n").filter((line) => line && !line.endsWith("/")).length;
+    const body = await readFile(file);
+    if (body.length > MAX_SAVE_BYTES) throw new RequestError(413, "save_too_large", "This is larger than 95 MB compressed. Remove build output or large files, then save again.");
+    return { body, files, sha256: createHash("sha256").update(body).digest("hex") };
+  } finally { await rm(scratch, { recursive: true, force: true }); }
+}
+async function unpack(body: Buffer, dir: string): Promise<void> {
+  const scratch = await mkdtemp(join(tmpdir(), "runner-unpack-"));
+  const file = join(scratch, "archive.tar.gz");
+  try {
+    await writeFile(file, body, { mode: 0o600 });
+    await mkdir(dir, { recursive: true });
+    await tar(["-xzf", file, "-C", dir]);
+  } finally { await rm(scratch, { recursive: true, force: true }); }
+}
+/** Calls the workspace store. A missing object resolves to null; other failures throw. */
+async function storeFetch(config: RunnerConfig, path: string, init: RequestInit = {}): Promise<Response | null> {
+  if (!hasStore(config)) throw new RequestError(409, "store_not_configured", "Cloud saving isn't set up on this runner. Add STORE_URL and STORE_TOKEN to its .env.");
+  let response: Response;
+  try { response = await fetch(`${config.storeUrl}${path}`, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${config.storeToken}` } }); }
+  catch { throw new RequestError(502, "store_unreachable", "Couldn't reach cloud storage. Try again."); }
+  if (response.status === 404) return null;
+  if (!response.ok) throw new RequestError(502, "store_error", `Cloud storage answered ${response.status}.`);
+  return response;
+}
+async function homeEntries(config: RunnerConfig): Promise<string[]> {
+  const data = relative(config.homeDir, config.dataDir);
+  const candidates = [".claude", ".claude.json", ...(data && !data.startsWith("..") && !data.startsWith("/") ? [data] : [])];
+  const found: string[] = [];
+  for (const entry of candidates) if (await exists(join(config.homeDir, entry))) found.push(entry);
+  return found;
+}
+/** Saves Claude's sign-in and session history. Returns null when there is no store or nothing to save. */
+export async function saveHome(config: RunnerConfig): Promise<{ key: string; bytes: number } | null> {
+  if (!hasStore(config)) return null;
+  const entries = await homeEntries(config);
+  if (!entries.length) return null;
+  const { body, files, sha256 } = await pack(config.homeDir, entries, HOME_EXCLUDES);
+  await storeFetch(config, `/v1/objects/${HOME_KEY}`, { method: "PUT", body, headers: { "Content-Type": "application/gzip", "x-store-meta": JSON.stringify({ files: String(files), sha256, kind: "home" }) } });
+  return { key: HOME_KEY, bytes: body.length };
+}
+/** Puts Claude's sign-in and session history back on a fresh disk. True when something was restored. */
+export async function restoreHome(config: RunnerConfig): Promise<boolean> {
+  if (!hasStore(config)) return false;
+  const response = await storeFetch(config, `/v1/objects/${HOME_KEY}`);
+  if (!response) return false;
+  await unpack(Buffer.from(await response.arrayBuffer()), config.homeDir);
+  return true;
+}
+
 // ---------- server ----------
 
 type Exec = { code: number | null; stdout: string; stderr: string };
 
-export function createRunner(config: RunnerConfig): Server {
+export function createRunner(config: RunnerConfig): Server & { stopWork: () => void } {
   const tokenFile = join(config.dataDir, "oauth-token");
   let run: ChildProcessWithoutNullStreams | null = null;
+  let finishing = false; // a run has ended and its files are being saved
   let login: { child: ChildProcessWithoutNullStreams; output: string; url: string | null; timer: NodeJS.Timeout } | null = null;
+  const opened = new Map<string, Promise<{ restored: boolean }>>();
+  const projectDir = (project: string) => join(config.workspaceDir, project);
+  const busy = () => run !== null || finishing;
 
   async function storedToken(): Promise<string | null> {
     try { return (await readFile(tokenFile, "utf8")).trim() || null; } catch { return null; }
@@ -147,9 +235,88 @@ export function createRunner(config: RunnerConfig): Server {
     delete env.RUNNER_ACCESS_KEY;
     delete env.CLAUDE_CODE_OAUTH_TOKEN;
     delete env.ANTHROPIC_API_KEY; // always use the subscription, never API billing
+    delete env.STORE_URL;
+    delete env.STORE_TOKEN;
+    // Claude may save files to this user's own folder too; the token opens nothing else.
+    if (hasStore(config)) { env.FACEFUL_STORE_URL = config.storeUrl!; env.FACEFUL_STORE_TOKEN = config.storeToken!; }
     const token = await storedToken();
     if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
     return env;
+  }
+  const syncHome = () => saveHome(config).catch((error) => { console.error("[runner] saving Claude's sign-in failed", error instanceof Error ? error.message : error); return null; });
+
+  /** Makes the project's folder, bringing back its last autosave on a fresh disk. Once per boot. */
+  function ensureProject(project: string): Promise<{ restored: boolean }> {
+    let pending = opened.get(project);
+    if (!pending) {
+      pending = (async () => {
+        const dir = projectDir(project);
+        if (await exists(dir)) return { restored: false };
+        await mkdir(dir, { recursive: true });
+        if (!hasStore(config)) return { restored: false };
+        const saved = await storeFetch(config, `/v1/objects/${autosaveKeyFor(project)}`);
+        if (!saved) return { restored: false };
+        await unpack(Buffer.from(await saved.arrayBuffer()), dir);
+        return { restored: true };
+      })();
+      opened.set(project, pending);
+      pending.catch(() => opened.delete(project));
+    }
+    return pending;
+  }
+  async function saveProject(project: string, kind: SaveInfo["kind"]): Promise<SaveInfo> {
+    const savedAt = new Date();
+    const key = kind === "auto" ? autosaveKeyFor(project) : saveKeyFor(project, savedAt);
+    const { body, files, sha256 } = await pack(projectDir(project), ["."], WORKSPACE_EXCLUDES);
+    await storeFetch(config, `/v1/objects/${key}`, { method: "PUT", body, headers: { "Content-Type": "application/gzip", "x-store-meta": JSON.stringify({ files: String(files), sha256, project, kind }) } });
+    return { key, project, kind, bytes: body.length, files, sha256, savedAt: savedAt.toISOString() };
+  }
+  async function listSaves(project: string) {
+    const response = await storeFetch(config, `/v1/objects?prefix=${encodeURIComponent(`projects/${project}/`)}&limit=200`);
+    const body = (await response!.json()) as { objects: { key: string; size: number; uploaded: string; metadata?: Record<string, string> }[] };
+    const describe = (item: (typeof body.objects)[number]) => ({ key: item.key, bytes: item.size, savedAt: item.uploaded, files: item.metadata?.files === undefined ? null : Number(item.metadata.files) });
+    const auto = body.objects.find((item) => item.key === autosaveKeyFor(project));
+    return {
+      autosave: auto ? describe(auto) : null,
+      saves: body.objects.filter((item) => isSaveKey(project, item.key)).sort((a, b) => b.key.localeCompare(a.key)).map(describe),
+    };
+  }
+  async function saveWorkspace(project: string): Promise<SaveInfo> {
+    if (!hasStore(config)) await storeFetch(config, "/"); // throws store_not_configured
+    if (busy()) throw new RequestError(409, "busy", "Wait for Claude Code to finish before saving.");
+    await ensureProject(project);
+    return saveProject(project, "manual");
+  }
+  /** Replaces the project's files with a save. The current files are saved first, so nothing is lost. */
+  async function restoreWorkspace(project: string, requested?: string) {
+    if (!hasStore(config)) await storeFetch(config, "/");
+    if (busy()) throw new RequestError(409, "busy", "Wait for Claude Code to finish before restoring.");
+    const key = requested ?? (await listSaves(project)).saves[0]?.key;
+    if (!key) throw new RequestError(404, "save_not_found", `No saves yet for ${project}.`);
+    if (!isSaveKey(project, key)) throw new RequestError(400, "invalid_save", "That save doesn't belong to this project.");
+    const response = await storeFetch(config, `/v1/objects/${key}`);
+    if (!response) throw new RequestError(404, "save_not_found", "That save no longer exists.");
+    const body = Buffer.from(await response.arrayBuffer());
+    await ensureProject(project);
+    const dir = projectDir(project);
+    const current = await readdir(dir);
+    const backup = current.length ? await saveProject(project, "manual") : null;
+    for (const name of current) await rm(join(dir, name), { recursive: true, force: true });
+    await unpack(body, dir);
+    return { key, restoredAt: new Date().toISOString(), backupKey: backup?.key ?? null, autosave: await saveProject(project, "auto") };
+  }
+  /** Saves everything worth keeping: Claude's sign-in and every project opened since boot. */
+  async function syncAll() {
+    if (!hasStore(config)) return { configured: false, home: null, projects: [] as SaveInfo[] };
+    if (busy()) throw new RequestError(409, "busy", "Claude Code is still working.");
+    const projects: SaveInfo[] = [];
+    for (const project of opened.keys()) if (await exists(projectDir(project))) projects.push(await saveProject(project, "auto"));
+    return { configured: true, home: await saveHome(config), projects };
+  }
+  function projectFrom(value: unknown): string {
+    const project = typeof value === "string" && value.trim() ? value.trim() : "default";
+    if (!isProjectName(project)) throw new RequestError(400, "invalid_project", "Project names use letters, digits and dashes (up to 64).");
+    return project;
   }
   async function exec(args: string[], timeoutMs = 20_000): Promise<Exec> {
     const env = await childEnv();
@@ -172,7 +339,8 @@ export function createRunner(config: RunnerConfig): Server {
       auth: await authStatus(),
       tokenStored: (await storedToken()) !== null,
       workspace: config.workspaceDir,
-      busy: run !== null,
+      store: hasStore(config),
+      busy: busy(),
       loginPending: login !== null,
     };
   }
@@ -220,6 +388,7 @@ export function createRunner(config: RunnerConfig): Server {
     const auth = await authStatus();
     if (!auth.loggedIn) throw new RequestError(400, "login_failed", outcome === "timeout" ? "Sign-in timed out. Start again and paste the newest code." : "Claude didn't accept that code. Start sign-in again and paste the newest code.");
     await rm(tokenFile, { force: true }); // the signed-in account replaces any pasted token
+    await syncHome(); // so the sign-in survives a fresh disk
     return authStatus();
   }
 
@@ -228,6 +397,7 @@ export function createRunner(config: RunnerConfig): Server {
     await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
     await writeFile(tokenFile, `${token}\n`, { mode: 0o600 });
     await chmod(tokenFile, 0o600);
+    await syncHome();
     return authStatus();
   }
 
@@ -235,16 +405,27 @@ export function createRunner(config: RunnerConfig): Server {
     endLogin();
     await rm(tokenFile, { force: true });
     await exec(["auth", "logout"]);
+    // Drop the saved copy first, so a stale sign-in can't come back on the next boot.
+    if (hasStore(config)) {
+      await storeFetch(config, `/v1/objects/${HOME_KEY}`, { method: "DELETE" }).catch((error) => console.error("[runner] removing the saved sign-in failed", error instanceof Error ? error.message : error));
+      await syncHome();
+    }
     return authStatus();
   }
 
   async function startRun(request: RunRequest, res: ServerResponse, headers: Record<string, string>) {
-    if (run) throw new RequestError(409, "busy", "Claude Code is already working. Stop the current run first.");
-    const child = spawn(config.claudeBin, buildRunArgs(request), { env: await childEnv(), cwd: config.workspaceDir, stdio: "pipe" });
+    if (busy()) throw new RequestError(409, "busy", "Claude Code is already working. Stop the current run first.");
+    finishing = true; // hold the slot while the project folder is prepared
+    let child: ChildProcessWithoutNullStreams;
+    let restored = false;
+    try {
+      restored = (await ensureProject(request.project)).restored;
+      child = spawn(config.claudeBin, buildRunArgs(request), { env: await childEnv(), cwd: projectDir(request.project), stdio: "pipe" });
+    } finally { finishing = false; }
     run = child;
     res.writeHead(200, { ...headers, "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "X-Accel-Buffering": "no" });
     const send = (value: unknown) => { if (!res.writableEnded) res.write(`${JSON.stringify(value)}\n`); };
-    send({ type: "runner", event: "started", workspace: config.workspaceDir });
+    send({ type: "runner", event: "started", project: request.project, workspace: projectDir(request.project), restored });
     let buffer = "";
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => {
@@ -260,11 +441,22 @@ export function createRunner(config: RunnerConfig): Server {
     child.stderr.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString("utf8")).slice(-4000); });
     const limit = setTimeout(() => { if (child.exitCode === null) child.kill("SIGTERM"); }, config.maxRunMinutes * 60_000);
     child.on("error", (error) => send({ type: "runner", event: "error", message: `Couldn't start Claude Code: ${error.message}` }));
-    child.on("close", (code, signal) => {
+    child.on("close", async (code, signal) => {
       clearTimeout(limit);
+      finishing = true;
       if (run === child) run = null;
       send({ type: "runner", event: "exit", code, signal, stderr: code === 0 ? "" : stderr.trim() });
-      res.end();
+      try {
+        // Autosave after every run, even when the page has gone away.
+        if (hasStore(config)) {
+          try { send({ type: "runner", event: "saved", save: await saveProject(request.project, "auto") }); }
+          catch (error) { send({ type: "runner", event: "save_failed", message: error instanceof RequestError ? error.message : "Couldn't save the project to cloud storage." }); }
+          await syncHome();
+        }
+      } finally {
+        finishing = false;
+        res.end();
+      }
     });
     // Stop Claude when the page goes away mid-run.
     res.on("close", () => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM"); });
@@ -283,7 +475,7 @@ export function createRunner(config: RunnerConfig): Server {
     try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new RequestError(400, "invalid_json", "Request body must be JSON."); }
   }
 
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     const cors = corsHeaders(req.headers.origin, config.allowedOrigins) ?? {};
     const json = (status: number, body: unknown) => {
       res.writeHead(status, { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -314,6 +506,20 @@ export function createRunner(config: RunnerConfig): Server {
       }
       if (route === "DELETE /v1/auth") return json(200, { auth: await signOut() });
       if (route === "POST /v1/run") return await startRun(parseRunRequest(await readJson(req)), res, cors);
+      if (route === "GET /v1/workspace") {
+        const project = projectFrom(new URL(req.url ?? "/", "http://runner").searchParams.get("project"));
+        if (!hasStore(config)) return json(200, { configured: false, project, autosave: null, saves: [] });
+        return json(200, { configured: true, project, ...(await listSaves(project)) });
+      }
+      if (route === "POST /v1/workspace/save") {
+        const { project } = (await readJson(req)) as { project?: unknown };
+        return json(201, { save: await saveWorkspace(projectFrom(project)) });
+      }
+      if (route === "POST /v1/workspace/restore") {
+        const { project, key } = (await readJson(req)) as { project?: unknown; key?: unknown };
+        return json(200, { restored: await restoreWorkspace(projectFrom(project), typeof key === "string" ? key : undefined) });
+      }
+      if (route === "POST /v1/sync") return json(200, await syncAll());
       if (route === "POST /v1/run/stop") {
         const stopped = run !== null;
         run?.kill("SIGTERM");
@@ -327,16 +533,40 @@ export function createRunner(config: RunnerConfig): Server {
       return json(500, { error: { code: "internal", message: "The runner hit an unexpected error. Check its logs." } });
     }
   });
+  /** For shutdown: ends the run in progress (it still autosaves) and any sign-in that was waiting. */
+  const stopWork = () => { run?.kill("SIGTERM"); endLogin(); };
+  return Object.assign(server, { stopWork });
 }
 
 async function main() {
   const config = loadConfig();
   await mkdir(config.workspaceDir, { recursive: true });
   await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
-  createRunner(config).listen(config.port, config.host, () => {
+  // On a fresh disk (a machine waking up), bring Claude's sign-in and history back before serving.
+  if (hasStore(config)) {
+    try { console.log(`[runner] ${(await restoreHome(config)) ? "restored Claude's sign-in and history from cloud storage" : "no saved sign-in in cloud storage yet"}`); }
+    catch (error) { console.error("[runner] couldn't restore the saved sign-in:", error instanceof Error ? error.message : error); }
+  }
+  const server = createRunner(config);
+  server.listen(config.port, config.host, () => {
     console.log(`[runner] Claude Code runner listening on http://${config.host}:${config.port}`);
-    console.log(`[runner] workspace ${config.workspaceDir}; allowed origins ${config.allowedOrigins.join(", ")}`);
+    console.log(`[runner] workspace ${config.workspaceDir}; cloud saves ${hasStore(config) ? "on" : "off"}`);
   });
+  // In the container this is process 1, and process 1 ignores a signal it has no handler for.
+  // Without this a cloud machine never goes to sleep and `docker stop` has to kill the runner.
+  let stopping = false;
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.on(signal, () => {
+      if (stopping) return;
+      stopping = true;
+      console.log(`[runner] ${signal}: stopping`);
+      server.stopWork();
+      server.close(() => process.exit(0));
+      // A run that was stopped just now still autosaves; its connection goes idle once that is sent.
+      setInterval(() => server.closeIdleConnections(), 200).unref();
+      setTimeout(() => process.exit(0), 60_000).unref();
+    });
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

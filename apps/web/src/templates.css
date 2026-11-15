@@ -1,0 +1,65 @@
+/*
+ * Template library (views/TemplateLibrary.tsx). Tokens come from /design.css; .modal, .segmented and .notice are
+ * reused. Loaded with the TemplateLibrary chunk, in the studio's polish layer.
+ *
+ * The posters are the focal element: plain 9:16 frames, no badges or overlays on them. Motion: press 120ms
+ * (scale .98), a hover lift only on fine pointers, nothing that moves layout. Reduced motion keeps colour changes.
+ */
+@layer polish {
+  .tl { box-sizing: border-box; inline-size: 100%; max-inline-size: 1120px; padding: 26px 24px 64px; }
+  :where(.tl) :is(h1, h2, h3, p, ul, ol, dl, dd) { margin: 0; }
+
+  .tl-intro h1 { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; }
+  .tl-intro > p { margin-block-start: 6px; max-inline-size: 62ch; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .tl-loading, .tl-empty { margin-block-start: 24px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+
+  .tl-family { margin-block-start: 34px; }
+  .tl-family-head { display: grid; gap: 4px; margin-block-end: 16px; }
+  .tl-family-head h2 { font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+  .tl-family-head p { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+
+  .tl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 22px 18px; padding: 0; list-style: none; }
+  .tl-card { display: grid; gap: 12px; inline-size: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: transform var(--dur-press) var(--ease-out); }
+  .tl-card:active { transform: scale(.98); }
+  .tl-poster { display: block; aspect-ratio: 9 / 16; overflow: hidden; border-radius: var(--radius-lg); background: var(--muted-surface); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) ease; }
+  .tl-poster img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
+  .tl-card:focus-visible { outline: none; }
+  .tl-card:focus-visible .tl-poster { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--focus); }
+  .tl-card-text { display: grid; gap: 3px; }
+  .tl-card-text strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .tl-card-text span { font-size: 13px; line-height: 1.45; color: var(--text-secondary); text-wrap: pretty; }
+  .tl-card-text small { font-size: 12.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  @media (hover: hover) and (pointer: fine) {
+    .tl-card:hover .tl-poster { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06), var(--shadow); }
+  }
+
+  /* ── detail ── */
+  .modal.wide:has(.tl-detail) { inline-size: min(980px, calc(100% - 32px)); }
+  .tl-detail { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .tl-player { position: sticky; inset-block-start: 0; display: grid; gap: 12px; justify-items: center; }
+  .tl-player video { display: block; inline-size: 100%; aspect-ratio: 9 / 16; max-block-size: calc(100dvh - 190px); border-radius: var(--radius-lg); background: #15161A; object-fit: contain; }
+  .tl-missing { display: grid; place-items: center; inline-size: 100%; aspect-ratio: 9 / 16; border-radius: var(--radius-lg); background: var(--subtle); font-size: 13.5px; color: var(--text-secondary); text-align: center; padding: 24px; box-sizing: border-box; }
+  .tl-facts { display: grid; gap: 10px; min-inline-size: 0; }
+  .tl-summary { font-size: 15px; line-height: 1.55; text-wrap: pretty; }
+  .tl-facts dl { display: grid; gap: 8px; margin-block: 6px 4px; }
+  .tl-facts dl > div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; font-size: 13.5px; line-height: 1.5; }
+  .tl-facts dt { color: var(--text-secondary); }
+  .tl-facts h3 { margin-block-start: 14px; font-size: 13px; font-weight: 600; letter-spacing: 0; }
+  .tl-note { font-size: 13.5px; color: var(--text-secondary); }
+  .tl-inputs, .tl-script { display: grid; gap: 4px; padding-inline-start: 20px; font-size: 13.5px; line-height: 1.5; }
+  .tl-script li::marker { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .tl-stills { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; padding: 0; list-style: none; }
+  .tl-stills img { display: block; inline-size: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--radius-sm); background: var(--subtle); }
+
+  @media (max-width: 760px) {
+    .tl { padding: 20px 16px 96px; }
+    .tl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+    .tl-detail { grid-template-columns: 1fr; gap: 20px; }
+    .tl-player { position: static; }
+    .tl-player video { max-block-size: 62dvh; inline-size: auto; max-inline-size: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tl-card, .tl-poster { transition: none; }
+    .tl-card:hover .tl-poster { transform: none; }
+  }
+}

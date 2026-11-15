@@ -1,0 +1,212 @@
+/**
+ * Faceful reel render worker.
+ *
+ * Polls the Faceful engine for saved timelines to render, draws them with the same Remotion
+ * composition the studio previews, and uploads the MP4 back, where it becomes a `render` draft file.
+ * Run as many as you like (several VPSs, boxd machines or containers): each job is leased to one
+ * worker at a time, and a worker that goes silent loses its lease so another can pick the job up.
+ *
+ * The worker holds one credential, REEL_WORKER_TOKEN, and never sees a database key: it only gets
+ * one job at a time with short-lived signed links.
+ *
+ * Env:
+ *   FACEFUL_API_URL         e.g. https://faceful.dtheo.dev (required)
+ *   REEL_WORKER_TOKEN       the engine's REEL_WORKER_TOKEN (required, at least 32 characters)
+ *   WORKER_ID               defaults to the hostname
+ *   POLL_SECONDS            idle wait between claims (default 5)
+ *   RENDER_CONCURRENCY      Chrome tabs per render (default: Remotion's choice)
+ *   CHROME_EXECUTABLE       optional path to Chrome; Remotion's headless shell is used otherwise
+ *   CHROME_MODE             "headless-shell" (default) or "chrome-for-testing" (needed for a desktop Chrome)
+ *   MEDIA_HOST_ALLOWLIST    extra hosts (comma separated) that linked media may come from
+ *   WORK_DIR                scratch folder for renders (default: the OS temp folder)
+ */
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import { hostname, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { bundle } from "@remotion/bundler";
+import { makeCancelSignal, renderMedia, selectComposition } from "@remotion/renderer";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const env = process.env;
+const API = (env.FACEFUL_API_URL ?? "").replace(/\/+$/, "");
+const TOKEN = env.REEL_WORKER_TOKEN ?? "";
+const WORKER_ID = (env.WORKER_ID ?? hostname()).replace(/[^A-Za-z0-9._:-]/g, "-").slice(0, 80);
+const POLL_MS = Math.max(1, Number(env.POLL_SECONDS ?? 5)) * 1000;
+const WORK_DIR = env.WORK_DIR ?? join(tmpdir(), "faceful-reel-worker");
+const ONCE = process.argv.includes("--once");
+/** Linked (non-file) media may only come from these hosts; draft files are signed links from the engine. */
+const ALLOWED_HOSTS = ["r2.cloudflarestorage.com", "supabase.co", ...(env.MEDIA_HOST_ALLOWLIST ?? "").split(",").map((host) => host.trim()).filter(Boolean)];
+
+if (!/^https?:\/\//.test(API) || TOKEN.length < 32) {
+  console.error("Set FACEFUL_API_URL and REEL_WORKER_TOKEN (at least 32 characters).");
+  process.exit(2);
+}
+
+type Media = { url: string; mime: string };
+type Job = {
+  id: string;
+  campaignId: string;
+  itemId: string;
+  compositionRevision: number;
+  attempt: number;
+  leaseSeconds: number;
+  composition: { fps: number; durationSeconds: number; video: Array<{ source: { kind: string; url?: string } }>; audio: Array<{ source: { kind: string; url?: string } }> } & Record<string, unknown>;
+  itemMedia: Media | null;
+  files: Record<string, Media>;
+};
+
+const log = (event: string, fields: Record<string, unknown> = {}) => console.log(JSON.stringify({ at: new Date().toISOString(), worker: WORKER_ID, event, ...fields }));
+const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+class Gone extends Error {}
+async function call<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API}/v1/worker/reel${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
+  // 404/409: the job was cancelled, reassigned or finished elsewhere. Stop working on it.
+  if (response.status === 404 || response.status === 409) throw new Gone(payload.error?.message ?? "The job is no longer ours.");
+  if (!response.ok) throw new Error(`${path} failed (${response.status}): ${payload.error?.message ?? "no details"}`);
+  return payload as T;
+}
+
+function allowedHost(url: string) {
+  try {
+    const { protocol, hostname: host } = new URL(url);
+    return protocol === "https:" && ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  } catch {
+    return false;
+  }
+}
+
+let serveUrl: string | null = null;
+async function bundled() {
+  if (serveUrl) return serveUrl;
+  const started = Date.now();
+  // One React and one Remotion for the whole bundle, even though the component lives in the web app.
+  const local = (name: string) => dirname(fileURLToPath(import.meta.resolve(`${name}/package.json`)));
+  serveUrl = await bundle({
+    entryPoint: join(here, "entry.tsx"),
+    webpackOverride: (config) => ({
+      ...config,
+      resolve: { ...config.resolve, alias: { ...(config.resolve?.alias as Record<string, string>), remotion: local("remotion"), react: local("react"), "react-dom": local("react-dom") } },
+    }),
+  });
+  log("bundled", { ms: Date.now() - started });
+  return serveUrl;
+}
+
+async function render(job: Job) {
+  const linked = [...job.composition.video, ...job.composition.audio].map((clip) => clip.source).filter((source) => source.kind === "url").map((source) => source.url!);
+  const refused = linked.filter((url) => !allowedHost(url));
+  if (refused.length) throw new Error(`Linked media from hosts this worker does not allow: ${[...new Set(refused.map((url) => new URL(url).host))].join(", ")}. Upload them as draft files instead.`);
+
+  const inputProps = { composition: job.composition, media: { itemMedia: job.itemMedia?.url ?? null, files: Object.fromEntries(Object.entries(job.files).map(([id, file]) => [id, { url: file.url, mime: file.mime }])) } };
+  const url = await bundled();
+  const browserExecutable = env.CHROME_EXECUTABLE || null;
+  const chromeMode = env.CHROME_MODE === "chrome-for-testing" ? "chrome-for-testing" : "headless-shell";
+  const composition = await selectComposition({ serveUrl: url, id: "Reel", inputProps, browserExecutable, chromeMode, logLevel: "warn" });
+  await mkdir(WORK_DIR, { recursive: true });
+  const output = join(WORK_DIR, `${job.id}.mp4`);
+  const { cancelSignal, cancel } = makeCancelSignal();
+  let lastBeat = 0;
+  let stopped: Error | null = null;
+  const beat = async (progress: number) => {
+    try {
+      await call(`/${job.id}/progress`, { workerId: WORKER_ID, progress: Math.min(0.99, progress) });
+    } catch (error) {
+      if (error instanceof Gone) {
+        stopped = error;
+        cancel();
+      }
+    }
+  };
+  // The lease is renewed by progress reports; a heartbeat keeps it alive through slow stretches.
+  const heartbeat = setInterval(() => void beat(0), Math.max(30, job.leaseSeconds / 3) * 1000);
+  try {
+    await renderMedia({
+      composition,
+      serveUrl: url,
+      codec: "h264",
+      audioCodec: "aac",
+      pixelFormat: "yuv420p",
+      // Limited-range BT.709, what phones and the social platforms expect.
+      colorSpace: "bt709",
+      outputLocation: output,
+      inputProps,
+      browserExecutable,
+      chromeMode,
+      cancelSignal,
+      concurrency: env.RENDER_CONCURRENCY ? Number(env.RENDER_CONCURRENCY) : null,
+      timeoutInMilliseconds: 120_000,
+      logLevel: "warn",
+      onProgress: ({ progress }) => {
+        if (Date.now() - lastBeat < 5000) return;
+        lastBeat = Date.now();
+        void beat(progress);
+      },
+    });
+  } catch (error) {
+    if (stopped) throw stopped;
+    throw error;
+  } finally {
+    clearInterval(heartbeat);
+  }
+  return { output, durationSeconds: composition.durationInFrames / composition.fps };
+}
+
+async function deliver(job: Job, output: string, durationSeconds: number) {
+  const bytes = (await stat(output)).size;
+  const sha256 = createHash("sha256").update(await readFile(output)).digest("hex");
+  const upload = await call<{ url: string; headers: Record<string, string> }>(`/${job.id}/upload-url`, { workerId: WORKER_ID, sha256, bytes });
+  const put = await fetch(upload.url, { method: "PUT", headers: { ...upload.headers, "content-length": String(bytes) }, body: createReadStream(output) as unknown as BodyInit, duplex: "half" } as RequestInit);
+  if (!put.ok) throw new Error(`The MP4 upload was refused (${put.status}).`);
+  await call(`/${job.id}/complete`, { workerId: WORKER_ID, sha256, bytes, durationSeconds: Math.round(durationSeconds * 100) / 100 });
+  return { bytes, sha256 };
+}
+
+async function once(): Promise<boolean> {
+  const { job } = await call<{ job: Job | null }>("/claim", { workerId: WORKER_ID });
+  if (!job) return false;
+  const started = Date.now();
+  log("claimed", { job: job.id, item: job.itemId, revision: job.compositionRevision, attempt: job.attempt });
+  let output: string | null = null;
+  try {
+    const rendered = await render(job);
+    output = rendered.output;
+    const delivered = await deliver(job, rendered.output, rendered.durationSeconds);
+    log("delivered", { job: job.id, seconds: rendered.durationSeconds, bytes: delivered.bytes, ms: Date.now() - started });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log(error instanceof Gone ? "abandoned" : "failed", { job: job.id, message });
+    if (!(error instanceof Gone)) await call(`/${job.id}/fail`, { workerId: WORKER_ID, error: message.slice(0, 500) }).catch(() => undefined);
+  } finally {
+    if (output) await rm(output, { force: true });
+  }
+  return true;
+}
+
+let running = true;
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+  process.on(signal, () => {
+    log("stopping");
+    running = false;
+  });
+
+log("started", { api: API, allowedHosts: ALLOWED_HOSTS, workDir: resolve(WORK_DIR) });
+while (running) {
+  let worked = false;
+  try {
+    worked = await once();
+  } catch (error) {
+    log("claim_error", { message: error instanceof Error ? error.message : String(error) });
+  }
+  if (ONCE) break;
+  if (!worked) await sleep(POLL_MS);
+}

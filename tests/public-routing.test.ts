@@ -60,12 +60,20 @@ test("paths this origin does not serve return truthful JSON errors, and engine r
   // The MCP endpoint, its OAuth protected-resource metadata, the consent page and the domain API are the engine's.
   for(const path of ['/mcp','/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp','/oauth/consent','/v1/studio/context','/v1/health','/api/engine','/api/mcp']) assert.equal(proxy(new Request(`https://castroom.test${path}`,{method:path==='/mcp'?'POST':'GET'})).headers.get('x-middleware-next'),'1',path);
   const response=proxy(new Request('https://castroom.test/',{method:'POST'}));assert.equal(response.status,405);assert.equal(response.headers.get('allow'),'GET, HEAD');
-  for(const path of ['/studio/','/dev/studio/','/claude-login-test/','/api/v1/campaigns','/v1/context']) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1');
+  for(const path of ['/studio/','/dev/studio/','/claude-login-test/','/face-scan','/face-scan/','/logos/','/api/v1/campaigns','/v1/context']) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1');
 });
 
 test("only the licensed local art and attribution pass through the public file allowlist",()=>{
   for(const path of ['/art/grainient-sunlit.webp','/art/ATTRIBUTION.txt']) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1');
   assert.equal(proxy(new Request('https://castroom.test/art/missing.webp')).status,404);
+});
+
+test("the /logos review page's fog texture and every logo audio file pass through the public file allowlist",async()=>{
+  const { readdir } = await import("node:fs/promises");
+  const audio=(await readdir("apps/web/public/audio",{recursive:true})).filter(name=>name.endsWith(".mp3")).map(name=>`/audio/${name}`);
+  assert.equal(audio.length,16);
+  for(const path of ['/art/fog.webp',...audio]) assert.equal(proxy(new Request(`https://castroom.test${path}`)).headers.get('x-middleware-next'),'1',path);
+  assert.equal(proxy(new Request('https://castroom.test/audio/logo-music/missing.mp3')).status,404);
 });
 
 test("the MCP server card is public, versioned with the server, and served only where the engine runs", async () => {

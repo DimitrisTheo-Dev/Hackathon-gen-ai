@@ -8,7 +8,8 @@ services:
     volumes:
       - claude-home:/home/node
     ports:
-      - "127.0.0.1:${RUNNER_PORT:-8787}:8787"
+      # boxd: RUNNER_BIND=0.0.0.0 and RUNNER_PORT=8000 so the machine's HTTPS address finds it.
+      - "${RUNNER_BIND:-127.0.0.1}:${RUNNER_PORT:-8787}:8787"
 
   caddy:
     image: caddy:2

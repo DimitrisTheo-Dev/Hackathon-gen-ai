@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { loadConfig, type EngineConfig } from "./config.js";
 import type { HttpDeps } from "./http.js";
 import { createPlanner } from "./llm.js";
+import { R2FileStore, UnconfiguredFileStore } from "./r2.js";
 import { SupabaseStore } from "./store-supabase.js";
 
 /**
@@ -37,6 +38,7 @@ export function getRuntime(env: Record<string, string | undefined> = process.env
     verifyAccessToken: createTokenVerifier(config.supabaseUrl),
     fetch: globalThis.fetch,
     planner: config.llm ? createPlanner(config.llm) : null,
+    files: config.r2 ? new R2FileStore(config.r2, () => new Date(), globalThis.fetch) : new UnconfiguredFileStore(),
   };
   cached = { deps, config };
   return deps;

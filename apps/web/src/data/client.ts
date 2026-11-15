@@ -16,12 +16,29 @@ import {
   type DirectorTurnInput,
   type DirectorTurnResult,
   type RestoreInput,
+  type LibraryTemplate,
   type Template,
   type TemplateInput,
   type AddSourceInput,
   type Brand,
+  type CloneJob,
+  type CloneJobInput,
+  type CloneSource,
   type RemoveSourceInput,
   type UpdateBrandInput,
+  type CreatePersonaInput,
+  type CreatePersonaLookInput,
+  type Persona,
+  type UpdatePersonaInput,
+  type UpdatePersonaLookInput,
+  type CompositionDocument,
+  type SaveCompositionInput,
+  type DraftFile,
+  type UploadTicket,
+  type RequestUploadInput,
+  type SaveTextFileInput,
+  type ReelRender,
+  type QueueRenderInput,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -184,6 +201,8 @@ export interface StudioClient {
   /** One conversational turn. Drafting may be saved; nothing is rendered, approved, charged or published. */
   directorTurn(input: DirectorTurnInput): Promise<DirectorTurnResult>;
   listTemplates(): Promise<Template[]>;
+  /** The video template library (rendered samples with signed media URLs). */
+  listLibraryTemplates(): Promise<LibraryTemplate[]>;
   createFromTemplate(input: TemplateInput): Promise<Campaign>;
   createSampleProject(input: SampleInput): Promise<Campaign>;
   listVersions(contentId: string): Promise<ContentVersion[]>;
@@ -202,6 +221,39 @@ export interface StudioClient {
   addSource(input: AddSourceInput): Promise<Campaign>;
   /** Removes a source from a project and from every draft that cited it. */
   removeSource(input: RemoveSourceInput): Promise<Campaign>;
+  /** Presenters made from a face scan and spoken consent, each with its looks. Photo links are short-lived. */
+  listPersonas(): Promise<Persona[]>;
+  createPersona(input: CreatePersonaInput): Promise<Persona>;
+  updatePersona(input: UpdatePersonaInput): Promise<Persona>;
+  deletePersona(personaId: string): Promise<void>;
+  /** Withdraws the persona's consent: its recordings are deleted and the persona can no longer be used. */
+  withdrawPersonaConsent(personaId: string): Promise<void>;
+  /** Stores a reference photo for one of the persona's looks and returns its key for createPersonaLook/updatePersonaLook. */
+  uploadPersonaPhoto(personaId: string, photo: Blob): Promise<string>;
+  createPersonaLook(input: CreatePersonaLookInput): Promise<Persona>;
+  updatePersonaLook(input: UpdatePersonaLookInput): Promise<Persona>;
+  deletePersonaLook(lookId: string): Promise<Persona>;
+  /** The item's video composition, or a first draft from its script when none is saved (revision 0). */
+  getComposition(contentId: string): Promise<CompositionDocument>;
+  /** Saves the composition with compare-and-swap on its revision. Preview only: nothing is rendered. */
+  saveComposition(input: SaveCompositionInput): Promise<CompositionDocument>;
+  /** Draft files of a project: every component of a reel, versioned. */
+  listFiles(campaignId: string): Promise<DraftFile[]>;
+  /** Registers a media draft and returns a one-time upload link (null when identical bytes are already stored). */
+  requestUpload(input: RequestUploadInput): Promise<UploadTicket>;
+  completeUpload(input: { fileId: string; operationKey: string }): Promise<DraftFile>;
+  saveTextFile(input: SaveTextFileInput): Promise<DraftFile>;
+  archiveFile(input: { fileId: string; operationKey: string }): Promise<DraftFile>;
+  /** Queues an MP4 render of the saved timeline; a render worker produces it as a draft file. */
+  queueRender(input: QueueRenderInput): Promise<ReelRender>;
+  listRenders(contentId: string): Promise<ReelRender[]>;
+  cancelRender(input: { renderId: string; operationKey: string }): Promise<ReelRender>;
+  /** What a YouTube, TikTok or Instagram link points to, with title and author when the platform gives them. */
+  lookupCloneSource(url: string): Promise<CloneSource>;
+  /** This workspace's clone jobs, newest first. */
+  listCloneJobs(): Promise<CloneJob[]>;
+  /** Queues a clone job. Nothing is made until a worker takes it; nothing is published. */
+  createCloneJob(input: CloneJobInput): Promise<CloneJob>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {
