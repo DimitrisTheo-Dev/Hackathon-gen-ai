@@ -258,3 +258,16 @@ test("a product named in the opening words starts after the opening title card, 
   // An explicit time is respected as given.
   assert.equal(placement(script, composition, { id: "p1", name: "BeWell Omega" }, 0.5, 3).start, 0.5);
 });
+
+test("a product photo link counts against the workspace's file storage quota", async () => {
+  const MB = 1024 * 1024;
+  const env = engine({ STORAGE_QUOTA_BYTES: String(MB) }); // the smallest quota the config accepts
+  const ask = async (size: number) => {
+    const response = await env.call("/v1/studio/operations/product_image_upload_url", "user:u1", { type: "image/png", size, sha256: sha256(crypto.randomUUID()) });
+    return { status: response.status, body: (await response.json()) as any };
+  };
+  assert.equal((await ask(MB)).status, 200);
+  const over = await ask(MB + 1);
+  assert.deepEqual([over.status, over.body.error.code], [429, "quota_exceeded"]);
+  assert.match(over.body.error.message, /file storage/);
+});

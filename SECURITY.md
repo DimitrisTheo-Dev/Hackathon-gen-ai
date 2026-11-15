@@ -36,7 +36,7 @@ Faceful lets people and their AI agents draft, render, schedule and pay for shor
 | --- | --- | --- | --- | --- |
 | `principal` | every authenticated `/v1/studio/*` request; every JSON-RPC message to `/mcp` | user, OAuth agent or workspace token | 240 | `RATE_LIMIT_PRINCIPAL_PER_MINUTE` |
 | `director` | `POST /v1/studio/director/turn` (model calls cost money) | principal | 10 | `RATE_LIMIT_DIRECTOR_PER_MINUTE` |
-| `costly` | `render_content`, `create_checkout`, `connect_channel`, `create_clone_job`, `request_file_upload`, `persona_image_upload_url`, `POST /v1/studio/likeness/upload-url`; MCP `start_render`, `create_checkout_link`, `request_file_upload` | principal | 10 | `RATE_LIMIT_COSTLY_PER_MINUTE` |
+| `costly` | `render_content`, `create_checkout`, `connect_channel`, `create_clone_job`, `review_content`, `request_file_upload`, `persona_image_upload_url`, `product_image_upload_url`, `POST /v1/studio/likeness/upload-url`; MCP `start_render`, `create_checkout_link`, `request_file_upload` | principal | 10 | `RATE_LIMIT_COSTLY_PER_MINUTE` |
 | `anonymous` | requests with no credential | client network | 120 | `RATE_LIMIT_ANONYMOUS_PER_MINUTE` |
 | `failed_auth` | requests whose credential is refused (studio, MCP, worker, scheduler) | client network | 60 | `RATE_LIMIT_FAILED_AUTH_PER_MINUTE` |
 
@@ -66,7 +66,7 @@ Faceful lets people and their AI agents draft, render, schedule and pay for shor
 - **Token lifecycle after membership changes.** A workspace token is not re-checked against its creator's current role. There is no member-removal flow yet, so revoke tokens by hand.
 - **Rate-limit limits.** Fixed windows allow up to twice the limit across a window boundary. Per-network limits depend on Vercel's edge headers. Volumetric DDoS protection is left to the platform, and limits fail open during a database outage (by design).
 - **Prompt injection is contained, not eliminated.** Text in a source can still sway the model's wording, but it cannot act: every effect is a proposal that a person reviews. Agents with `content:edit` can edit the workspace brand kit, which every later draft reads as data.
-- **Storage limits are coarse.** Only draft files count toward the storage quota: face-scan recordings and persona photos are bounded per file and by the `costly` rate limit, not by the quota. The check is not atomic, so concurrent requests can overshoot it by a few files. Archived drafts keep their bytes (history stays playable) but leave the quota. Bytes uploaded through a link and never completed or saved stay in R2 until lifecycle rules remove them.
+- **Storage limits are coarse.** Only draft files count toward the storage quota: face-scan recordings, persona photos and product photos are bounded per file and by the `costly` rate limit, not by the quota. The check is not atomic, so concurrent requests can overshoot it by a few files. Archived drafts keep their bytes (history stays playable) but leave the quota. Bytes uploaded through a link and never completed or saved stay in R2 until lifecycle rules remove them.
 - **Public health endpoint.** `/v1/health` lists which integrations are configured, with no values.
 - **Not in place:** MFA policy beyond Supabase defaults, audit-log export, automated dependency scanning in CI, or a formal penetration test.
 
