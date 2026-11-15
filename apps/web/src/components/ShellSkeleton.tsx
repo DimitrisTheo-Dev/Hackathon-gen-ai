@@ -43,8 +43,9 @@ export function bootProbe(): void {
     }
     if (state === "shell") {
       var named = query.get("view") || "";
-      var view = /^(home|canvas|schedule|connect|brand|billing)$/.test(named) ? named : query.has("campaign") || query.has("item") ? "canvas" : "home";
-      root.setAttribute("data-boot-view", view === "home" || view === "canvas" ? view : "page");
+      var view = /^(home|canvas|schedule|connect|brand|billing|templates|personas|clone)$/.test(named) ? named : query.has("campaign") || query.has("item") ? "canvas" : "home";
+      // Card libraries (Templates, Personas) and Clone a video have their own skeletons, matching their layouts.
+      root.setAttribute("data-boot-view", view === "home" || view === "canvas" ? view : view === "templates" || view === "personas" ? "grid" : view === "clone" ? "clone" : "page");
       if (localStorage.getItem("faceful:sidebar") === "collapsed") root.setAttribute("data-boot-sidebar", "collapsed");
       if (localStorage.getItem("faceful:panel") === "closed") root.setAttribute("data-boot-panel", "closed");
     }
@@ -81,7 +82,7 @@ export const boot = {
   settling: () => covering || performance.now() - revealedAt < 600,
 };
 
-/** The skeleton markup. No text and no data: only the frame every studio view shares, plus three body variants. */
+/** The skeleton markup. No text and no data: only the frame every studio view shares, plus five body variants. */
 export function ShellSkeleton({ leaving = false, entering = false, age }: { leaving?: boolean; entering?: boolean; age?: number }) {
   return (
     <div className="boot" role="status" aria-label="Opening your studio" aria-busy={!leaving} data-leaving={leaving ? "" : undefined} data-entering={entering ? "" : undefined} style={age === undefined ? undefined : ({ "--boot-age": `${age}ms` } as CSSProperties)}>
@@ -99,6 +100,8 @@ export function ShellSkeleton({ leaving = false, entering = false, age }: { leav
           <div className="boot-view boot-home"><i className="boot-title" /><i className="boot-line" /><i className="boot-composer" /><span className="boot-chips"><i /><i /><i /><i /></span></div>
           <div className="boot-view boot-canvas"><span className="boot-head"><i className="boot-title" /><i className="boot-line" /></span><span className="boot-cards"><i /><i /><i /></span></div>
           <div className="boot-view boot-page"><i className="boot-title" /><i className="boot-line" /><i className="boot-block" /><i className="boot-block" /></div>
+          <div className="boot-view boot-grid"><i className="boot-title" /><i className="boot-line" /><span className="boot-posters"><i /><i /><i /><i /><i /></span></div>
+          <div className="boot-view boot-clone"><i className="boot-title" /><i className="boot-line" /><span className="boot-clone-body"><span className="boot-clone-form"><i /><i className="is-area" /><i className="is-chips" /></span><i className="boot-clone-frame" /><i className="boot-clone-frame" /></span></div>
           <div className="boot-dock"><i /><i /><i /><i /></div>
         </div>
         <div className="boot-panel"><span className="boot-panel-head"><i /><i /></span><i className="boot-composer" /></div>

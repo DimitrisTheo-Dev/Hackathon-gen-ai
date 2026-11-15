@@ -2,28 +2,7 @@
 
 ## Midday update: Sunday 15 November
 
-**One action unblocks four screens.** Five migrations merged with Minas's work were never applied to the hosted database:
-- `socials`
-- `reel_production`
-- `socials_webhook_renewal`
-- `personas`
-- `clone_jobs`
-
-Until they are, production answers 503 ("The studio database could not complete this request") for:
-- **Channels:** `/v1/studio/channels`
-- **Personas:** `/v1/studio/personas`
-- **Clone a video:** `/v1/studio/clone/jobs`
-- **The Video tab's timeline, files and renders**
-
-All five are additive: new tables (row-level security on, server-only grants) and new columns. Two constraints are swapped for looser equivalents. They applied cleanly, in the hosted order, on a throwaway Postgres 15.
-
-Run from the repo root:
-
-```bash
-supabase db push --include-all
-```
-
-`--include-all` is needed because `templates` and `likeness_consents` were applied out of order. The agent's own push was blocked by its permission settings, so a person must run it.
+**The five missing migrations are applied.** `socials`, `reel_production`, `socials_webhook_renewal`, `personas` and `clone_jobs` are now on the hosted database; `supabase migration list` shows all ten local migrations remote. Re-checked on production with a signed-in session: Channels, Personas, Clone a video and the Video tab's timeline, files and renders all answer 200 (they answered 503 before).
 
 **Built but not configured on production** (from `/v1/health`):
 - draft file storage (`files.connected: false`)
@@ -113,9 +92,9 @@ Labels: **VERIFIED LIVE** — exercised on production with real services. **IMPL
 | Claude Code in the browser (`/claude-login-test/`, Minas): the official CLI on your own server, signed in with your own Claude subscription, streamed to a page | **IMPLEMENTED, NOT VERIFIED LIVE by this workstream.** The page is served on production and its unit tests pass; no runner was reachable to exercise sign-in or a session. It is not yet connected to a Faceful workspace (the runner starts Claude without Faceful's MCP server) | `apps/claude-runner/README.md`. Check Anthropic's terms before offering subscription sign-in to other people; the README scopes it to your own use |
 | Installable app (manifest, icons, offline page, service worker) | **IMPLEMENTED, NOT VERIFIED on a phone** | — |
 | Template library (11 short-form formats, each with a rendered Greek sample) | **VERIFIED LIVE**: `/v1/studio/templates/library` returns 11 templates with signed sample videos, posters and beat stills | Studio → Templates |
-| Video tab: Remotion timeline editor, draft files, MP4 render queue (8 MCP tools) | **BLOCKED on production** until the migrations above are applied (timeline, files and renders return 503). Rendering also needs a Remotion worker, and files need the files store; neither is configured | `docs/agents/reel-production.md`, `workers/reel-render/` |
-| Personas (presenters backed by a face-scan consent) and Clone a video | **BLOCKED on production** until the migrations above are applied (both return 503) | — |
-| Social accounts through Buffer, or Instagram directly; activity webhooks | **IMPLEMENTED, NOT VERIFIED LIVE.** The migration is not applied, and no Buffer or Instagram credentials are configured on production | `INTEGRATION_CONTRACTS.md` §4, §11 |
+| Video tab: Remotion timeline editor, draft files, MP4 render queue (8 MCP tools) | **IMPLEMENTED; reachable on production** (timeline, files and render lists load). Editing was not exercised end to end. Rendering needs a Remotion worker and file uploads need the files store; neither is configured | `docs/agents/reel-production.md`, `workers/reel-render/` |
+| Personas (presenters backed by a face-scan consent) and Clone a video | **IMPLEMENTED; reachable on production** (both lists load). Clone jobs wait in a queue until a worker is attached | — |
+| Social accounts through Buffer, or Instagram directly; activity webhooks | **IMPLEMENTED, NOT VERIFIED LIVE.** The tables exist; no Buffer or Instagram credentials are configured on production | `INTEGRATION_CONTRACTS.md` §4, §11 |
 | Chromium, Safari (WebKit) and Firefox; accessibility (axe, WCAG 2.2 AA) | **VERIFIED** in all three engines on a production-shaped build: 342 browser tests, 0 serious or critical axe findings. Production pages opened without console errors in Chromium and WebKit. Not yet checked on a physical iPhone or Android phone | `docs/demo/evidence/quality/` |
 | `/pitch` presenter reveal | **VERIFIED LIVE** (served on production, no console errors in Chromium and WebKit; 10 browser tests). Uses a drawn presenter labelled "Illustration" until a real clip is added | `docs/demo/pitch-script.md`, `docs/demo/evidence/production/pitch-prod-studio-beat.png` |
 | MCP server card for discovery | **VERIFIED LIVE** at `/.well-known/mcp/server-card.json` (draft format, SEP-1649/SEP-2127) | `INTEGRATION_CONTRACTS.md` §9 |

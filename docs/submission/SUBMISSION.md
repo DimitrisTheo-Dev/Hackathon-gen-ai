@@ -34,12 +34,11 @@ Short presenter-led videos (Reels, Shorts, TikToks) are the most effective forma
 | Studio refresh: one continuous loading state, zero layout shift | measured on production with a signed-in session |
 | Works in Chromium, Safari (WebKit) and Firefox; no serious or critical axe findings (WCAG 2.2 AA) on 12 surfaces at desktop and phone widths; landing Lighthouse 100 mobile and desktop on a compressed server | 342 browser tests across three engines; `docs/demo/evidence/quality/` |
 
-**Not yet live (stated plainly in the product):**
+**What is live and what still waits (stated plainly in the product too):**
 - **Presenter-video rendering** waits for the Humanlike recorder.
-- **AI writing on the server** needs a model key. Until then, the studio offers the hand-off to your own agent.
-- **The reel editor** (Remotion timeline, draft files, MP4 renders), **Personas**, **Clone a video** and **social accounts** (Buffer, or Instagram directly) are built. They wait on a database migration and on their services: a files store, a render worker, and Buffer or Instagram credentials.
+- **The reel editor** (Remotion timeline, draft files, MP4 renders), **Personas**, **Clone a video** and **social accounts** (Buffer, or Instagram directly) are built. They are reachable on production and wait on their services: a files store, a render worker, and Buffer or Instagram credentials.
 - **YouTube publishing** is built but not yet verified with a real channel. TikTok needs the platform's app review or Buffer.
-- **The template library** is live: 11 formats with rendered Greek samples.
+- **Live today:** AI drafting and edits through the Director (Gemini on production), and the template library: 11 formats with rendered Greek samples.
 
 ## How it works
 
@@ -76,7 +75,7 @@ The studio, the AI Director and every MCP tool call the same engine functions. T
 
 ## Built with
 
-React 19, Vite, TypeScript, Supabase (Auth, Postgres, Storage), Vercel Functions, the Model Context Protocol TypeScript SDK, Stripe, Resend, the Anthropic SDK (Claude) for the Director, Humanlike for presenters.
+React 19, Vite, TypeScript, Supabase (Auth, Postgres, Storage), Vercel Functions, the Model Context Protocol TypeScript SDK, Stripe, Resend, Gemini for the Director (Claude through the Anthropic SDK is also supported), Humanlike for presenters.
 
 ## Team
 

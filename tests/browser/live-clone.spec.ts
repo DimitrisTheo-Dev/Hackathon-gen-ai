@@ -31,7 +31,8 @@ test('Clone a video: a link shows the platform player, a brief and toggles start
   await page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Clone a video' }).click();
   await expect(page).toHaveURL(/view=clone/);
   await expect(page.getByRole('heading', { level: 1, name: 'Clone a video' })).toBeVisible();
-  await expect(page.getByText('Your video shows here once a worker has made it.')).toBeVisible();
+  // The empty result frame names the workspace's brand kit, which the new version is made in.
+  await expect(page.locator('.cv-result')).toContainText('shows here once a worker has made it.');
 
   const link = page.getByLabel('Video link');
   // Other sites are refused by the shared link reader, before any request.

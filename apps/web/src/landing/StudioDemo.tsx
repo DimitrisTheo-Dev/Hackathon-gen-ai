@@ -1,11 +1,13 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowUp, CalendarDays, Check, ChevronRight, Folder, Grid2X2, Layers, MousePointer2, Paperclip, Plug, Plus, Search, Sparkles } from "lucide-react";
+import { ArrowUp, AudioLines, CalendarDays, Captions, Check, ChevronRight, Clapperboard, Copy, FileText, Folder, Grid2X2, Instagram, LayoutTemplate, MousePointer2, Music, Music2, Paperclip, Plug, Plus, Search, Sparkles, UserRound, Youtube } from "lucide-react";
 
 /**
  * A coded illustration of the real studio: Projects on the left, the storyboard canvas in the
  * middle, the AI Director chat on the right. It tells one short story in a loop:
  * prompt → the composer docks into the chat → presenter drafts land → a presenter is chosen →
- * an edit becomes version 2 → a posting time waits for approval → a connected agent adds a draft.
+ * an edit becomes version 2 → a posting time waits for approval → a connected agent adds a draft →
+ * the draft opens in the video editor (template, persona, brand kit, a multi-track timeline playing) →
+ * the agent adds a closing card to the timeline over MCP → the three destinations wait for approval.
  *
  * It is an interface illustration with sample content. Nothing is rendered, scheduled or published,
  * and the markup never claims otherwise. Server-rendered HTML is the composed final frame, which is
@@ -13,7 +15,7 @@ import { ArrowUp, CalendarDays, Check, ChevronRight, Folder, Grid2X2, Layers, Mo
  */
 const PROMPT = "Create a 15-second Reel for BeWell with a friendly Greek presenter, ready for Monday.";
 
-const STEP = { home: 0, typing: 1, send: 2, dock: 3, drafts: 4, ready: 5, pick: 6, ask: 7, proposal: 8, applied: 9, schedule: 10, agentCursor: 11, agentCard: 12, fade: 13, rewind: 14 } as const;
+const STEP = { home: 0, typing: 1, send: 2, dock: 3, drafts: 4, ready: 5, pick: 6, ask: 7, proposal: 8, applied: 9, schedule: 10, agentCursor: 11, agentCard: 12, video: 13, play: 14, agentEdit: 15, destinations: 16, fade: 17, rewind: 18 } as const;
 
 /** [time in ms, step]. Steps only ever toggle classes; all motion is CSS transform/opacity. */
 const TIMELINE: ReadonlyArray<readonly [number, number]> = [
@@ -30,10 +32,14 @@ const TIMELINE: ReadonlyArray<readonly [number, number]> = [
   [6900, STEP.schedule], // posting time proposed, needs approval
   [7700, STEP.agentCursor], // agent cursor glides in
   [8400, STEP.agentCard], // agent's draft lands
-  [9800, STEP.fade],
-  [10100, STEP.rewind], // rewind poses with transitions off
+  [9500, STEP.video], // the first draft opens in the video editor
+  [9900, STEP.play], // the timeline plays: playhead, karaoke captions, voice
+  [11500, STEP.agentEdit], // the agent drops a closing card onto the timeline over MCP
+  [12600, STEP.destinations], // Reels, TikTok and Shorts, waiting for approval
+  [14300, STEP.fade],
+  [14600, STEP.rewind], // rewind poses with transitions off
 ];
-const LOOP_MS = 10250;
+const LOOP_MS = 14750;
 const TYPE_START = 400;
 const TYPE_END = 1650;
 const FINAL_STEP: number = STEP.agentCard;
@@ -126,6 +132,8 @@ const drafts = [
   { tone: "c", title: "Τα λέμε εκεί", words: ["Τα", "λέμε", "εκεί,", "τη", "Δευτέρα."], revised: null },
 ] as const;
 const AGENT_DRAFT = { title: "Πίσω από τη σκηνή", words: ["Πάμε", "πίσω", "από", "τη", "σκηνή."] } as const;
+/** The voice track's waveform: fixed heights, so server and client draw the same bars. */
+const WAVE = [38, 62, 80, 54, 92, 70, 44, 76, 96, 60, 40, 72, 88, 52, 66, 90, 58, 36, 74, 84, 50, 68, 94, 46, 62, 80, 42, 70];
 
 export function StudioDemo() {
   const [step, setStep] = useState<number>(FINAL_STEP);
@@ -219,13 +227,13 @@ export function StudioDemo() {
     return () => { window.clearInterval(timer); elapsed.current = (Date.now() - origin) % LOOP_MS; };
   }, [motion, playing]);
 
-  const live = step <= FINAL_STEP;
+  const live = step < STEP.fade;
   const at = (from: number) => (live && step >= from ? "is-in" : "");
   const on = (from: number) => live && step >= from;
   const docked = step >= STEP.dock && step !== STEP.rewind;
   const picked = on(STEP.pick);
-  const latest = step >= STEP.schedule ? "schedule" : step >= STEP.proposal ? "proposal" : step >= STEP.ask ? "ask" : step >= STEP.ready ? "saved" : step >= STEP.dock ? "working" : "";
-  const rootClass = ["fd", docked ? "is-docked" : "is-home", step === STEP.send ? "is-sending" : "", picked ? "has-pick" : "", on(STEP.agentCard) ? "has-agent-card" : "", step === STEP.fade ? "is-fading" : "", step === STEP.rewind ? "is-rewinding" : ""].filter(Boolean).join(" ");
+  const latest = step >= STEP.agentEdit ? "agentEdit" : step >= STEP.video ? "video" : step >= STEP.schedule ? "schedule" : step >= STEP.proposal ? "proposal" : step >= STEP.ask ? "ask" : step >= STEP.ready ? "saved" : step >= STEP.dock ? "working" : "";
+  const rootClass = ["fd", docked ? "is-docked" : "is-home", step === STEP.send ? "is-sending" : "", picked ? "has-pick" : "", on(STEP.agentCard) ? "has-agent-card" : "", on(STEP.video) ? "is-video" : "", on(STEP.agentEdit) ? "has-edit-msg" : "", step === STEP.fade ? "is-fading" : "", step === STEP.rewind ? "is-rewinding" : ""].filter(Boolean).join(" ");
   /** The name chip on a draft: the presenter's name beside a small "speaking" meter. */
   const nameChip = (names: readonly PresenterId[]) => (
     <span className="fd-presenter">
@@ -238,7 +246,7 @@ export function StudioDemo() {
     <figure
       ref={figure}
       className="landing-demo"
-      aria-label="Animated illustration of the Faceful studio. A typed request becomes three presenter drafts with captions beside the AI Director chat. A presenter is chosen for them, an edit is saved as version 2, a posting time waits for approval, and a connected agent adds a draft."
+      aria-label="Animated illustration of the Faceful studio. A typed request becomes three presenter drafts with captions beside the AI Director chat. A presenter is chosen for them, an edit is saved as version 2, a posting time waits for approval, and a connected agent adds a draft. The first draft then opens in the video editor with its template, persona and brand kit and a timeline of picture, voice, music and captions; the agent adds a closing card over MCP, and Instagram Reels, TikTok and YouTube Shorts wait for approval."
       data-playing={playing ? "true" : "false"}
       data-step={step}
       onClick={(event) => { if (motion && !(event.target as Element).closest("button")) setHeld((value) => !value); }}
@@ -256,13 +264,16 @@ export function StudioDemo() {
               <span className="fd-wordmark"><span className="landing-mark"><i /><i /><i /></span>faceful</span>
               <span className="fd-search"><Search />Search studio<kbd>⌘K</kbd></span>
               <span className={`fd-nav ${docked ? "" : "is-active"}`}><Plus />Create</span>
-              <span className={`fd-nav ${docked ? "is-active" : ""}`}><Layers />Campaigns<b>{on(STEP.dock) ? 3 : 2}</b></span>
+              <span className="fd-nav"><LayoutTemplate />Templates<b>11</b></span>
+              <span className="fd-nav"><Copy />Clone a video</span>
               <span className="fd-nav"><CalendarDays />Schedule</span>
+              <span className="fd-nav"><UserRound />Personas</span>
+              <span className="fd-nav"><FileText />Brand kit</span>
               <span className="fd-label">Projects</span>
               <span className={`fd-project fd-project-new ${at(STEP.dock)}`}><Folder />BeWell launch<b>{step >= STEP.agentCard ? 4 : 3}</b></span>
               <span className="fd-project"><Folder />Autumn menu<b>2</b></span>
               <span className="fd-project"><Folder />Founder notes<b>1</b></span>
-              <span className={`fd-agent ${on(STEP.agentCursor) ? "is-busy" : ""}`}><span className="fd-agent-icon"><Plug /></span><span><strong>1 agent connected</strong><small>Codex · via MCP</small></span></span>
+              <span className={`fd-agent ${on(STEP.agentCursor) ? "is-busy" : ""}`}><span className="fd-agent-icon"><Plug /></span><span><strong>1 agent connected</strong><small>Codex · 21 tools via MCP</small></span></span>
             </aside>
 
             <div className="fd-main">
@@ -271,10 +282,10 @@ export function StudioDemo() {
                 <strong>What will we create today?</strong>
                 <span>Describe your idea. Shape it with Faceful.</span>
               </div>
-              <div className="fd-chips"><span>Choose a template</span><span>Plan a campaign</span><span>Find existing content</span></div>
+              <div className="fd-chips"><span>Start from a template</span><span>Clone a video</span><span>Plan a campaign</span></div>
 
               <div className="fd-canvas">
-                <div className="fd-topbar"><span>Projects</span><ChevronRight /><strong>BeWell launch</strong><span className="fd-view"><Grid2X2 />Canvas</span></div>
+                <div className="fd-topbar"><span>Projects</span><ChevronRight /><strong>BeWell launch</strong><span className="fd-view"><span className="fd-view-option"><Grid2X2 />Canvas</span><span className="fd-view-option"><Clapperboard />Video</span></span></div>
                 <div className="fd-heading"><strong>BeWell launch</strong><span>Draft campaign · Europe/Athens</span></div>
                 <div className="fd-track">
                   <span className={`fd-pill ${at(STEP.drafts)} ${step >= STEP.ready ? "is-ready" : ""}`}>
@@ -318,8 +329,41 @@ export function StudioDemo() {
                     <div className="fd-card-meta"><strong>{AGENT_DRAFT.title}</strong><span className="fd-state"><i />Draft<span className="fd-version"><span>v1</span></span><em>via MCP</em></span></div>
                   </div>
                 </div>
-                <span className={`fd-cursor ${on(STEP.agentCursor) ? "is-on" : ""} ${step >= STEP.agentCard ? "is-clicked" : ""}`}><MousePointer2 /><span>Codex</span></span>
-                <div className="fd-footer"><span><i />Live workspace</span><span>{step >= STEP.agentCard ? 4 : step >= STEP.drafts ? 3 : 0} drafts · nothing rendered or scheduled</span></div>
+                <span className={`fd-cursor ${on(STEP.agentCursor) && !on(STEP.video) ? "is-on" : ""} ${step >= STEP.agentCard ? "is-clicked" : ""}`}><MousePointer2 /><span>Codex</span></span>
+                {/* Act two: the first draft in the video editor. Same presenter, the revised caption, the brand kit and a template. */}
+                <div className={["fd-video", at(STEP.video), on(STEP.play) ? "is-playing" : "", on(STEP.agentEdit) ? "has-edit" : "", on(STEP.destinations) ? "has-destinations" : ""].filter(Boolean).join(" ")}>
+                  <div className="fd-video-preview">
+                    <span className="fd-stage"><Presenter who={PICKED_PRESENTER} /></span>
+                    <span className="fd-poster-top">{nameChip([PICKED_PRESENTER])}<small>9:16 · 15 s</small></span>
+                    <span className="fd-video-card">Δευτέρα 09:00</span>
+                    <span className="fd-karaoke">{(drafts[0].revised ?? drafts[0].words).map((word, index) => <Fragment key={word}><i style={{ "--w": index } as CSSProperties}>{word}</i>{" "}</Fragment>)}</span>
+                    <span className="fd-progress"><i /></span>
+                  </div>
+                  <div className="fd-video-side">
+                    <div className="fd-video-facts">
+                      <span><small>Template</small><b><LayoutTemplate />Talking tip</b></span>
+                      <span><small>Presenter</small><b><UserRound />Nikos · persona</b></span>
+                      <span><small>Brand kit</small><b><i className="fd-swatch" />BeWell</b></span>
+                    </div>
+                    <div className="fd-timeline">
+                      <span className="fd-ruler"><i>0:00</i><i>0:05</i><i>0:10</i><i>0:15</i></span>
+                      <span className="fd-lane"><small>Picture</small><span className="fd-lane-body"><span className="fd-clip fd-clip-picture" style={{ "--from": 0, "--to": 64 } as CSSProperties}>Nikos</span><span className="fd-clip fd-clip-broll" style={{ "--from": 64.6, "--to": 100 } as CSSProperties}>Festival b-roll</span></span></span>
+                      <span className="fd-lane"><small>Cards</small><span className="fd-lane-body"><span className="fd-clip fd-clip-card" style={{ "--from": 70, "--to": 100 } as CSSProperties}>Δευτέρα 09:00<em>MCP</em></span></span></span>
+                      <span className="fd-lane"><small>Voice</small><span className="fd-lane-body"><span className="fd-clip fd-clip-voice" style={{ "--from": 2, "--to": 90 } as CSSProperties}>{WAVE.map((height, index) => <i key={index} style={{ "--h": height } as CSSProperties} />)}</span></span></span>
+                      <span className="fd-lane"><small>Music</small><span className="fd-lane-body"><span className="fd-clip fd-clip-music" style={{ "--from": 0, "--to": 100 } as CSSProperties}>Calm · 92 BPM</span></span></span>
+                      <span className="fd-lane"><small>Captions</small><span className="fd-lane-body">{(drafts[0].revised ?? drafts[0].words).map((word, index, all) => <span key={word} className="fd-clip fd-clip-word" style={{ "--from": 4 + (index * 84) / all.length, "--to": 4 + ((index + 1) * 84) / all.length - 1.2 } as CSSProperties}>{word}</span>)}</span></span>
+                      <span className="fd-playhead-track"><span className="fd-playhead" /></span>
+                    </div>
+                    <div className="fd-files"><small>Draft files</small><span><FileText />script.md</span><span><AudioLines />voice-take-2</span><span><Captions />captions.vtt</span><span><Music />music</span></div>
+                  </div>
+                  <div className="fd-destinations">
+                    <span className="fd-destination"><Instagram />Reels</span>
+                    <span className="fd-destination"><Music2 />TikTok</span>
+                    <span className="fd-destination"><Youtube />Shorts</span>
+                    <span className="fd-destination-slot"><i />Mon 09:00<small>needs your approval</small></span>
+                  </div>
+                </div>
+                <div className="fd-footer"><span><i />Live workspace</span><span>{on(STEP.video) ? `Video edit · ${drafts[0].title} · timeline v${on(STEP.agentEdit) ? 2 : 1}` : `${step >= STEP.agentCard ? 4 : step >= STEP.drafts ? 3 : 0} drafts`} · nothing rendered or scheduled</span></div>
               </div>
             </div>
 
@@ -340,6 +384,8 @@ export function StudioDemo() {
                   <span className="fd-proposal-foot"><span className="fd-apply">Apply changes</span><span className="fd-saved"><Check />Saved as version 2</span></span>
                 </div>
                 <div className={`fd-msg fd-director ${at(STEP.schedule)} ${latest === "schedule" ? "is-latest" : ""}`}><span className="fd-who"><Sparkles />AI Director</span><p>Proposed: Monday 09:00, Europe/Athens. Publishing needs your approval.</p></div>
+                <div className={`fd-msg fd-director ${at(STEP.video)} ${latest === "video" ? "is-latest" : ""}`}><span className="fd-who"><Sparkles />AI Director</span><p>Opened the video edit: the Talking tip template, Nikos and your brand colours, with voice, music and captions on the timeline.</p></div>
+                <div className={`fd-msg fd-agent-msg ${at(STEP.agentEdit)} ${latest === "agentEdit" ? "is-latest" : ""}`}><span className="fd-who"><Plug />Codex · via MCP</span><p><code>save_video_timeline</code> added a closing card. Saved as timeline version 2.</p></div>
               </div>
             </aside>
 
