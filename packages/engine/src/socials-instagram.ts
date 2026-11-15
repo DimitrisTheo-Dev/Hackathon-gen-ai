@@ -94,15 +94,22 @@ async function complete(deps: EngineDeps, input: { code: string; redirectUri: st
   const profile = answer.data?.[0] ?? answer;
   // `user_id` is the professional account's ID, the one webhook deliveries name. (`id` is a different, app-scoped ID.)
   if (!profile?.user_id || !profile.username) throw new EngineError("validation_error", "Instagram did not describe this account. Only professional (business or creator) accounts can be connected.");
-  // Ask for the account's comments and messages to be sent to this deployment. Best effort: posting works without it.
-  const subscribed = await graph<{ success?: boolean }>(deps, long.access_token, "POST", `/me/subscribed_apps?subscribed_fields=${WEBHOOK_FIELDS}`)
-    .then((result) => result.success === true)
-    .catch(() => false);
+  const credentials = { accessToken: long.access_token, expiresAt: expiry(deps, long.expires_in) };
+  // Ask for the account's comments and messages to be sent to this deployment. Best effort: posting works without it,
+  // and the scheduler asks again until it takes (socials.ts, subscribeProviderAccounts).
+  const subscribed = await subscribe(deps, credentials);
   return {
-    credentials: { accessToken: long.access_token, expiresAt: expiry(deps, long.expires_in) },
+    credentials,
     account: { platform: "instagram", externalAccountId: String(profile.user_id), providerAccountId: String(profile.user_id), displayName: `@${profile.username}`, profileUrl: `https://www.instagram.com/${encodeURIComponent(profile.username)}/`, state: "connected" },
     subscribed,
   };
+}
+
+/** Asks Instagram to send the account's activity here (socials-webhooks.ts reads it). True once Instagram says it will. */
+async function subscribe(deps: EngineDeps, credentials: Credentials): Promise<boolean> {
+  return graph<{ success?: boolean }>(deps, credentials.accessToken, "POST", `/me/subscribed_apps?subscribed_fields=${WEBHOOK_FIELDS}`)
+    .then((result) => result.success === true)
+    .catch(() => false);
 }
 
 async function refresh(deps: EngineDeps, credentials: Credentials): Promise<Credentials | null> {
@@ -186,6 +193,7 @@ export const instagramProvider: SocialProvider<Credentials> = {
   platforms: ["instagram"],
   credentialsSchema,
   signIn: { authorizeUrl, complete },
+  subscribe,
   refresh,
   publish,
   postStatus,
