@@ -60,7 +60,14 @@ This file was regenerated from the shipped CSS on 15 November 2026. The tokens l
 
 - **Create** (the home view): a centred "What will we create today?", one composer with Format, Length and Language pills, suggestion chips, "Create with my own script", and "Pick up where you left off". It never shows past turns. Sending docks the conversation beside the canvas, and that is where the history lives.
 - **Canvas:** 9:16 cards in `auto-fill minmax(204px, 1fr)`. Each card is one button; its status pill sits on the art. Selection is a 2px ink shadow.
-- **Details:** iOS-settings rows (Guidance, Presenter & style, Channels, Posting times, Versions) that open in place, with a glass footer.
+- **Details:** iOS-settings rows (Guidance, Presenter & style, Channels, Posting times, Review, Versions) that open in place, with a glass footer.
+- **Review** (Details → Review): "Check this draft" runs three passes:
+  - **Claims:** the exact quote, a status chip that pairs a word with an icon, the note, the source quote, and "Use this wording".
+  - **Voice & captions:** findings with timecodes.
+  - **On screen:** visual findings.
+
+  "What was checked" always says what was not examined, and basic mode says it was not AI. Never use the words verified, fact-checked or accurate; say "Checked against your approved facts". Health and finance drafts need a named approval (name, credential, and a written reason when flagged items remain) before they can be scheduled; the readiness checklist shows this as its first step, "Claims". Fact ticks are neutral, never green: green means a confirmed state, and a review confirms nothing.
+- **Products** (Brand kit): square photo cards with a Health or Finance chip (General shows nothing) and up to three approved facts. Approved facts are the only product claims a script can make without a source. In the video studio, "Show product" places a product's photo where the script first names it, after any opening title card.
 - **Landing:**
   - a 500-weight headline at 1.02 leading and -0.03em tracking, using the owner's `clamp()`;
   - "What if ⟨agent⟩ made your next video campaign?" with zero layout shift (its own line, a clip-path chip, metric-matched fallback fonts);

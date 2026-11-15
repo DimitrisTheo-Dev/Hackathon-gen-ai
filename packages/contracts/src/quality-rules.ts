@@ -131,7 +131,7 @@ const RULE_TOPICS: Partial<Record<ClaimKind, RegExp>> = {
 
 /* ───────────────────────── domain ───────────────────────── */
 
-/** Products the script names, earliest mention first, with the character index of that mention. */
+/** Products the script names, earliest mention first, with the character index of that mention in `normalizeText(script)`. */
 export function productMentions(script: string, products: ReadonlyArray<Pick<Product, "id" | "name">>): Array<{ productId: string; index: number }> {
   const text = normalizeText(script);
   const found: Array<{ productId: string; index: number }> = [];
@@ -297,13 +297,37 @@ export function applySuggestion(script: string, claim: Pick<ReviewClaim, "quote"
 
 /* ───────────────────────── timeline helpers ───────────────────────── */
 
-/** Seconds on the timeline where the script's character `index` is spoken: from word timings, else by position. */
+/**
+ * Seconds on the timeline where character `index` of the *normalized* script is spoken (the index `productMentions`
+ * returns): from word timings, else by position in the text.
+ */
 export function timeAtScriptIndex(script: string, composition: Pick<Composition, "durationSeconds" | "transcript">, index: number): number {
-  const before = tokens(script.slice(0, index)).length;
-  const all = Math.max(1, tokens(script).length);
+  const text = normalizeText(script);
+  const before = tokens(text.slice(0, index)).length;
+  const all = Math.max(1, tokens(text).length);
   const words = composition.transcript?.words ?? [];
   if (words.length) return words[Math.min(words.length - 1, Math.round((before / all) * words.length))].start;
-  return Math.round(Math.min(composition.durationSeconds, (index / Math.max(1, script.length)) * composition.durationSeconds) * 10) / 10;
+  return Math.round(Math.min(composition.durationSeconds, (index / Math.max(1, text.length)) * composition.durationSeconds) * 10) / 10;
+}
+
+/**
+ * Where a product photo starts on the timeline (place_product, its preview and the local fixture all use this): at `at`
+ * when given; else where the script first names the product, moved past an opening title or statement card it would
+ * sit under; else one third in. Callers clamp it to the timeline.
+ */
+export function productPlacementTime(
+  script: string,
+  composition: Pick<Composition, "durationSeconds" | "transcript" | "cards">,
+  product: Pick<Product, "id" | "name">,
+  at: number | null,
+): { time: number; matchedMention: boolean } {
+  if (at !== null) return { time: at, matchedMention: false };
+  const mention = productMentions(script, [product])[0];
+  if (!mention) return { time: composition.durationSeconds / 3, matchedMention: false };
+  let time = timeAtScriptIndex(script, composition, mention.index);
+  const opening = composition.cards.find((card) => (card.kind === "title" || card.kind === "statement") && card.start <= time && time < card.end);
+  if (opening) time = opening.end;
+  return { time, matchedMention: true };
 }
 
 /** Longest-common-subsequence alignment of two token lists; returns runs present only in `a` and only in `b`. */

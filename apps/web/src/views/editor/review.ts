@@ -1,16 +1,18 @@
-import type { Campaign, ScheduleManifest, StudioContext } from "@castroom/contracts";
+import { REVIEW_BLOCKER_PREFIX, type Campaign, type ScheduleManifest, type StudioContext } from "@castroom/contracts";
 
 /**
  * The schedule review as a checklist. The server's blockers stay the authority: this only sorts their
  * wording into the step a person can act on, and counts how many drafts each step still holds back.
  */
-export type ReviewStepId = "videos" | "channels" | "other";
+export type ReviewStepId = "claims" | "videos" | "channels" | "other";
 export type BlockerGroup = { message: string; itemIds: string[] };
 export type ReviewStep = { id: ReviewStepId; done: number; total: number; blockers: BlockerGroup[] };
 export type ReviewState = "stale" | "expired" | "blocked" | "ready" | "approved";
 
 /** Which step a server blocker belongs to. Unknown wording is kept, in its own step, never dropped. */
 export function blockerStep(message: string): ReviewStepId {
+  // The content-review gate names itself; its wording may mention a video, so it is matched first.
+  if (message.startsWith(REVIEW_BLOCKER_PREFIX)) return "claims";
   if (/\b(video|render(?:ed|ing)?|presenter)\b/i.test(message)) return "videos";
   if (/\b(destination|channel|account|publish(?:ing)?|time|copy|caption|schedul\w*|youtube|instagram|tiktok)\b/i.test(message)) return "channels";
   return "other";
@@ -36,7 +38,7 @@ export function manifestStale(manifest: ScheduleManifest, campaign: Campaign): b
 
 export function reviewSteps(manifest: ScheduleManifest, campaign: Campaign): ReviewStep[] {
   const total = campaign.items.length;
-  const groups: Record<ReviewStepId, Map<string, Set<string>>> = { videos: new Map(), channels: new Map(), other: new Map() };
+  const groups: Record<ReviewStepId, Map<string, Set<string>>> = { claims: new Map(), videos: new Map(), channels: new Map(), other: new Map() };
   for (const blocker of manifest.blockers) {
     const step = groups[blockerStep(blocker.message)];
     const ids = step.get(blocker.message) ?? new Set<string>();
@@ -52,7 +54,14 @@ export function reviewSteps(manifest: ScheduleManifest, campaign: Campaign): Rev
       blockers: [...groups[id]].map(([message, ids]) => ({ message, itemIds: [...ids] })),
     };
   };
-  return [step("videos"), step("channels"), ...(groups.other.size ? [step("other")] : [])];
+  // Claims come first, and only when the server holds a draft back for them: a fixed script means a new render,
+  // and a list with nothing to say about claims must not read as "claims checked".
+  return [...(groups.claims.size ? [step("claims")] : []), step("videos"), step("channels"), ...(groups.other.size ? [step("other")] : [])];
+}
+
+/** A blocker's words as the checklist shows them: under "Claims", the prefix that filed it there is not repeated. */
+export function blockerText(message: string): string {
+  return message.startsWith(REVIEW_BLOCKER_PREFIX) ? message.slice(REVIEW_BLOCKER_PREFIX.length).trim() || message : message;
 }
 
 export function reviewState(manifest: ScheduleManifest, campaign: Campaign, now = Date.now()): ReviewState {

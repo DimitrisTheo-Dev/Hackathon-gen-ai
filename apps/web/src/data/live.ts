@@ -41,6 +41,16 @@ import {
   archiveFileInputSchema,
   reelRenderSchema,
   queueRenderInputSchema,
+  approveReviewInputSchema,
+  contentReviewSchema,
+  createProductInputSchema,
+  placeProductInputSchema,
+  placeProductResultSchema,
+  productImageTicketSchema,
+  productImageUploadInputSchema,
+  productSchema,
+  reviewContentInputSchema,
+  updateProductInputSchema,
 } from "@castroom/contracts";
 import {
   ApiError,
@@ -410,5 +420,31 @@ export function createLiveClient(
       request(`/items/${encodeURIComponent(validate(idSchema, contentId))}/renders`, z.array(reelRenderSchema)),
     cancelRender: (input) =>
       request("/operations/cancel_reel_render", reelRenderSchema, validate(z.object({ renderId: idSchema, operationKey: z.uuid() }).strict(), input)),
+    createProduct: async (input) => request("/operations/create_product", productSchema, validate(createProductInputSchema, input)),
+    updateProduct: async (input) => request("/operations/update_product", productSchema, validate(updateProductInputSchema, input)),
+    deleteProduct: async (productId) => {
+      await request("/operations/delete_product", z.object({ deleted: z.literal(true) }), { productId: validate(idSchema, productId) });
+    },
+    uploadProductImage: async (photo) => {
+      const digest = await crypto.subtle.digest("SHA-256", await photo.arrayBuffer());
+      const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const input = productImageUploadInputSchema.safeParse({ type: photo.type, size: photo.size, sha256 });
+      if (!input.success) throw new ApiError("validation_error", "Use a JPEG, PNG or WebP photo under 15 MB.");
+      const ticket = await request("/operations/product_image_upload_url", productImageTicketSchema, input.data);
+      let put: Response;
+      try {
+        // Straight to private storage with exactly the headers the ticket names; the link accepts these bytes only.
+        put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: photo, credentials: "omit", cache: "no-store" });
+      } catch {
+        throw new ApiError("provider_unavailable", "The photo did not upload. Check the connection and try again.");
+      }
+      if (!put.ok) throw new ApiError("provider_unavailable", "The photo did not upload. Check the connection and try again.");
+      return ticket.key;
+    },
+    placeProduct: async (input) => request("/operations/place_product", placeProductResultSchema, validate(placeProductInputSchema, input), { timeoutMs: 30_000 }),
+    getReview: (itemId) => request(`/items/${encodeURIComponent(validate(idSchema, itemId))}/review`, contentReviewSchema.nullable()),
+    // A model may read the script against the approved facts and sources; give it the time the engine allows.
+    reviewContent: async (input) => request("/operations/review_content", contentReviewSchema, validate(reviewContentInputSchema, input), { timeoutMs: 90_000 }),
+    approveReview: async (input) => request("/operations/approve_review", contentReviewSchema, validate(approveReviewInputSchema, input)),
   };
 }
