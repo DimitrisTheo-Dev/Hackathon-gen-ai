@@ -1,6 +1,6 @@
 # Faceful
 
-A shared content studio for people and their external AI agents: describe a presenter-led video, shape the draft, and let your own agent work in the same projects. The studio UI, the AI Creative Director, the MCP server and the scheduler all call one domain engine (`packages/engine`). The repository is private.
+A shared content studio for people and their external AI agents: describe a presenter-led video, shape the draft, and let your own agent work in the same projects. The studio UI, the AI Creative Director, the MCP server and the scheduler all call one domain engine (`packages/engine`).
 
 Status, blockers and proof: [`DEMO_READINESS.md`](DEMO_READINESS.md) · contracts: [`INTEGRATION_CONTRACTS.md`](INTEGRATION_CONTRACTS.md) · demo script: [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md) · billing: [`STRIPE_SANDBOX_SETUP.md`](STRIPE_SANDBOX_SETUP.md).
 
@@ -48,11 +48,10 @@ Manual creation saves supplied context and 1–3 scripts. It does not infer busi
 
 ## Deployment
 
-The Vercel project is linked to this private GitHub repository. The engine needs the server environment variables listed in `.env.example`; `GET /v1/health` shows what a deployment has configured. Preview builds enable `CASTROOM_ENABLE_FIXTURES=true`; the production environment forcibly excludes the fixture module. Public docs have initial HTML. Private studio routes require authentication before requesting live data and are excluded from indexing; the backend must authorize every object and operation.
+The Vercel project is linked to this GitHub repository. The engine needs the server environment variables listed in `.env.example`; `GET /v1/health` shows what a deployment has configured. Preview builds enable `CASTROOM_ENABLE_FIXTURES=true`; the production environment forcibly excludes the fixture module. Public docs have initial HTML. Private studio routes require authentication before requesting live data and are excluded from indexing; the backend must authorize every object and operation.
 
 - [Production](https://faceful.vercel.app) (also served at faceful.dtheo.dev)
-- [Studio development preview](https://hackathon-gen-98b7cqknx-my-team-29ecd279.vercel.app/dev/studio/) (Vercel team access; sample drafts only)
-- [Private repository](https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai)
+- [Repository](https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai)
 - [Shared contract handoff](docs/product/contract-handoff.md)
 
 ## Attribution and limits

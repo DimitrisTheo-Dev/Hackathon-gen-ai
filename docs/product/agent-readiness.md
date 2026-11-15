@@ -39,7 +39,7 @@ Evidence labels: **S** = inspected static source; **D** = deployed HTTP evidence
 | AR-ACT-03 SHOULD | Fail; no live MCP | Blocker: implement authenticated Streamable HTTP and verify discovery in both target clients. Registry publication pending. |
 | AR-ACT-04 MAY | Fail; deferred | Low: server-card conventions/host support must be confirmed before publication. |
 | AR-ACT-05 MAY | Fail; deferred | Low: MCP Apps is optional; external studio serves the first journey. |
-| AR-ACT-06 SHOULD | Partial | Repository CLI supports real public reads and local bounded-plan validation, with tests. Public registry distribution and campaign execution are unavailable; an authorized checkout is required. |
+| AR-ACT-06 SHOULD | Partial | Repository CLI supports real public reads and local bounded-plan validation, with tests. Public registry distribution and campaign execution are unavailable; run it from a checkout of the repository. |
 | AR-ACT-07 SHOULD | Fail; justified deferral | Low: WebMCP remains a draft; target clients use remote MCP. Feature-detect if later adopted. |
 | AR-ACT-08 MAY | Not applicable | No agent purchase/billing task or paid checkout in this build. |
 | AR-ACT-09 MAY | Not applicable | No open-ended public content-query service is needed for the bounded campaign workflow. |

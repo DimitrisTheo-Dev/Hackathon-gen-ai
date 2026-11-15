@@ -1,9 +1,8 @@
 {
   // Faceful machines gateway: one Claude Code container per user.
-  // Deploy (needs Docker running): CLOUDFLARE_API_TOKEN=… npm run deploy
+  // Deploy (needs Docker running): CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… npm run deploy
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "faceful-machines",
-  "account_id": "9c96bc186c40affb19ccb9fcc5ebc05f",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
@@ -28,11 +27,11 @@
   ],
   "vars": {
     "SUPABASE_URL": "https://hgsgvdujzatfhsjoojll.supabase.co",
-    "STORE_URL": "https://faceful-workspace-store.mmkontis.workers.dev",
     "ALLOWED_ORIGINS": "https://faceful.dtheo.dev,http://127.0.0.1:5173,http://localhost:5173",
     "INSTANCE_TYPE": "standard-1"
   }
   // Secrets (never in this file):
+  //   wrangler secret put STORE_URL             the faceful-workspace-store Worker's address
   //   wrangler secret put STORE_SIGNING_KEY     same value as the faceful-workspace-store Worker's
   //   wrangler secret put GATEWAY_SIGNING_KEY   signs personal tokens (node mint-token.mjs <user-id>)
 }

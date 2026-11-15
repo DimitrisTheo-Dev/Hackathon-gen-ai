@@ -46,8 +46,8 @@ back at `Paste code here if prompted`. Run `/status`, then `/exit`.
 ./test.sh apikey
 ```
 
-Uses `ANTHROPIC_API_KEY` from `Humanlike-node/.env.local`, copied to a 0600 temp file for
-this run only. To test another key: `KEY_FILE=~/path/to/keyfile ./test.sh apikey`.
+Needs a file holding an Anthropic API key (mode 0600, under `$HOME` when Docker runs through
+Colima): `KEY_FILE=~/path/to/keyfile ./test.sh apikey`.
 
 **Option 3, Console sign-in**
 

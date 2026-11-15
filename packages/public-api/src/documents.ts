@@ -76,7 +76,7 @@ The authenticated domain API under /v1 and the MCP endpoint at /mcp are separate
     summary: "Read public guidance and validate a supplied draft plan locally from an authorized repository checkout.",
     markdown: `# Faceful CLI
 
-The repository CLI supports public discovery and local draft-plan validation. It does not render, create a persisted campaign, issue tokens or publish. It is not published on npm; use an authorized checkout of the private repository.
+The repository CLI supports public discovery and local draft-plan validation. It does not render, create a persisted campaign, issue tokens or publish. It is not published on npm; run it from a checkout of this repository.
 
 ## Run
 Use Node.js 24 or newer and the pnpm version pinned in package.json. From the repository root:

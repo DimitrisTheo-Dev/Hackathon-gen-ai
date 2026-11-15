@@ -1,10 +1,9 @@
 # Faceful workspace store (Cloudflare Worker in front of the faceful-workspaces R2 bucket).
-# Deploy: CLOUDFLARE_API_TOKEN=... npx wrangler deploy --config apps/workspace-store/wrangler.toml
+# Deploy: CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... npx wrangler deploy --config apps/workspace-store/wrangler.toml
 # Secret: STORE_SIGNING_KEY (wrangler secret put STORE_SIGNING_KEY), also kept by whoever mints machine tokens.
 name = "faceful-workspace-store"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
-account_id = "9c96bc186c40affb19ccb9fcc5ebc05f"
 workers_dev = true
 
 [[r2_buckets]]

@@ -8,7 +8,7 @@
   },
   "preview": {
     "id": "dpl_ERxsbE7fvzBxS7rU2ev3vVoGfTii",
-    "url": "https://hackathon-gen-8ddcv4szk-my-team-29ecd279.vercel.app/dev/studio/",
+    "url": "https://hackathon-gen-8ddcv4szk-<team>.vercel.app/dev/studio/",
     "state": "READY",
     "sha": "994c2fbcb06ef28985bc3da52f8096c3e71d5ba6",
     "requires": "Vercel team access"

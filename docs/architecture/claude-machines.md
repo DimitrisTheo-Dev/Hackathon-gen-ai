@@ -1,6 +1,6 @@
 # Claude Code machines: one container per user
 
-Status, 15 Nov 2026: built, deployed on Cloudflare (Humanlike account) and tested on real machines (see "Tested live"). The runner, store, gateway, database and the `/claude-login-test/` page are live. boxd was dropped when its signups ran out; the same runner image still works on any VPS.
+Status, 15 Nov 2026: built, deployed on Cloudflare and tested on real machines (see "Tested live"). The runner, store, gateway, database and the `/claude-login-test/` page are live. boxd was dropped when its signups ran out; the same runner image still works on any VPS.
 
 ## Shape
 
