@@ -150,7 +150,9 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
           {campaign.sources.length>0&&<p>From {campaign.sources.map(source=>source.title).join('; ')}</p>}
         </div>}
       </div>}
-      {entries.map(entry=>{
+      {/* Create is a fresh start: the conversation lives beside the canvas, never on this screen. Sending from here docks
+          the panel first (onStart), so a new turn always appears where its history is. */}
+      {!home&&entries.map(entry=>{
         const pending=entry.summary===PENDING;
         const fresh=Date.parse(entry.at)>mountedAt.current;
         const actions=entry.plan?.actions??[];
@@ -185,10 +187,10 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
         </div>
       </article>;})}
       {planning&&latest?.summary!==PENDING&&<Thinking>Preparing a plan…</Thinking>}
-      {jobs.map(job=><p className={`director-job is-${job.state}`} key={job.id} role="status">{job.state!=='failed'&&<span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span>}{jobLabel(job.stage,job.state)}{job.error?` · ${job.error.message}`:''}</p>)}
+      {!home&&jobs.map(job=><p className={`director-job is-${job.state}`} key={job.id} role="status">{job.state!=='failed'&&<span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span>}{jobLabel(job.stage,job.state)}{job.error?` · ${job.error.message}`:''}</p>)}
       {error&&<Notice error>{error}</Notice>}
     </div>
-    {away&&<button className="director-jump" onClick={toLatest}><ArrowDown size={13}/>Latest</button>}
+    {away&&!home&&<button className="director-jump" onClick={toLatest}><ArrowDown size={13}/>Latest</button>}
     <div className="director-compose-area">
       {syncError&&<p className="director-sync" role="status">{syncError} <button className="text-button" onClick={()=>void onRetrySync()}>Retry sync</button></p>}
       {dirty&&<p className="director-sync">You have unsaved Details edits. <button className="text-button" onClick={onDetails}>Save or undo them first</button>.</p>}
@@ -218,9 +220,10 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
             {/* Where the conversation is kept is said once, in the docked panel; home keeps one line. */}
             {limit&&<p className="director-status" title={limit.detail}><i aria-hidden="true"/><span>{limit.homeShort}</span><span className="sr-only">. {limit.detail}</span><ViewLink view="connect" onOpen={onAgents} className="director-status-link">Use your own agent</ViewLink></p>}
           </div>
-          {!entries.length&&<div className="director-suggestions home-chips">{starters.map((prompt,index)=>{const Icon=starterIcon[prompt];return <button key={prompt} style={{'--i':index} as CSSProperties} onClick={()=>suggest(prompt)}>{Icon&&<Icon size={15} aria-hidden="true"/>}<span>{prompt}</span></button>;})}</div>}
+          <div className="director-suggestions home-chips">{starters.map((prompt,index)=>{const Icon=starterIcon[prompt];return <button key={prompt} style={{'--i':index} as CSSProperties} onClick={()=>suggest(prompt)}>{Icon&&<Icon size={15} aria-hidden="true"/>}<span>{prompt}</span></button>;})}</div>
           <div className="director-quick-actions"><button className="text-button" onClick={onCreate}><PenLine size={13} aria-hidden="true"/>Create with my own script</button></div>
-          {!entries.length&&campaign.items.length>0&&<button type="button" className="home-continue" onClick={onShowContent}>
+          {/* The way back to this project's drafts and its conversation. */}
+          {campaign.items.length>0&&<button type="button" className="home-continue" onClick={onShowContent}>
             <span className="home-continue-thumbs" aria-hidden="true">{campaign.items.slice(0,3).map((other,index)=><span key={other.id}><Preview item={other} index={index} compact passive brandName={brand}/></span>)}</span>
             <span className="home-continue-text"><small>Pick up where you left off</small><strong>{campaign.title}</strong><span>{count(campaign.items.length,'draft')}</span></span>
             <ArrowRight size={16} aria-hidden="true"/>

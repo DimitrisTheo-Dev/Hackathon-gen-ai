@@ -63,6 +63,9 @@
 .detail-row h3 button { padding: 0; border: 0; background: none; color: var(--ink); font-size: 14px; font-weight: 500; line-height: 1.3; text-align: start; cursor: pointer; }
 /* The whole row is the target, and the row carries the focus ring. */
 .detail-row h3 button::after { content: ""; position: absolute; inset: 0; }
+/* No press transform here: a transform makes the button the containing block of its row-wide ::after, so the target
+   would shrink to the label mid-press and a click on the value or chevron would land on the row. The row's tint is the press. */
+.detail-row h3 button:active { transform: none; }
 .detail-row h3 button:focus-visible { outline: none; }
 .detail-row:has(button:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 13px; }
 .detail-row:active { background: rgba(42,42,39,.06); }
@@ -419,7 +422,9 @@
 .review-fix { display: inline-flex; align-items: center; gap: 6px; justify-self: start; min-block-size: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 12.5px; font-weight: 500; transition: background-color 160ms ease, transform 120ms var(--ease-out); }
 .review-fix:not(:disabled):active { transform: scale(.97); }
 .review-fix:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.review-why { display: inline-flex; align-items: center; gap: 6px; justify-self: start; min-block-size: 26px; padding: 0 10px; border-radius: 999px; background: rgba(42,42,39,.055); color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+/* Radius is half the one-line height: a pill for a short reason, a soft box when a longer one wraps. */
+.review-why { display: inline-flex; align-items: flex-start; gap: 6px; justify-self: start; align-self: start; padding: 5px 10px; border-radius: 13px; background: rgba(42,42,39,.055); color: var(--text-secondary); font-size: 12px; font-weight: 500; line-height: 16px; text-wrap: pretty; }
+.review-why > svg { flex: none; margin-block-start: 2px; }
 .review-step-note { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
 .review-restart { display: grid; gap: 12px; justify-items: start; padding: 14px 16px; border-radius: 14px; background: var(--danger-surface); color: var(--danger); font-size: 13.5px; line-height: 1.5; }
 .review-restart p { margin: 0; }
@@ -535,14 +540,16 @@
 .prompt-cycle-text { display: block; overflow: hidden; text-overflow: ellipsis; }
 .director-panel.is-home .director-composer-actions { display: flex; align-items: center; gap: 6px; padding: 4px 4px 2px; }
 .director-panel.is-home .director-composer-actions .icon-button { flex: 0 0 auto; inline-size: 34px; block-size: 34px; border-radius: 10px; }
-.home-tokens { display: flex; flex: 1 1 auto; gap: 6px; min-inline-size: 0; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent); }
+/* A scroller clips on both axes, so it carries 4px of room for the pills' focus ring (2px + 2px offset) and gives it back with a
+   matching negative margin; scroll padding keeps a pill reached with Tab clear of the right-edge fade. */
+.home-tokens { display: flex; flex: 1 1 auto; gap: 6px; min-inline-size: 0; margin: -4px; padding: 4px; overflow-x: auto; scroll-padding-inline: 4px 20px; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent); }
 .home-tokens::-webkit-scrollbar { display: none; }
 .home-token { position: relative; flex: 0 0 auto; display: inline-flex; }
 .home-token-face { display: inline-flex; align-items: center; gap: 5px; block-size: 30px; padding: 0 9px 0 11px; border: 1px dashed rgba(42,42,39,.22); border-radius: 999px; color: var(--text-secondary); font-size: 12.5px; font-weight: 500; white-space: nowrap; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
 .home-token-face > svg { color: var(--text-muted); }
 .home-token[data-set] .home-token-face { border-style: solid; border-color: transparent; background: rgba(42,42,39,.07); color: var(--ink); }
 .home-token select { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; padding: 0; border: 0; opacity: 0; font-size: 16px; cursor: pointer; appearance: none; -webkit-appearance: none; }
-.home-token:has(select:focus-visible) .home-token-face { outline: 2px solid var(--focus); outline-offset: 1px; }
+.home-token:has(select:focus-visible) .home-token-face { outline: 2px solid var(--focus); outline-offset: 2px; }
 .director-panel.is-home .director-send { flex: 0 0 auto; inline-size: 36px; block-size: 36px; margin-inline-start: auto; border-radius: 50%; }
 .home-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 16px; margin-block-start: 12px; text-align: center; }
 .home-meta .director-status { margin: 0; justify-content: center; font-size: 12.5px; }
@@ -632,8 +639,8 @@ html[data-booting] .director-panel.is-home :is(.director-intro > *, .director-co
 }
 @media (max-width: 480px) {
   /* Phones: preferences get their own row above attach and send, so none hides behind the fade. */
-  .director-panel.is-home .director-composer-actions { flex-wrap: wrap; row-gap: 4px; }
-  .home-tokens { order: -1; flex: 1 0 100%; padding: 0 2px 2px; mask-image: none; }
+  .director-panel.is-home .director-composer-actions { flex-wrap: wrap; row-gap: 6px; }
+  .home-tokens { order: -1; flex: 1 0 100%; scroll-padding-inline: 4px; mask-image: none; }
 }
 @media (max-width: 380px) {
   .director-panel.is-home .home-chips { grid-template-columns: 1fr; }
