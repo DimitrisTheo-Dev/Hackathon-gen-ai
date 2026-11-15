@@ -12,7 +12,8 @@ Describe a short presenter-led video (a Reel, Short or TikTok), shape the drafts
 - **An AI director.** Chat beside the canvas. Each change comes back as a proposal with a diff that you apply or discard. It runs on Gemini, Anthropic or the Vercel AI Gateway, whichever key is configured.
 - **Your agent in the same studio.** The MCP server at `/mcp` lets an agent create projects, write drafts, edit a reel's timeline and read status. Agents connect with a scoped, expiring workspace token or with OAuth 2.1.
 - **People approve.** A schedule is a hashed review of the exact versions, files, accounts and times. Agents can propose one but can never approve it, publish, manage billing or create tokens.
-- **Brand kit, presenters and reels.** It covers brand identity and guardrails, consent-backed presenters from a guided face scan, a Remotion timeline editor that renders MP4s, a template library and publishing to social accounts.
+- **Brand kit, presenters and reels.** It covers brand identity and guardrails, products with photos and approved facts, consent-backed presenters from a guided face scan, a Remotion timeline editor that renders MP4s, a template library and publishing to social accounts.
+- **A content review before posting.** Each draft's claims are checked against the approved product facts, its spoken words and captions against the script, and its visuals for the named product and readable captions. Health and finance scripts need a named person's approval before they can be scheduled. The review never calls anything "verified".
 - **Shared credits.** The studio and agents spend from one balance, billed through Stripe in sandbox mode. Credits are granted only by signed webhooks.
 
 Some features are built but still wait on a service or a migration in production. [`DEMO_READINESS.md`](DEMO_READINESS.md) says exactly what is live.
