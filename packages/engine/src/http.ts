@@ -347,7 +347,8 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
     else if (pathname === "/v1/stripe/webhook" && request.method === "POST") {
       // Not rate limited: every delivery is signature-verified, and dropping one would lose a billing event.
       // Signature verification needs the exact bytes Stripe sent, so the body is read as text and never re-serialised.
-      const result = await handleStripeWebhook(deps, await request.text(), request.headers.get("stripe-signature"));
+      // Bounded like every other body (Stripe events are a few KB), so an unsigned flood cannot buffer megabytes first.
+      const result = await handleStripeWebhook(deps, await readBoundedText(request, 1024 * 1024), request.headers.get("stripe-signature"));
       response = json(result.body, result.status);
     } else if (pathname === "/v1/cron/tick") {
       // An authorized scheduler is not rate limited; a wrong secret counts as a failed credential.

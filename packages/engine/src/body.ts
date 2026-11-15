@@ -3,8 +3,8 @@ import { EngineError } from "./errors.js";
 /** Upper bound for JSON request bodies on `/v1` and `/mcp`. The largest legitimate body (a director turn with history) is far below it. */
 export const MAX_BODY_BYTES = 256 * 1024;
 
-function tooLarge() {
-  return new EngineError("validation_error", `The request is too large. Bodies are limited to ${MAX_BODY_BYTES / 1024} KB.`, { status: 413 });
+function tooLarge(maxBytes: number) {
+  return new EngineError("validation_error", `The request is too large. Bodies are limited to ${maxBytes / 1024} KB.`, { status: 413 });
 }
 
 /**
@@ -15,7 +15,7 @@ function tooLarge() {
  */
 export async function readBoundedText(request: Request, maxBytes = MAX_BODY_BYTES): Promise<string> {
   const declared = Number(request.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge();
+  if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge(maxBytes);
   if (!request.body) return "";
   const reader = request.body.getReader();
   const decoder = new TextDecoder();
@@ -28,7 +28,7 @@ export async function readBoundedText(request: Request, maxBytes = MAX_BODY_BYTE
       received += value.byteLength;
       if (received > maxBytes) {
         await reader.cancel().catch(() => undefined);
-        throw tooLarge();
+        throw tooLarge(maxBytes);
       }
       text += decoder.decode(value, { stream: true });
     }
