@@ -120,6 +120,13 @@ export interface EngineConfig {
   rateLimit: RateLimitConfig;
   /** Credential the Remotion render workers (VPS, boxd or containers) present to claim reel renders. */
   reelWorkerToken: string | null;
+  /** Claude Code machines (machines.ts): who may have one, and the key the gateway checks its short-lived tokens with. */
+  machines: {
+    /** MACHINES_GATEWAY_KEY, the same value as the gateway's. A keyring "2:<secret>,1:<older>" signs with its first entry. Null: not set up. */
+    gatewayKey: { version: number; secret: string } | null;
+    /** MACHINE_ALLOWED_USERS: user ids, the same list as the gateway's. Empty lets nobody in. */
+    allowedUsers: string[];
+  };
 }
 
 const avatarsSchema = z.array(
@@ -273,6 +280,15 @@ function socialsFrom(env: Record<string, string | undefined>): EngineConfig["soc
   };
 }
 
+function machinesFrom(env: Record<string, string | undefined>): EngineConfig["machines"] {
+  const first = env.MACHINES_GATEWAY_KEY?.split(",")[0]?.trim() ?? "";
+  const versioned = /^(\d{1,3}):(.+)$/.exec(first);
+  const [version, secret] = versioned ? [Number(versioned[1]), versioned[2]] : [1, first];
+  if (first && (secret.length < 32 || version < 1)) console.error(JSON.stringify({ level: "error", event: "config_invalid", key: "MACHINES_GATEWAY_KEY" }));
+  const allowedUsers = (env.MACHINE_ALLOWED_USERS ?? "").split(",").map((id) => id.trim().toLowerCase()).filter((id) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(id));
+  return { gatewayKey: secret.length >= 32 && version >= 1 ? { version, secret } : null, allowedUsers };
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): EngineConfig {
   const supabaseUrl = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
   const appBaseUrl = (env.APP_BASE_URL ?? (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : "")).trim().replace(/\/$/, "");
@@ -316,5 +332,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     trustProxyHeaders,
     rateLimit: rateLimitFrom(env, trustProxyHeaders),
     reelWorkerToken: env.REEL_WORKER_TOKEN && env.REEL_WORKER_TOKEN.trim().length >= 32 ? env.REEL_WORKER_TOKEN.trim() : null,
+    machines: machinesFrom(env),
   };
 }

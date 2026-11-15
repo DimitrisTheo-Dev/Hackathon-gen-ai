@@ -45,7 +45,7 @@ Cloudflare Containers can run the same image (it is a plain amd64 Linux containe
 
 ## Safety
 
-- Draft files arrive as short-lived signed links from the engine. Media linked by URL is only fetched from hosts in the allowlist (R2 and Supabase by default, plus `MEDIA_HOST_ALLOWLIST`); anything else fails the job with a reason. Run workers where they cannot reach private networks or cloud metadata endpoints.
+- Draft files arrive as short-lived signed links from the engine. Media linked by URL is only fetched from exact hosts: the engine's own Supabase project (`SUPABASE_URL`), its R2 account endpoint (`FACEFUL_R2_ACCOUNT_ID`) and `MEDIA_HOST_ALLOWLIST`. The worker downloads each file itself, checks every redirect against the same list, and serves the copy to Chrome locally; anything else fails the job with a reason. Run workers where they cannot reach private networks or cloud metadata endpoints.
 - The output is H.264 `yuv420p`, BT.709, AAC.
 - Do not render or upload a person's face or voice without their consent. Keep the "AI avatar" label on for avatar presenters.
 

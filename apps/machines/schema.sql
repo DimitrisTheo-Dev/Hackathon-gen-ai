@@ -46,3 +46,12 @@ create table if not exists saves (
   primary key (user_id, r2_key)
 );
 create index if not exists saves_by_project on saves (user_id, project_id, saved_at desc);
+
+-- One row per wake, for the per-user limits (MACHINE_WAKES_PER_HOUR, MACHINE_AWAKE_MINUTES_PER_DAY).
+-- stopped_at is null while the machine is awake. Rows older than a week are pruned on the next wake.
+create table if not exists machine_wakes (
+  user_id text not null,
+  started_at text not null,
+  stopped_at text
+);
+create index if not exists machine_wakes_by_user on machine_wakes (user_id, started_at desc);
