@@ -1,114 +1,188 @@
 /*
- * Template library (views/TemplateLibrary.tsx). Tokens come from /design.css; .modal, .segmented and .notice are
- * reused. Loaded with the TemplateLibrary chunk, in the studio's polish layer.
+ * Templates (views/TemplateLibrary.tsx): one page, two ways to start. Tokens come from /design.css; .modal,
+ * .segmented and .notice are reused. Loaded with the TemplateLibrary chunk, in the studio's polish layer.
  *
- * The posters are the focal element: plain 9:16 frames, no badges or overlays on them. Motion: press 120ms
- * (scale .98), a hover lift only on fine pointers, nothing that moves layout. Reduced motion keeps colour changes.
+ * The header holds the two tabs as one segmented control: both choices are always in view, the open one sits on a
+ * raised thumb that slides between them. The posters are the focal element: plain 9:16 frames, a play cue only on
+ * hover. Motion: press 120ms (scale .97), the thumb 260ms, hover deepens a shadow and never moves anything.
+ * Reduced motion keeps colour and opacity changes only.
  */
 @layer polish {
-  .tl { box-sizing: border-box; inline-size: 100%; max-inline-size: 1120px; padding: 26px 24px 64px; }
+  .tl { box-sizing: border-box; inline-size: 100%; max-inline-size: 1180px; padding: 26px 24px 64px; container-type: inline-size; }
   :where(.tl) :is(h1, h2, h3, p, ul, ol, dl, dd) { margin: 0; }
 
+  /* ── header and tabs ── */
   .tl-intro h1 { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; }
   .tl-intro > p { margin-block-start: 6px; max-inline-size: 62ch; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
-  .tl-loading, .tl-empty { margin-block-start: 24px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+  .tl-tabs { position: relative; isolation: isolate; box-sizing: border-box; display: inline-grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; margin-block-start: 20px; padding: 4px; border-radius: 13px; background: rgba(42,42,39,.055); }
+  /* The raised thumb under the open tab. It slides; the tabs themselves never move. */
+  .tl-tabs::before { content: ""; position: absolute; z-index: -1; inset-block: 4px; inset-inline-start: 4px; inline-size: calc((100% - 10px) / 2); border-radius: 9px; background: var(--surface); box-shadow: 0 0 0 1px rgba(42,42,39,.05), 0 1px 2px rgba(42,42,39,.08), 0 3px 10px rgba(42,42,39,.06); transition: transform 260ms var(--ease-out); }
+  .tl[data-tab="clone"] .tl-tabs::before { transform: translateX(calc(100% + 2px)); }
+  .tl-tab { display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; min-block-size: 40px; padding: 0 18px 0 15px; border: 0; border-radius: 9px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 14px; font-weight: 500; letter-spacing: -.005em; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+  .tl-tab svg { flex: 0 0 auto; }
+  .tl-tab:is([aria-selected="true"], [data-selected]) { color: var(--ink); }
+  .tl-tab:active { transform: scale(.97); }
+  .tl-tab-short { display: none; }
+  span.tl-tab { cursor: default; }
+  @media (hover: hover) and (pointer: fine) {
+    .tl-tab:not([aria-selected="true"]):hover { color: var(--ink); background: rgba(42,42,39,.035); }
+  }
+  .tl-panel { margin-block-start: 32px; }
+  .tl-panel[hidden] { display: none; }
+
+  .tl-loading { margin-block-start: 24px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); }
   /* Skeleton: the real grid's geometry with quiet bars; a slow shimmer only where motion is welcome. */
   .tl-skeleton i { display: block; border-radius: 6px; background: var(--subtle); }
   .tl-skeleton .tl-card { cursor: default; }
-  .tl-sk-title { inline-size: 150px; block-size: 18px; }
-  .tl-sk-note { inline-size: min(420px, 80%); block-size: 12px; margin-block-start: 4px; }
-  .tl-sk-name { inline-size: 62%; block-size: 14px; }
-  .tl-sk-line { inline-size: 92%; block-size: 11px; margin-block-start: 3px; }
+  .tl-sk-title { inline-size: 150px; block-size: 18px; margin-block: 2px 1px; }
+  .tl-sk-note { inline-size: min(420px, 80%); block-size: 12px; margin-block: 4px 4px; }
+  .tl-sk-name { inline-size: 62%; block-size: 14px; margin-block: 3px 2px; }
+  .tl-sk-line { inline-size: 92%; block-size: 11px; margin-block: 4px; }
   .tl-sk-line.short { inline-size: 40%; }
   .tl-skeleton .tl-poster, .tl-skeleton i { background: linear-gradient(100deg, var(--subtle) 30%, #F7F6F2 50%, var(--subtle) 70%) 0 0 / 300% 100%; animation: tl-shimmer 1.6s linear infinite; }
   @keyframes tl-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
-  .tl-failed { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; max-inline-size: 640px; margin-block-start: 24px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
-  .tl-failed-icon { display: grid; place-items: center; inline-size: 30px; block-size: 30px; border-radius: 50%; background: var(--danger-surface); color: var(--danger); }
+
+  /* A failed list: what failed, the server's reason, and Retry beside it. */
+  .tl-failed { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; max-inline-size: 640px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .tl-failed-icon { display: grid; place-items: center; inline-size: 32px; block-size: 32px; border-radius: 50%; background: var(--danger-surface); color: var(--danger); }
   .tl-failed p { display: grid; gap: 2px; font-size: 13px; line-height: 1.45; }
   .tl-failed strong { font-weight: 600; color: var(--ink); }
   .tl-failed span { color: var(--text-secondary); text-wrap: pretty; }
+  /* Nothing published: three sunlit frames, what will appear, and where to start instead. */
+  .tl-empty { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 18px; max-inline-size: 560px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+  .tl-empty-art { display: flex; gap: 5px; }
+  .tl-empty-art i { inline-size: 22px; aspect-ratio: 9 / 16; border-radius: 5px; background: linear-gradient(160deg, #F6C404, #EEA902); }
+  .tl-empty-art i:nth-child(2) { background: linear-gradient(160deg, #DDCB9F, #EEA902); transform: translateY(-4px); }
+  .tl-empty-art i:nth-child(3) { background: linear-gradient(160deg, #88B4C5, #DDCB9F); }
+  .tl-empty p { display: grid; gap: 3px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .tl-empty strong { font-size: 14px; font-weight: 600; color: var(--ink); }
 
-  .tl-family { margin-block-start: 34px; }
+  /* ── the format grid ── */
+  .tl-family + .tl-family { margin-block-start: 44px; }
   .tl-family-head { display: grid; gap: 4px; margin-block-end: 16px; }
-  .tl-family-head h2 { font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
-  .tl-family-head p { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+  .tl-family-head h2 { display: flex; align-items: baseline; gap: 8px; font-size: 17px; font-weight: 600; line-height: 1.3; letter-spacing: -.015em; }
+  .tl-count { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .tl-family-head p { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
 
-  .tl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 22px 18px; padding: 0; list-style: none; }
-  .tl-card { display: grid; gap: 12px; inline-size: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: transform var(--dur-press) var(--ease-out); }
-  .tl-card:active { transform: scale(.98); }
-  .tl-poster { display: block; aspect-ratio: 9 / 16; overflow: hidden; border-radius: var(--radius-lg); background: var(--muted-surface); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) ease; }
+  .tl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 24px 18px; padding: 0; list-style: none; }
+  .tl-card { display: grid; gap: 12px; inline-size: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform var(--dur-press) var(--ease-out); }
+  .tl-card:active { transform: scale(.97); }
+  .tl-poster { position: relative; display: block; aspect-ratio: 9 / 16; overflow: hidden; border-radius: var(--radius-lg); background: var(--muted-surface); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06), 0 1px 2px rgba(42,42,39,.04); transition: box-shadow var(--dur-base) ease; }
   .tl-poster img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; opacity: 0; transition: opacity 240ms var(--ease-out); }
   .tl-poster img[data-loaded] { opacity: 1; }
+  /* The play cue: the card opens the sample. Shown on hover and keyboard focus only, never as a permanent badge. */
+  .tl-poster-play { position: absolute; inset: auto auto 10px 10px; display: grid; place-items: center; inline-size: 34px; block-size: 34px; padding-inline-start: 2px; box-sizing: border-box; border-radius: 50%; background: rgba(255,255,255,.92); color: #15161A; box-shadow: 0 4px 14px rgba(0,0,0,.22); opacity: 0; transition: opacity var(--dur-base) var(--ease-out); }
   .tl-card:focus-visible .tl-poster { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--focus); }
+  .tl-card:focus-visible .tl-poster-play { opacity: 1; }
   .tl-card-text { display: grid; gap: 3px; }
-  .tl-card-text strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .tl-card-text strong { font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; }
   .tl-card-text span { font-size: 13px; line-height: 1.45; color: var(--text-secondary); text-wrap: pretty; }
-  .tl-card-text small { font-size: 12.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .tl-card-text small { font-size: 12.5px; line-height: 1.45; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   @media (hover: hover) and (pointer: fine) {
-    .tl-card:hover .tl-poster { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06), var(--shadow); }
+    .tl-card:hover .tl-poster { box-shadow: inset 0 0 0 1px rgba(42,42,39,.06), var(--elev-2); }
+    .tl-card:hover .tl-poster-play { opacity: 1; }
   }
 
   /* ── detail ── */
-  .modal.wide:has(.tl-detail) { inline-size: min(980px, calc(100% - 32px)); }
-  .tl-detail { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .tl-detail { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 32px; align-items: start; }
   .tl-player { position: sticky; inset-block-start: 0; display: grid; gap: 12px; justify-items: center; }
   /* Sample player: the frame is the control surface; the bar sits on a soft scrim inside the frame's corners. */
-  .tl-video { position: relative; inline-size: 100%; max-inline-size: calc((100dvh - 190px) * 9 / 16); overflow: hidden; border-radius: var(--radius-lg); background: #15161A; isolation: isolate; }
+  .tl-video { position: relative; inline-size: 100%; max-inline-size: calc((100dvh - 190px) * 9 / 16); overflow: hidden; border-radius: var(--radius-lg); background: #15161A; isolation: isolate; container-type: inline-size; }
   .tl-video video { display: block; inline-size: 100%; aspect-ratio: 9 / 16; object-fit: contain; cursor: pointer; }
-  .tl-video-big { position: absolute; inset: 50% auto auto 50%; display: grid; place-items: center; inline-size: 56px; block-size: 56px; padding: 0 0 0 3px; border: 0; border-radius: 50%; background: rgba(255,255,255,.92); color: #15161A; box-shadow: 0 6px 24px rgba(0,0,0,.28); cursor: pointer; transform: translate(-50%, -50%); transition: transform var(--dur-press) var(--ease-out); }
-  .tl-video-big:active { transform: translate(-50%, -50%) scale(.96); }
-  .tl-video-bar { position: absolute; inset: auto 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px; padding: 28px 10px 10px; background: linear-gradient(to top, rgba(0,0,0,.62), rgba(0,0,0,0)); color: #fff; transition: opacity 200ms var(--ease-out); }
-  .tl-video-button { display: grid; place-items: center; inline-size: 32px; block-size: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; transition: background-color var(--dur-fast) ease; }
-  .tl-video-time { padding-inline: 2px 4px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; opacity: .9; }
-  .tl-video-seek { --progress: 0%; inline-size: 100%; block-size: 20px; margin: 0; padding: 0; border: 0; border-radius: 4px; background: transparent; box-shadow: none; appearance: none; cursor: pointer; }
+  .tl-video-big { position: absolute; inset: 50% auto auto 50%; display: grid; place-items: center; inline-size: 60px; block-size: 60px; padding: 0 0 0 3px; border: 0; border-radius: 50%; background: rgba(255,255,255,.94); color: #15161A; box-shadow: 0 6px 24px rgba(0,0,0,.28); cursor: pointer; transform: translate(-50%, -50%); transition: transform var(--dur-press) var(--ease-out); }
+  .tl-video-big:active { transform: translate(-50%, -50%) scale(.97); }
+  .tl-video-bar { position: absolute; inset: auto 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 4px; padding: 32px 8px 8px; background: linear-gradient(to top, rgba(0,0,0,.62), rgba(0,0,0,0)); color: #fff; transition: opacity 200ms var(--ease-out); }
+  .tl-video-button { display: grid; place-items: center; inline-size: 36px; block-size: 36px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; transition: background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+  .tl-video-button:active { transform: scale(.97); }
+  .tl-video-time { padding-inline: 4px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; opacity: .9; }
+  .tl-video-seek { --progress: 0%; inline-size: 100%; block-size: 24px; margin: 0; padding: 0; border: 0; border-radius: 4px; background: transparent; box-shadow: none; appearance: none; cursor: pointer; }
   .tl-video-seek::-webkit-slider-runnable-track { block-size: 4px; border-radius: 2px; background: linear-gradient(to right, #fff var(--progress), rgba(255,255,255,.32) var(--progress)); }
   .tl-video-seek::-moz-range-track { block-size: 4px; border-radius: 2px; background: linear-gradient(to right, #fff var(--progress), rgba(255,255,255,.32) var(--progress)); }
   .tl-video-seek::-webkit-slider-thumb { inline-size: 12px; block-size: 12px; margin-block-start: -4px; border: 0; border-radius: 50%; background: #fff; appearance: none; }
   .tl-video-seek::-moz-range-thumb { inline-size: 12px; block-size: 12px; border: 0; border-radius: 50%; background: #fff; }
+  @container (max-width: 300px) { .tl-video-time { display: none; } }
   @media (hover: hover) and (pointer: fine) {
     .tl-video-button:hover { background: rgba(255,255,255,.16); }
+    .tl-video-big:hover { background: #fff; }
     /* While playing, the bar steps back until the pointer or keyboard returns to the frame. */
     .tl-video[data-playing] .tl-video-bar { opacity: 0; }
     .tl-video[data-playing]:is(:hover, :focus-within) .tl-video-bar { opacity: 1; }
   }
+  @media (pointer: coarse) { .tl-video-button { inline-size: 44px; block-size: 44px; } }
   .tl-missing { display: grid; place-items: center; inline-size: 100%; aspect-ratio: 9 / 16; border-radius: var(--radius-lg); background: var(--subtle); font-size: 13.5px; color: var(--text-secondary); text-align: center; padding: 24px; box-sizing: border-box; }
+
   .tl-facts { display: grid; gap: 10px; min-inline-size: 0; }
-  .tl-summary { font-size: 15px; line-height: 1.55; text-wrap: pretty; }
-  .tl-facts dl { display: grid; gap: 8px; margin-block: 6px 4px; }
-  .tl-facts dl > div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; font-size: 13.5px; line-height: 1.5; }
+  .tl-summary { font-size: 15.5px; line-height: 1.55; color: var(--ink); text-wrap: pretty; }
+  /* The facts read as a quiet settings list: one hairline between rows. */
+  .tl-facts dl { display: grid; margin-block: 8px 2px; border-block: 1px solid var(--border); }
+  .tl-facts dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding-block: 9px; font-size: 13.5px; line-height: 1.5; }
+  .tl-facts dl > div + div { border-block-start: 1px solid var(--border); }
   .tl-facts dt { color: var(--text-secondary); }
-  .tl-facts h3 { margin-block-start: 14px; font-size: 13px; font-weight: 600; letter-spacing: 0; }
-  .tl-note { font-size: 13.5px; color: var(--text-secondary); }
-  .tl-inputs, .tl-script { display: grid; gap: 4px; padding-inline-start: 20px; font-size: 13.5px; line-height: 1.5; }
-  .tl-script li::marker { color: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .tl-stills { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; padding: 0; list-style: none; }
-  .tl-stills li { position: relative; overflow: hidden; border-radius: var(--radius-sm); background: var(--subtle); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); }
+  .tl-facts dd { color: var(--ink); text-wrap: pretty; }
+  .tl-facts h3 { margin-block-start: 16px; font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0; color: var(--ink); }
+  .tl-note { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+  .tl-inputs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; list-style: none; }
+  .tl-inputs li { padding: 4px 11px; border-radius: 999px; background: var(--subtle); font-size: 13px; line-height: 1.5; color: var(--ink); }
+  /* The script's numbers match the beat stills below it. */
+  .tl-script { display: grid; gap: 8px; padding: 0; list-style: none; counter-reset: beat; font-size: 13.5px; line-height: 1.5; }
+  .tl-script li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; text-wrap: pretty; }
+  .tl-script li::before { counter-increment: beat; content: counter(beat); display: grid; place-items: center; block-size: 20px; margin-block-start: 0; border-radius: 50%; background: var(--subtle); color: var(--text-secondary); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tl-stills { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; padding: 0; list-style: none; }
+  .tl-stills li { position: relative; overflow: hidden; border-radius: 10px; background: var(--subtle); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); }
   .tl-stills img, .tl-still-missing { display: block; inline-size: 100%; aspect-ratio: 9 / 16; object-fit: cover; }
   .tl-stills img { opacity: 0; transition: opacity 240ms var(--ease-out); }
   .tl-stills img[data-loaded] { opacity: 1; }
-  /* The beat's number, matching the script list beside it. */
   .tl-still-number { position: absolute; inset: 5px auto auto 5px; display: grid; place-items: center; min-inline-size: 18px; block-size: 18px; padding-inline: 5px; box-sizing: border-box; border-radius: 9px; background: rgba(21,22,26,.66); color: #fff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* Wide windows: a dialog sized to the player and the facts. Phones keep the shared bottom sheet (mobile.css). */
+  @media (min-width: 761px) {
+    .modal.wide:has(.tl-detail) { inline-size: min(980px, calc(100% - 32px)); }
+  }
+
+  /* A narrow page: the tabs fill the row, and below 460px they show their short labels. */
+  @container (max-width: 640px) {
+    .tl-tabs { display: grid; inline-size: 100%; }
+    .tl-tab { min-block-size: 44px; padding-inline: 10px; }
+  }
+  @container (max-width: 460px) {
+    .tl-tab { gap: 7px; padding-inline: 8px; }
+    .tl-tab-long { display: none; }
+    .tl-tab-short { display: inline; }
+  }
 
   @media (max-width: 760px) {
     .tl { padding: 20px 16px 96px; }
-    .tl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+    .tl-intro h1 { font-size: 24px; }
+    .tl-tabs { margin-block-start: 16px; }
+    .tl-panel { margin-block-start: 26px; }
+    .tl-family + .tl-family { margin-block-start: 36px; }
+    .tl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; }
+    .tl-card { gap: 10px; }
+    .tl-card-text strong { font-size: 14.5px; }
+    .tl-failed { grid-template-columns: auto minmax(0, 1fr); }
+    .tl-failed > .button { grid-column: 2; justify-self: start; min-block-size: 44px; }
+    .tl-empty { grid-template-columns: 1fr; justify-items: start; }
     .tl-detail { grid-template-columns: 1fr; gap: 20px; }
     .tl-player { position: static; }
-    .tl-video { max-inline-size: min(100%, calc(62dvh * 9 / 16)); }
+    .tl-video { max-inline-size: min(100%, calc(56dvh * 9 / 16)); }
+    .tl-facts dl > div { grid-template-columns: 88px minmax(0, 1fr); }
+    .tl-stills { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .tl-card, .tl-poster, .tl-poster img, .tl-stills img, .tl-video-bar, .tl-video-big { transition: none; }
+    .tl-tabs::before, .tl-tab, .tl-card, .tl-poster, .tl-poster img, .tl-stills img, .tl-video-bar, .tl-video-big, .tl-video-button { transition: none; }
+    .tl-tab:active, .tl-card:active, .tl-video-button:active { transform: none; }
+    .tl-video-big:active { transform: translate(-50%, -50%); }
     .tl-skeleton .tl-poster, .tl-skeleton i { animation: none; }
-    .tl-card:hover .tl-poster { transform: none; }
   }
 }
 
 /*
- * Focus over the sample's dark frame. Unlayered on purpose: the global ring in design.css is unlayered, so a layered
- * refinement would lose to it. Same rule as everywhere (2px, 2px clear of the edge), drawn white so it reads on video.
+ * Focus refinements. Unlayered on purpose: the global ring in design.css is unlayered, so a layered refinement
+ * would lose to it. Same rule as everywhere (2px, 2px clear of the edge).
  */
-/* A template card is ringed on its poster only (the layered rule below draws it around the rounded frame). */
+/* A template card is ringed on its poster only (the layered rule above draws it around the rounded frame). */
 .tl-card:focus-visible { outline: none; }
+/* Over the sample's dark frame the ring is drawn white so it reads on video. */
 .tl-video :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .tl-video .tl-video-seek:focus { outline: none; }
 .tl-video .tl-video-seek:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
