@@ -28,6 +28,14 @@ import {
   type Persona,
   type UpdatePersonaInput,
   type UpdatePersonaLookInput,
+  type CompositionDocument,
+  type SaveCompositionInput,
+  type DraftFile,
+  type UploadTicket,
+  type RequestUploadInput,
+  type SaveTextFileInput,
+  type ReelRender,
+  type QueueRenderInput,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -222,6 +230,21 @@ export interface StudioClient {
   createPersonaLook(input: CreatePersonaLookInput): Promise<Persona>;
   updatePersonaLook(input: UpdatePersonaLookInput): Promise<Persona>;
   deletePersonaLook(lookId: string): Promise<Persona>;
+  /** The item's video composition, or a first draft from its script when none is saved (revision 0). */
+  getComposition(contentId: string): Promise<CompositionDocument>;
+  /** Saves the composition with compare-and-swap on its revision. Preview only: nothing is rendered. */
+  saveComposition(input: SaveCompositionInput): Promise<CompositionDocument>;
+  /** Draft files of a project: every component of a reel, versioned. */
+  listFiles(campaignId: string): Promise<DraftFile[]>;
+  /** Registers a media draft and returns a one-time upload link (null when identical bytes are already stored). */
+  requestUpload(input: RequestUploadInput): Promise<UploadTicket>;
+  completeUpload(input: { fileId: string; operationKey: string }): Promise<DraftFile>;
+  saveTextFile(input: SaveTextFileInput): Promise<DraftFile>;
+  archiveFile(input: { fileId: string; operationKey: string }): Promise<DraftFile>;
+  /** Queues an MP4 render of the saved timeline; a render worker produces it as a draft file. */
+  queueRender(input: QueueRenderInput): Promise<ReelRender>;
+  listRenders(contentId: string): Promise<ReelRender[]>;
+  cancelRender(input: { renderId: string; operationKey: string }): Promise<ReelRender>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {

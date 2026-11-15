@@ -12,6 +12,17 @@ import {
   manifestSchema,
   reviseInputSchema,
   type Brand,
+  compositionDocumentSchema,
+  compositionSchema,
+  draftComposition,
+  saveCompositionInputSchema,
+  draftFileSchema,
+  referencedFileIds,
+  requestUploadInputSchema,
+  saveTextFileInputSchema,
+  uploadTicketSchema,
+  type DraftFile,
+  type ResolvedMedia,
   type Campaign,
   type ContentItem,
   type Platform,
@@ -24,6 +35,7 @@ import {
   validate,
   type StudioClient,
 } from "./client";
+import { FIXTURE_UPLOAD_PREFIX, fixtureBlobs } from "./fixture-uploads";
 
 /** Explicit development-only transport. Never import it from the live transport. */
 export const FIXTURE_STORAGE_KEY = "castroom-development-v1";
@@ -194,7 +206,18 @@ const stateSchema = z.object({
     z.string(),
     z.object({ hash: z.string(), result: z.unknown() }),
   ),
+  // Added after v1 shipped; older saved fixture state simply has none yet.
+  // A composition in an older shape is ignored on read, so it cannot lock the whole fixture.
+  compositions: z
+    .record(
+      z.string(),
+      z.object({ revision: z.number().int().positive(), updatedAt: z.string(), composition: z.unknown() }),
+    )
+    .default({}),
+  files: z.array(draftFileSchema).default([]),
+  fileTexts: z.record(z.string(), z.string()).default({}),
 });
+
 type State = z.infer<typeof stateSchema>;
 
 function canonical(value: unknown): string {
@@ -232,6 +255,9 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     version: 1,
     campaigns: [initialCampaign()],
     operations: {},
+    compositions: {},
+    files: [],
+    fileTexts: {},
   };
   function read(): State {
     if (!selectedStorage) return structuredClone(memory);
@@ -326,6 +352,71 @@ export function createFixtureClient(storage?: Storage): StudioClient {
       at: now,
       outcome: "Saved in this browser only",
     });
+  }
+  function itemFrom(state: State, id: string): ContentItem {
+    const item = state.campaigns.flatMap((entry) => entry.items).find((entry) => entry.id === id);
+    if (!item)
+      throw new ApiError(
+        "not_found",
+        "This development content item was not found.",
+      );
+    return item;
+  }
+  const hour = () => new Date(Date.now() + 3600_000).toISOString();
+  function fileUrl(state: State, file: DraftFile) {
+    if (file.state !== "ready") return null;
+    const text = state.fileTexts[file.id];
+    if (text !== undefined) return `data:${file.mime};charset=utf-8,${encodeURIComponent(text)}`;
+    return fixtureBlobs.get(file.id) ?? null;
+  }
+  function withUrl(state: State, file: DraftFile): DraftFile {
+    const url = fileUrl(state, file);
+    return { ...file, url, urlExpiresAt: url ? hour() : null };
+  }
+  function compositionDocument(state: State, id: string) {
+    const item = itemFrom(state, id);
+    const saved = state.compositions[id];
+    const stored = saved ? compositionSchema.safeParse(saved.composition) : null;
+    const composition = stored?.success
+      ? stored.data
+      : draftComposition({
+          title: item.title,
+          script: item.script,
+          brandColor: item.style.brandColor,
+          captionPosition: item.style.captionPosition,
+          mediaDurationSeconds: item.media?.durationSeconds ?? null,
+        });
+    const files: Record<string, ResolvedMedia> = {};
+    for (const fileId of referencedFileIds(composition)) {
+      const file = state.files.find((entry) => entry.id === fileId && entry.state === "ready");
+      const url = file && fileUrl(state, file);
+      if (file && url) files[fileId] = { url, mime: file.mime, expiresAt: hour(), durationSeconds: file.durationSeconds, name: file.name };
+    }
+    return compositionDocumentSchema.parse({
+      itemId: item.id,
+      campaignId: item.campaignId,
+      itemRevision: item.revision,
+      revision: saved?.revision ?? 0,
+      updatedAt: saved?.updatedAt ?? null,
+      composition,
+      itemMedia: item.media
+        ? { url: item.media.url, mime: "video/mp4", expiresAt: item.media.expiresAt, durationSeconds: item.media.durationSeconds, name: item.title }
+        : null,
+      files,
+    });
+  }
+  function newFile(state: State, input: { campaignId: string; itemId: string | null; kind: DraftFile["kind"]; name: string; mime: string; bytes: number; sha256: string; durationSeconds: number | null; meta: DraftFile["meta"] }, ready: boolean): DraftFile {
+    campaignFrom(state, input.campaignId);
+    if (input.itemId && itemFrom(state, input.itemId).campaignId !== input.campaignId)
+      throw new ApiError("validation_error", "That item belongs to a different project.");
+    const version = 1 + Math.max(0, ...state.files.filter((file) => file.campaignId === input.campaignId && file.itemId === input.itemId && file.name === input.name).map((file) => file.version));
+    const file: DraftFile = { id: crypto.randomUUID(), ...input, state: ready ? "ready" : "pending", version, createdBy: "You · development fixture", createdAt: new Date().toISOString(), url: null, urlExpiresAt: null };
+    state.files.unshift(file);
+    return file;
+  }
+  async function digest(text: string) {
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
   async function unavailable(): Promise<never> {
     throw new ApiError(
@@ -614,5 +705,75 @@ export function createFixtureClient(storage?: Storage): StudioClient {
         return campaign;
       });
     },
+    getComposition: async (id) => compositionDocument(read(), id),
+    saveComposition: async (raw) => {
+      const input = validate(saveCompositionInputSchema, raw);
+      return mutate("save_composition", input, compositionDocumentSchema, (state) => {
+        const item = itemFrom(state, input.contentId);
+        const missing = referencedFileIds(input.composition).filter((fileId) => !state.files.some((file) => file.id === fileId && file.state === "ready" && file.campaignId === item.campaignId));
+        if (missing.length) throw new ApiError("validation_error", "The timeline uses a file that is not ready in this project.");
+        if ((state.compositions[item.id]?.revision ?? 0) !== input.expectedRevision)
+          throw new ApiError(
+            "revision_conflict",
+            "This video edit changed after you opened it. Reload the latest version before saving.",
+          );
+        const now = new Date().toISOString();
+        state.compositions[item.id] = { revision: input.expectedRevision + 1, updatedAt: now, composition: input.composition };
+        const campaign = campaignFrom(state, item.campaignId);
+        campaign.activity.push({
+          id: crypto.randomUUID(),
+          actor: "You · development fixture",
+          action: "Saved the video edit",
+          objectId: item.id,
+          revision: input.expectedRevision + 1,
+          at: now,
+          outcome: "Saved in this browser only",
+        });
+        return compositionDocument(state, item.id);
+      });
+    },
+    listFiles: async (campaignId) => {
+      const state = read();
+      campaignFrom(state, campaignId);
+      return state.files.filter((file) => file.campaignId === campaignId && file.state !== "archived").map((file) => withUrl(state, file));
+    },
+    requestUpload: async (raw) => {
+      const input = validate(requestUploadInputSchema, raw);
+      return mutate("request_file_upload", input, uploadTicketSchema, (state) => {
+        const file = newFile(state, input, false);
+        return { file, upload: { url: `${FIXTURE_UPLOAD_PREFIX}${file.id}`, method: "PUT" as const, headers: {}, expiresAt: hour() } };
+      });
+    },
+    completeUpload: async ({ fileId, operationKey }) =>
+      mutate("complete_file_upload", { fileId, operationKey } as { fileId: string; operationKey: string }, draftFileSchema, (state) => {
+        const file = state.files.find((entry) => entry.id === fileId);
+        if (!file || file.state === "archived") throw new ApiError("not_found", "This development file was not found.");
+        if (!fixtureBlobs.has(fileId)) throw new ApiError("validation_error", "The upload has not arrived yet.");
+        file.state = "ready";
+        return withUrl(state, file);
+      }),
+    saveTextFile: async (raw) => {
+      const input = validate(saveTextFileInputSchema, raw);
+      const sha256 = await digest(input.text);
+      return mutate("save_text_file", input, draftFileSchema, (state) => {
+        const { text, operationKey: _key, ...rest } = input;
+        const file = newFile(state, { ...rest, bytes: new TextEncoder().encode(text).byteLength, sha256 }, true);
+        state.fileTexts[file.id] = text;
+        return withUrl(state, file);
+      });
+    },
+    archiveFile: async ({ fileId, operationKey }) =>
+      mutate("archive_file", { fileId, operationKey } as { fileId: string; operationKey: string }, draftFileSchema, (state) => {
+        const file = state.files.find((entry) => entry.id === fileId);
+        if (!file) throw new ApiError("not_found", "This development file was not found.");
+        file.state = "archived";
+        return withUrl(state, file);
+      }),
+    // Rendering needs the live engine and a render worker; the fixture says so instead of pretending.
+    queueRender: async () => {
+      throw new ApiError("unsupported", "The development studio cannot render. Use the live studio with a connected render worker.");
+    },
+    listRenders: async () => [],
+    cancelRender: unavailable,
   };
 }

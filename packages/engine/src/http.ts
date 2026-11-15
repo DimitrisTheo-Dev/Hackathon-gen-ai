@@ -4,7 +4,10 @@ import { audit, constantTimeEqual, hashToken, newAgentToken, requireHuman, requi
 import { createCheckout, createPortal, getBillingStatus, handleStripeWebhook } from "./billing.js";
 import { readBoundedText } from "./body.js";
 import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.js";
+import { getComposition, saveComposition } from "./composition.js";
 import { directorTurn } from "./director.js";
+import { archiveFile, completeUpload, listFiles, requestUpload, saveTextFile } from "./files.js";
+import { authenticateReelWorker, cancelRender, listRenders, queueRender, reelWorker } from "./reel-render.js";
 import { EngineError } from "./errors.js";
 import { likenessLiveToken, likenessUploadUrl, revokeLikenessConsent, saveLikenessConsent } from "./likeness.js";
 import { createPersona, createPersonaLook, deletePersona, deletePersonaLook, listPersonas, personaConsentToWithdraw, personaImageUploadUrl, updatePersona, updatePersonaLook } from "./personas.js";
@@ -109,6 +112,13 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   delete_persona_look: deletePersonaLook,
   connect_channel: connectChannel,
   disconnect_channel: disconnectChannel,
+  save_composition: saveComposition,
+  request_file_upload: requestUpload,
+  complete_file_upload: completeUpload,
+  save_text_file: saveTextFile,
+  archive_file: archiveFile,
+  queue_reel_render: queueRender,
+  cancel_reel_render: cancelRender,
   create_run_grant: async () => {
     throw new EngineError("unsupported", "Unattended publishing grants are not available in this build. Approve each schedule in the studio.");
   },
@@ -138,6 +148,9 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     return json(await getCampaign(deps, ctx, campaignId));
   }
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/items\/([^/]+)\/composition$/))) return json(await getComposition(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/items\/([^/]+)\/renders$/))) return json(await listRenders(deps, ctx, decodeURIComponent(match[1])));
+  if (read && (match = path.match(/^\/campaigns\/([^/]+)\/files$/))) return json(await listFiles(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
   if (read && path === "/personas") return json(await listPersonas(deps, ctx));
@@ -257,6 +270,18 @@ async function socials(deps: HttpDeps, request: Request, path: string, correlati
   throw new EngineError("not_found", "Unknown socials route.");
 }
 
+/** Reel render worker routes: /v1/worker/reel/*. */
+async function reelWorkerRoute(deps: HttpDeps, request: Request, path: string, limits: RequestLimits): Promise<Response> {
+  // Like the avatar render worker: a trusted service credential that is not throttled; refused credentials are.
+  try {
+    authenticateReelWorker(deps, request.headers.get("authorization"));
+  } catch (error) {
+    if (error instanceof EngineError) await refuseCredential(limits, deps.config.rateLimit, error);
+    throw error;
+  }
+  return json(await reelWorker(deps, request, path, () => body(request)));
+}
+
 /** Which integrations are configured. Booleans and safe sentences only — never a key, a URL with credentials or an ID. */
 export function health(deps: HttpDeps) {
   const { config } = deps;
@@ -267,6 +292,7 @@ export function health(deps: HttpDeps) {
     rendering: { connected: Boolean(config.renderWorkerToken), provider: "humanlike", humanlikeKey: Boolean(config.humanlikeApiKey) },
     files: { connected: Boolean(deps.files?.configured) },
     likeness: { liveTranscription: Boolean(config.humanlikeTranscribeKey) },
+    reelRendering: { connected: Boolean(config.reelWorkerToken) },
     billing: { mode: config.stripe ? "sandbox" : "not_configured", problem: config.stripeProblem },
     // What can post: YouTube channels connected in the studio, and each social provider a workspace could connect here
     // (SOCIALS_CREDENTIAL_KEY set; for Instagram directly, also this deployment's own Instagram app).
@@ -307,6 +333,7 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
       response = json({ swept: await sweepRenderJobs(deps), publishing: await processDuePublishJobs(deps), webhooks: await renewWebhookSubscriptions(deps), credentials });
     } else if (pathname.startsWith("/v1/studio/")) response = await studio(deps, request, pathname.slice("/v1/studio".length), correlationId, limits);
     else if (pathname === "/v1/socials" || pathname.startsWith("/v1/socials/")) response = await socials(deps, request, pathname.slice("/v1/socials".length), correlationId, limits);
+    else if (pathname.startsWith("/v1/worker/reel/")) response = await reelWorkerRoute(deps, request, pathname.slice("/v1/worker/reel".length), limits);
     else if (pathname.startsWith("/v1/worker/")) response = await worker(deps, request, pathname.slice("/v1/worker".length), limits);
     else throw new EngineError("not_found", "Unknown API route.");
   } catch (error) {

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { StoreConflict } from "./errors.js";
 import type { Condition, Filter, MediaStorage, RateLimitHit, Row, SelectOptions, Store } from "./store.js";
 
-/** Mirrors the unique constraints in supabase/migrations (engine_core, then socials for accounts and events). */
+/** Mirrors the unique constraints in supabase/migrations (engine core, socials, personas and video compositions). */
 const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => boolean }>> = {
   organizations: [{ columns: ["id"] }, { columns: ["personal_owner_id"], where: (r) => r.personal_owner_id != null }],
   memberships: [{ columns: ["org_id", "user_id"] }],
@@ -27,6 +27,8 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   castroom_director_access: [{ columns: ["user_id", "workspace_id", "campaign_id"] }],
   // supabase/migrations/20261115130000_personas.sql: one consent backs at most one persona.
   personas: [{ columns: ["consent_id"], where: (r) => r.consent_id != null }],
+  video_compositions: [{ columns: ["org_id", "item_id"] }],
+  project_files: [{ columns: ["org_id", "project_id", "item_id", "name", "version"] }],
 };
 
 function matches(row: Row, filter: Filter): boolean {

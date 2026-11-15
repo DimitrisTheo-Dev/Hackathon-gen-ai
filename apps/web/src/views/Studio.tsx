@@ -9,10 +9,12 @@ import {
   CreditCard,
   Clock3,
   FileText,
+  Film,
   Folder,
   Grid2X2,
   LayoutTemplate,
   Layers,
+  LoaderCircle,
   LogOut,
   Menu,
   PanelLeft,
@@ -78,6 +80,8 @@ const loadPersonas = () => import("./Personas");
 const Personas = lazy(() => loadPersonas().then((m) => ({ default: m.Personas })));
 const loadBrand = () => import("./Brand");
 const Brand = lazy(() => loadBrand().then((m) => ({ default: m.Brand })));
+// Remotion and the video editor load only when the Video view opens.
+const VideoStudio = lazy(() => import("./VideoStudio"));
 const SIDEBAR_KEY = "faceful:sidebar";
 function ViewSkeleton() {
   return <div className="view-skeleton" role="status" aria-label="Loading"><span className="skeleton skeleton-title" /><span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" /><span className="skeleton skeleton-block" /></div>;
@@ -85,7 +89,7 @@ function ViewSkeleton() {
 
 import { useDirectorHistory } from '../director/use-history';
 import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
-type View = "home" | "canvas" | "schedule" | "templates" | "personas" | "connect" | "brand" | "billing";
+type View = "home" | "canvas" | "schedule" | "video" | "templates" | "personas" | "connect" | "brand" | "billing";
 /** Search, filter and sort only earn their place once a project is too long to take in at a glance. */
 const TOOLS_FROM = 7;
 type Target = ContentItem["targets"][number];
@@ -128,7 +132,7 @@ function shownTitle(campaign: Pick<Campaign, "title" | "origin">) {
 function listNames(names: string[]) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
-const VIEWS = ["home", "canvas", "schedule", "templates", "personas", "connect", "brand", "billing"];
+const VIEWS = ["home", "canvas", "schedule", "video", "templates", "personas", "connect", "brand", "billing"];
 export function Studio({
   client,
   onSignOut,
@@ -390,7 +394,7 @@ export function Studio({
     if (!url.hash) url.hash = "";
     // Nothing is written when the address already says this: a refresh causes no history change at all.
     if (url.href !== location.href) history.replaceState(history.state, "", url);
-    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "templates" ? "Templates" : view === "personas" ? "Personas" : view === "billing" ? "Billing" : (campaign?.title ?? "Studio")} · Faceful`;
+    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "video" ? `Video · ${campaign?.title ?? "Studio"}` : view === "templates" ? "Templates" : view === "personas" ? "Personas" : view === "billing" ? "Billing" : (campaign?.title ?? "Studio")} · Faceful`;
   }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
@@ -765,7 +769,7 @@ export function Studio({
   // Requested times whose platform has no connected account. Said once, in one banner, not on every row.
   const unlinked = [...new Set((campaign?.items ?? []).flatMap((i) => i.targets).filter((t) => !context.channels.some((c) => c.id === t.accountId)).map((t) => platformNames[t.platform]))];
   const credits = context.capabilities.renderUnitsRemaining;
-  const inProject = Boolean(campaign) && (view === "canvas" || view === "schedule");
+  const inProject = Boolean(campaign) && (view === "canvas" || view === "schedule" || view === "video");
   return (
     <div className="app-frame">
       <a className="skip-link" href="#workspace-content">
@@ -858,6 +862,7 @@ export function Studio({
               <div className="segmented topbar-views" role="group" aria-label="Project view">
                 <button aria-pressed={view === "canvas"} onClick={() => go("canvas")}><Grid2X2 size={14} />Canvas</button>
                 <button aria-pressed={view === "schedule"} onClick={() => go("schedule")}><CalendarDays size={14} />Schedule</button>
+                <button aria-pressed={view === "video"} onClick={() => go("video")}><Film size={14} />Video</button>
               </div>
             )}
             <div className="topbar-right">
@@ -1089,6 +1094,17 @@ export function Studio({
                       </div>
                     )}
                   </div>
+                ) : view === "video" ? (
+                  <Suspense fallback={<div className="video-loading-shell"><LoaderCircle size={18} className="spin" /> Opening the video studio…</div>}>
+                    <VideoStudio
+                      key={campaign.id}
+                      client={client}
+                      context={context}
+                      campaign={campaign}
+                      itemId={selected}
+                      onSelectItem={setSelected}
+                    />
+                  </Suspense>
                 ) : (
                   <div className="schedule-view">
                     {unlinked.length > 0 && (
@@ -1194,6 +1210,7 @@ export function Studio({
             <button aria-current={sidebar ? "page" : undefined} onClick={() => setSidebar(true)}><Folder size={20}/><span>Projects</span></button>
             <button aria-current={view === "canvas" ? "page" : undefined} onClick={() => go("canvas")}><Grid2X2 size={20}/><span>Canvas</span></button>
             <button aria-current={view === "schedule" ? "page" : undefined} onClick={() => go("schedule")}><CalendarDays size={20}/><span>Schedule</span></button>
+            <button aria-current={view === "video" ? "page" : undefined} onClick={() => go("video")}><Film size={20}/><span>Video</span></button>
             <button onClick={() => {if(view==="home")setCreating(true);else if(!campaign)go("home");else {setSelected(current=>current??campaign?.items[0]?.id??null);setMobileChatOpen(true);}}}>{view==="home"?<Plus size={21}/>:<Sparkles size={20}/>}<span>{view==="home"?"Create":"Chat"}</span></button>
           </nav>
         </div>

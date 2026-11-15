@@ -106,7 +106,7 @@ export interface EngineConfig {
   /** Model-backed director turns allowed per organization per 24 hours. */
   directorDailyTurns: number;
   mediaUrlTtlSeconds: number;
-  /** Cloudflare R2 bucket for private files (likeness recordings and consent manifests). Null when not configured. */
+  /** Cloudflare R2 bucket for private files (likeness recordings, persona photos, reel draft files). Null when not configured. */
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string } | null;
   /**
    * Whether forwarded headers (`x-forwarded-for`, `x-forwarded-host`, `x-forwarded-proto`) were set by a proxy we
@@ -114,6 +114,8 @@ export interface EngineConfig {
    */
   trustProxyHeaders: boolean;
   rateLimit: RateLimitConfig;
+  /** Credential the Remotion render workers (VPS, boxd or containers) present to claim reel renders. */
+  reelWorkerToken: string | null;
 }
 
 const avatarsSchema = z.array(
@@ -297,5 +299,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     r2: r2From(env),
     trustProxyHeaders,
     rateLimit: rateLimitFrom(env, trustProxyHeaders),
+    reelWorkerToken: env.REEL_WORKER_TOKEN && env.REEL_WORKER_TOKEN.trim().length >= 32 ? env.REEL_WORKER_TOKEN.trim() : null,
   };
 }

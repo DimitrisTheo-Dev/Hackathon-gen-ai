@@ -28,6 +28,16 @@ import {
   personaSchema,
   updatePersonaInputSchema,
   updatePersonaLookInputSchema,
+  compositionDocumentSchema,
+  saveCompositionInputSchema,
+  draftFileSchema,
+  uploadTicketSchema,
+  requestUploadInputSchema,
+  completeUploadInputSchema,
+  saveTextFileInputSchema,
+  archiveFileInputSchema,
+  reelRenderSchema,
+  queueRenderInputSchema,
 } from "@castroom/contracts";
 import {
   ApiError,
@@ -370,5 +380,27 @@ export function createLiveClient(
     createPersonaLook: async (input) => request("/operations/create_persona_look", personaSchema, validate(createPersonaLookInputSchema, input)),
     updatePersonaLook: async (input) => request("/operations/update_persona_look", personaSchema, validate(updatePersonaLookInputSchema, input)),
     deletePersonaLook: async (lookId) => request("/operations/delete_persona_look", personaSchema, { lookId: validate(idSchema, lookId) }),
+    getComposition: (contentId) =>
+      request(
+        `/items/${encodeURIComponent(validate(idSchema, contentId))}/composition`,
+        compositionDocumentSchema,
+      ),
+    saveComposition: (input) =>
+      request(
+        "/operations/save_composition",
+        compositionDocumentSchema,
+        validate(saveCompositionInputSchema, input),
+      ),
+    listFiles: (campaignId) =>
+      request(`/campaigns/${encodeURIComponent(validate(idSchema, campaignId))}/files`, z.array(draftFileSchema)),
+    requestUpload: (input) => request("/operations/request_file_upload", uploadTicketSchema, validate(requestUploadInputSchema, input)),
+    completeUpload: (input) => request("/operations/complete_file_upload", draftFileSchema, validate(completeUploadInputSchema, input)),
+    saveTextFile: (input) => request("/operations/save_text_file", draftFileSchema, validate(saveTextFileInputSchema, input)),
+    archiveFile: (input) => request("/operations/archive_file", draftFileSchema, validate(archiveFileInputSchema, input)),
+    queueRender: (input) => request("/operations/queue_reel_render", reelRenderSchema, validate(queueRenderInputSchema, input)),
+    listRenders: (contentId) =>
+      request(`/items/${encodeURIComponent(validate(idSchema, contentId))}/renders`, z.array(reelRenderSchema)),
+    cancelRender: (input) =>
+      request("/operations/cancel_reel_render", reelRenderSchema, validate(z.object({ renderId: idSchema, operationKey: z.uuid() }).strict(), input)),
   };
 }

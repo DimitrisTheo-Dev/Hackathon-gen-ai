@@ -28,7 +28,7 @@ Do not try to connect yourself. A workspace owner or admin creates the token, or
 - [API and agent documentation](https://faceful.vercel.app/docs/): Product purpose and how to check what a deployment has switched on.
 - [OpenAPI 3.1.1](https://faceful.vercel.app/openapi.json): Implemented read-only public routes.
 - [Public API guide](https://faceful.vercel.app/docs/api/): First calls, schemas, errors and caching.
-- [Use Faceful with your AI agent](https://faceful.vercel.app/docs/mcp/): The MCP endpoint, authorization, the 13 tools, limits and what has been tried.
+- [Use Faceful with your AI agent](https://faceful.vercel.app/docs/mcp/): The MCP endpoint, authorization, the 21 tools, limits and what has been tried.
 - [Codex and Claude Code setup](https://faceful.vercel.app/docs/setup/): Workspace-token setup and how to confirm a connection.
 - [Repository CLI](https://faceful.vercel.app/docs/cli/): pnpm commands for discovery and local draft validation; not published to a package registry.
 - [Formats and limits](https://faceful.vercel.app/docs/capabilities/): What can be drafted and rendered, render credits and unavailable combinations.

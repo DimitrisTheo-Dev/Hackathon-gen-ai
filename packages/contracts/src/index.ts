@@ -710,3 +710,5 @@ export const libraryTemplateSchema = z.object({
   expiresAt: instantSchema,
 });
 export type LibraryTemplate = z.infer<typeof libraryTemplateSchema>;
+/* Video compositions previewed with Remotion. */
+export * from "./composition.js";
