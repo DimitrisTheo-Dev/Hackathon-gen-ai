@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test:ui": "playwright test",
     "castroom": "tsx packages/cli/src/main.ts",
+    "routine": "node --env-file-if-exists=.env.local --import tsx apps/claude-routine/cli.ts",
     "check:proxy": "tsc --project tsconfig.proxy.json && node scripts/check-proxy.mjs",
     "dev:api": "node --env-file=.env.local --import tsx scripts/dev-api.ts",
     "smoke:engine": "node --env-file=.env.local --import tsx scripts/smoke-engine.ts",

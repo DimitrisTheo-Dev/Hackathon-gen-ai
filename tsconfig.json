@@ -26,6 +26,7 @@
     "packages/cli/src",
     "packages/engine/src",
     "api",
-    "apps/claude-runner"
+    "apps/claude-runner",
+    "apps/claude-routine"
   ]
 }
