@@ -18,6 +18,7 @@ import {
 import type { StudioClient } from "../data/client";
 import { Modal, Notice } from "../components/ui";
 import { DOMAIN_LABEL, DomainChip } from "../review/vocabulary";
+import { BrandDraftAssist } from "./BrandDraft";
 import "../brand.css";
 
 /* ───────────── vocabulary ───────────── */
@@ -1606,6 +1607,7 @@ export function Brand({
   onCampaign,
   onSelectProject,
   onStartProject,
+  draftFromWebsite = false,
 }: {
   context: StudioContext;
   client: StudioClient;
@@ -1620,6 +1622,8 @@ export function Brand({
   onCampaign: (campaign: Campaign) => void;
   onSelectProject: (id: string) => void;
   onStartProject: () => void;
+  /** Offer "Draft this from your website" (it needs the engine, so the local studio leaves it out). */
+  draftFromWebsite?: boolean;
 }) {
   // A UI convenience only: the engine checks content:edit on every save.
   const editable = context.principal.scopes.includes("content:edit");
@@ -1648,6 +1652,15 @@ export function Brand({
           </p>
         )}
       </header>
+
+      {editable && draftFromWebsite && (
+        <BrandDraftAssist
+          brand={brand}
+          client={client}
+          firstRun={!context.brand.description && !context.brand.tone && !context.brand.audience && context.brand.rules.length === 0}
+          onBrand={onBrand}
+        />
+      )}
 
       <section className="bk-identity" aria-label="Brand">
         <div className="bk-identity-main">

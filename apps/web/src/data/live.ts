@@ -19,6 +19,8 @@ import {
   versionSchema,
   addSourceInputSchema,
   brandSchema,
+  brandDraftSchema,
+  draftBrandInputSchema,
   cloneJobInputSchema,
   cloneJobSchema,
   cloneSourceSchema,
@@ -348,6 +350,9 @@ export function createLiveClient(
         brandSchema.strict(),
         validate(updateBrandInputSchema, input),
       ),
+    // The engine visits the site (8 seconds at most) and may ask the model, so this can take a while.
+    draftBrandFromWebsite: async (input) =>
+      request("/operations/draft_brand_from_website", brandDraftSchema, validate(draftBrandInputSchema, input), { timeoutMs: 60_000 }),
     addSource: async (input) => {
       const body = validate(addSourceInputSchema, input);
       return request(
