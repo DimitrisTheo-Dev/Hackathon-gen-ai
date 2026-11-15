@@ -43,7 +43,7 @@ export function createSocialsApi(baseUrl: string, getToken: () => Promise<string
       response = await fetch(`${base}/v1/socials${path}`, {
         method,
         headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) },
-        body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+        ...(method === "POST" ? { body: JSON.stringify(body ?? {}) } : {}),
         credentials: "omit",
         cache: "no-store",
         redirect: "error",

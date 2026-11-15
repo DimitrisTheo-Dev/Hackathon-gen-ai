@@ -57,7 +57,7 @@ function expandIpv6(address: string): string[] {
   const [head, tail] = value.split("::");
   const front = head ? head.split(":") : [];
   const back = tail === undefined ? [] : tail ? tail.split(":") : [];
-  const fill = tail === undefined ? [] : new Array(Math.max(0, 8 - front.length - back.length)).fill("0");
+  const fill = tail === undefined ? [] : Array.from({ length: Math.max(0, 8 - front.length - back.length) }, () => "0");
   return [...front, ...fill, ...back].map((group) => parseInt(group || "0", 16).toString(16));
 }
 

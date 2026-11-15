@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { audit, idempotent, requireHuman, type Ctx, type EngineDeps } from "./access.js";
-import { checkoutInputSchema, checkoutResultSchema, portalResultSchema, stripeNotConfigured, type CheckoutResult, type PortalResult } from "./billing.js";
+import { checkoutInputSchema, checkoutResultSchema, portalResultSchema, stripeNotConfigured, type CheckoutResult, type PortalResult } from "./billing-contract.js";
 import type { StripeConfig } from "./config.js";
 import { EngineError, StoreConflict } from "./errors.js";
 import { selectOne, type Filter, type Row } from "./store.js";

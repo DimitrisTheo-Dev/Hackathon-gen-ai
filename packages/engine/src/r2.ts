@@ -60,7 +60,7 @@ export function presignUrl(input: {
   for (const [name, value] of Object.entries(input.headers ?? {})) headers[name.toLowerCase()] = value.trim();
   const signedHeaders = Object.keys(headers).sort().join(";");
   const query: Record<string, string> = {
-    ...(input.query ?? {}),
+    ...input.query,
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
     "X-Amz-Credential": `${input.accessKeyId}/${scope}`,
     "X-Amz-Date": date,
@@ -85,7 +85,7 @@ export function presignUrl(input: {
 
 /** Object keys are built by the engine only; this guards against a bug ever producing a path escape. */
 function assertKey(key: string) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,511}$/.test(key) || key.includes("..") || key.includes("//"))
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$/.test(key) || key.includes("..") || key.includes("//"))
     throw new EngineError("validation_error", "That file location is not valid.");
 }
 
