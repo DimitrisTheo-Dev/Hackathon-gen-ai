@@ -217,6 +217,9 @@
   .bk-sheet-facts-head strong { font-size: 12.5px; font-weight: 550; color: var(--ink); }
   .bk-sheet-facts-help { margin-block-end: 4px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
   .bk-fact-list > li { padding-block: 9px; }
+  /* Ring room under the last row: the modal content scrolls and would cut a focused button's outline. */
+  .bk-product-sheet { padding-block-end: 6px; }
+  .bk-product-sheet .bk-sheet-actions .button { scroll-margin-block: 8px; }
   .bk-product-sheet .bk-sheet-actions { margin-block-start: 22px; }
 
   .bk-footnote { margin-block-start: 40px; padding-block-start: 14px; border-block-start: 1px solid var(--border); max-inline-size: 76ch; font-size: 12px; line-height: 1.6; color: var(--text-secondary); text-wrap: pretty; }

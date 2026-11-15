@@ -16,7 +16,7 @@
 .editor-details { --group: var(--background); }
 /* The containing block of everything inside it: screen-reader-only text far down the list is clipped and scrolls here,
    instead of stretching the phone dialog into a second, page-level scroll. */
-.editor-details .editor-scroll { position: relative; padding: 16px 16px 28px; scrollbar-width: thin; overscroll-behavior: contain; }
+.editor-details .editor-scroll { position: relative; padding: 16px 16px 28px; scrollbar-width: thin; overscroll-behavior: contain; scroll-padding-block: 12px; }
 
 .editor-details .editor-preview { inline-size: 164px; margin: 2px auto 0; container-type: inline-size; }
 .editor-details .editor-preview.is-storyboard { inline-size: 128px; }
