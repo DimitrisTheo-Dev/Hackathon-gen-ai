@@ -159,6 +159,18 @@ test("a good capture passes; a missing angle or an unspoken consent blocks; advi
   assert.equal(still.passed, true);
 });
 
+test("the demo build never fails a capture on phrases the recognizer missed, and still keeps what it heard", () => {
+  const scanFrames: FaceFrame[] = Array.from({ length: 300 }, (_, i) => ({ t: i * 33, faces: 1, yaw: Math.sin(i / 30) * 30, pitch: 0, blink: i % 90 === 0 ? 0.9 : 0.1 }));
+  const speechFrames: FaceFrame[] = Array.from({ length: 400 }, (_, i) => ({ t: i * 33, faces: 1, jaw: Math.abs(Math.sin(i / 5)), audio: Math.abs(Math.sin(i / 5)) * 0.2 }));
+  const phrases = pickPhrases("Minas Kontis", "en");
+  const misheard = { posesCaptured: ALL, scanFrames, speechFrames, phrases, transcript: "", speechMs: 30_000 };
+  const demo = evaluateLiveness(misheard, { requirePhrases: false });
+  assert.equal(demo.passed, true);
+  assert.deepEqual(demo.checks.find((check) => check.id === "phrases"), { id: "phrases", label: "Phrases spoken", passed: true, required: false, value: 0 });
+  assert.equal(evaluateLiveness({ ...misheard, posesCaptured: ["center"] }, { requirePhrases: false }).passed, false, "the other checks still apply");
+  assert.equal(evaluateLiveness(misheard).passed, false, "strict by default");
+});
+
 test("the picture's brightness is its mean luma, so a dark room can be told from a missing face", () => {
   const fill = (r: number, g: number, b: number) => Uint8ClampedArray.from({ length: 16 * 4 }, (_, i) => [r, g, b, 255][i % 4]);
   assert.ok(Math.abs(meanLuma(fill(255, 255, 255)) - 1) < 1e-9, "white is fully bright");

@@ -62,6 +62,11 @@ const HINT_SETTLE_MS = 350;
 type Turn = Exclude<PoseId, "center">;
 /** Spoken this long with no text back from live transcription: it is not hearing, so switch recognizers. */
 const LIVE_DEAF_MS = 3000;
+/**
+ * Demo: words the recognizer misses never fail a capture. The phrases check still runs and its value is kept
+ * with the consent; every other check still applies. Build with VITE_LIKENESS_STRICT=1 to require it again.
+ */
+const REQUIRE_PHRASES = import.meta.env.VITE_LIKENESS_STRICT === "1";
 
 const COPY = {
   en: {
@@ -463,15 +468,18 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
     audioCtxRef.current = null;
     if (stepRef.current !== "speech") return;
     if (speechBlobRef.current) setSpeechUrl(objectUrl(speechBlobRef.current));
-    const evaluated = evaluateLiveness({
-      posesCaptured: capturedRef.current,
-      scanFrames: scanFramesRef.current,
-      speechFrames: speechFramesRef.current,
-      phrases: phrasesRef.current,
-      transcript,
-      speechMs,
-      phraseCoverage: heardRef.current?.coverage(),
-    });
+    const evaluated = evaluateLiveness(
+      {
+        posesCaptured: capturedRef.current,
+        scanFrames: scanFramesRef.current,
+        speechFrames: speechFramesRef.current,
+        phrases: phrasesRef.current,
+        transcript,
+        speechMs,
+        phraseCoverage: heardRef.current?.coverage(),
+      },
+      { requirePhrases: REQUIRE_PHRASES },
+    );
     // Measured values, for tuning the thresholds on real captures. No transcript, name or image.
     console.info("[likeness] checks", evaluated.checks.map((check) => `${check.id}=${check.value}${check.passed ? "" : " (fail)"}`).join(" "), "phrases", heardRef.current?.coverage().map((share) => share.toFixed(2)).join("/"));
     setReport(evaluated);
