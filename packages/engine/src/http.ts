@@ -15,6 +15,8 @@ import type { Planner } from "./llm.js";
 import { createProduct, deleteProduct, placeProduct, productImageUploadUrl, updateProduct } from "./products.js";
 import { authenticateWithLimits, principalSubject, refuseCredential, RequestLimits } from "./ratelimit.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
+import { approveReview, getLatestReview, reviewContent } from "./review.js";
+import type { ReviewModel } from "./review-model.js";
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
 import { completeSocialSignIn, connectSocialProvider, disconnectSocialProvider, getSocialPlatform, listSocials, refreshSocialCredentials, removeSocialAccount, socialSignInReturn, syncSocialProvider, usableProviders } from "./socials.js";
 import { listSocialEvents, receiveSocialWebhook, renewWebhookSubscriptions, socialWebhookHandshake } from "./socials-events.js";
@@ -25,6 +27,8 @@ import { createCloneJob, listCloneJobs, lookupCloneSource } from "./clone.js";
 
 export interface HttpDeps extends EngineDeps {
   planner: Planner | null;
+  /** The content review's claims model. Omitted: made from `config.llm` when that is set (review.ts). Tests inject one. */
+  reviewModel?: ReviewModel | null;
 }
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -96,6 +100,9 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   delete_product: deleteProduct,
   product_image_upload_url: productImageUploadUrl,
   place_product: placeProduct,
+  // Content review (review.ts). Approval is a named human act: owners, admins and reviewers, never agents.
+  review_content: reviewContent,
+  approve_review: approveReview,
   add_source: addSource,
   remove_source: removeSource,
   render_content: renderContent,
@@ -133,7 +140,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   },
 } satisfies Record<string, OperationHandler>));
 /** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
-export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job"]);
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content"]);
 
 async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
   const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
@@ -159,6 +166,8 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/items\/([^/]+)\/composition$/))) return json(await getComposition(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/items\/([^/]+)\/renders$/))) return json(await listRenders(deps, ctx, decodeURIComponent(match[1])));
+  // The latest content review of an item, or null (review.ts).
+  if (read && (match = path.match(/^\/items\/([^/]+)\/review$/))) return json(await getLatestReview(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/campaigns\/([^/]+)\/files$/))) return json(await listFiles(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());

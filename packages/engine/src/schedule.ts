@@ -4,6 +4,7 @@ import { audit, canonical, idempotent, requireHuman, requireScope, sha256Hex, ty
 import { NOT_AVAILABLE_YET, youtubePublisher } from "./channels.js";
 import { EngineError, StoreConflict } from "./errors.js";
 import { ChannelGrantExpired, UnknownPublishOutcome } from "./providers/youtube.js";
+import { reviewBlockers } from "./review.js";
 import { accountPublisher, connectedThroughProvider, isSocialPlatform, publishingAvailable } from "./socials.js";
 import { recordSocialEvents } from "./socials-events.js";
 import { selectOne, type Filter, type Row } from "./store.js";
@@ -78,6 +79,8 @@ export async function prepareSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown):
     ]);
     const assetIds = items.map((item) => item.media_asset_id).filter(Boolean) as string[];
     const assets = assetIds.length ? await deps.store.select("media_assets", { org_id: ctx.org.id, id: { in: assetIds } }) : [];
+    // Health and finance scripts need an approved content review of their current revision (review.ts). Never throws.
+    const reviewGate = await reviewBlockers(deps, ctx, items);
     const entries: Row[] = [];
     const blockers: Array<{ itemId: string; message: string }> = [];
     const now = deps.now().getTime();
@@ -85,6 +88,8 @@ export async function prepareSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown):
       const asset = assets.find((entry) => entry.id === item.media_asset_id);
       const rendered = asset && item.render_revision !== null && asset.revision === item.render_revision;
       if (!rendered) blockers.push({ itemId: item.id, message: asset ? "The video is out of date for this script. Render the current version first." : "No finished video yet. Render this item before scheduling it." });
+      const reviewBlocker = reviewGate.get(item.id);
+      if (reviewBlocker) blockers.push({ itemId: item.id, message: reviewBlocker });
       const targets = item.targets as Row[];
       if (!targets.length) blockers.push({ itemId: item.id, message: "No destination or time has been chosen." });
       for (const target of targets) {
@@ -113,7 +118,7 @@ export async function prepareSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown):
           blockers.push({ itemId: item.id, message: `The ${platform} time is in the past. Choose a future time.` });
           continue;
         }
-        if (!rendered) continue;
+        if (!rendered || reviewBlocker) continue;
         entries.push({
           itemId: item.id,
           revision: item.revision,
