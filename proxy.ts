@@ -71,6 +71,8 @@ export default function proxy(request: Request): Response {
     return response;
   }
   if (files.has(path)) return next();
+  // The New project flow's generated pictures (public/art/fog and its samples).
+  if (/^\/art\/fog\/(?:[\w-]+\/)?[\w-]+\.webp$/.test(path)) return next();
   const suggestion = closestPage(normalized);
   if (wantsMd) return markdownResponse(request, notFoundMarkdown(path, suggestion), 404);
   return new Response(request.method === "HEAD" ? null : notFoundHtml(path, suggestion), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", Vary: "Accept", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", Link: publicDiscoveryLinkHeader } });
