@@ -638,7 +638,7 @@ export function Editor({
               value={
                 <>
                   {reviewValue.tone !== "none" && <span className="cr-dot" data-tone={reviewValue.tone} aria-hidden="true" />}
-                  {reviewValue.text}
+                  <span className="cr-summary">{reviewValue.text}</span>
                 </>
               }
             >

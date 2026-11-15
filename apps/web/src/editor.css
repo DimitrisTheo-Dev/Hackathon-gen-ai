@@ -126,7 +126,10 @@
 .cr-suggest-label { color: var(--text-secondary); font-size: 11.5px; font-weight: 550; }
 .cr-suggest > p:not(.cr-applied) { color: var(--ink); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
 /* The confirmation takes the button's place at the button's height, so nothing below moves. */
-.cr-applied { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-block-size: 32px; color: var(--positive-ink); font-size: 12.5px; line-height: 1.4; }
+.cr-applied { display: grid; grid-template-columns: 13px minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; min-block-size: 32px; color: var(--positive-ink); font-size: 12.5px; line-height: 1.4; }
+.cr-applied > svg { align-self: start; margin-block-start: calc((1lh - 13px) / 2); }
+/* Long values (an approver's full name) end in an ellipsis instead of being cut mid-letter. */
+.cr-summary { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-details .cr-applied .text-button { min-block-size: 28px; padding: 0; color: var(--ink); font-size: 12.5px; font-weight: 550; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
 .cr-checked { display: grid; gap: 6px; padding-block-start: 14px; border-block-start: 1px solid var(--border); }
 .cr-checked ul { display: grid; gap: 3px; padding: 0; list-style: none; }
