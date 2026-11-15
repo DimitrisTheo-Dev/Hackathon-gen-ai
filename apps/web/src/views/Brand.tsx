@@ -1476,7 +1476,7 @@ function ProductSheet({
         </div>
         <fieldset className="bk-domain" disabled={lock} aria-describedby="bk-domain-help">
           <legend>Kind of product</legend>
-          <div className="bk-segmented">
+          <div className="choice-segmented">
             {DOMAINS.map(({ id, icon: Icon }) => (
               <label key={id} data-checked={domain === id || undefined}>
                 <input type="radio" name="bk-product-domain" value={id} checked={domain === id} onChange={() => setDomain(id)} />
