@@ -827,8 +827,6 @@ export function Studio({
             <button className={view === "schedule" ? "active" : ""} aria-current={view==="schedule"?"page":undefined} title="Schedule" onClick={() => go("schedule")}><CalendarDays size={16} /><span>Schedule</span></button>
             {!fixture && <button className={view === "personas" ? "active" : ""} aria-current={view==="personas"?"page":undefined} title="Personas" onClick={() => go("personas")}><UserRound size={16} /><span>Personas</span></button>}
             {!fixture && <button className={view === "billing" ? "active" : ""} aria-current={view==="billing"?"page":undefined} title="Billing" onClick={() => go("billing")}><CreditCard size={16} /><span>Billing</span></button>}
-            {/* Social accounts and webhook addresses come from the engine, which the local fixture does not have. */}
-            {!fixture && <button className={view === "settings" ? "active" : ""} aria-current={view==="settings"?"page":undefined} title="Settings" onClick={() => go("settings")}><SettingsIcon size={16} /><span>Settings</span></button>}
           </nav>
           <div className="projects-heading">
             <span>Projects</span>
@@ -856,6 +854,13 @@ export function Studio({
               <Palette size={16} />
               <span>Brand kit</span>
             </button>
+            {/* Social accounts come from the engine, which the local fixture does not have. */}
+            {!fixture && (
+              <button className={`sidebar-row ${view === "settings" ? "selected" : ""}`} aria-current={view === "settings" ? "page" : undefined} title="Settings" onClick={() => go("settings")}>
+                <SettingsIcon size={16} />
+                <span>Settings</span>
+              </button>
+            )}
             <button className={`sidebar-row agent-status ${view === "connect" ? "selected" : ""}`} title="Agents" onClick={() => go("connect")}>
               <Plug size={16} />
               <span>Agents</span>
@@ -1431,7 +1436,7 @@ export function Studio({
           )}
         </Modal>
       )}
-      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => setCreating(true)} onConnect={() => go("connect")} onBrand={() => go("brand")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
+      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => setCreating(true)} onConnect={() => go("connect")} onBrand={() => go("brand")} onSettings={fixture ? undefined : () => go("settings")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
     </div>
   );
 }

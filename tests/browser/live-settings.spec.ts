@@ -33,7 +33,8 @@ async function noBlockingViolations(page: Page) {
 test('Settings connects Buffer, lists and removes its accounts, and has no webhook settings to fill in', async ({ page }) => {
   await signIn(page);
   await page.goto('/studio/');
-  await page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Settings' }).click();
+  // A workspace setting: in the sidebar's footer, beside Brand kit, Agents and Credits.
+  await page.getByRole('complementary', { name: 'Studio' }).getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page).toHaveURL(/view=settings/);
   await expect(page).toHaveTitle('Settings · Faceful');
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
