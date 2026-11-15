@@ -148,9 +148,13 @@ export function createLiveClient(
     try {
       payload = response.status === 204 ? undefined : await response.json();
     } catch {
+      // A non-JSON answer comes from the hosting layer (a timeout or gateway page), not from the engine. Say what
+      // that means for this request: a read changed nothing; a change may or may not have been saved.
       throw new ApiError(
         body === undefined ? "provider_unavailable" : "unknown_outcome",
-        "The studio API returned an unreadable response. Refresh status before continuing.",
+        body === undefined
+          ? `The studio's server sent an answer it couldn't read (HTTP ${response.status}). Nothing was changed. Try again in a moment.`
+          : `The answer to this change couldn't be read (HTTP ${response.status}), so it may or may not have been saved. Refresh the page to check before trying again.`,
       );
     }
     if (!response.ok) {

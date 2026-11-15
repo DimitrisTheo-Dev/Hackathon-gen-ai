@@ -16,13 +16,19 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
  */
 const CARD = /^<button class="content-select"/;
 
-/** Opens the first draft in the editor and picks a tab ("AI Chat" or "Details"). */
+/** Opens the first draft in the editor, on the AI chat or on Details (one header toggle switches between them). */
 async function editor(page: Page, tab: 'AI Chat' | 'Details') {
   await page.goto('/dev/studio/?view=canvas');
   await expect(page.locator('.content-card')).toHaveCount(3);
-  if (!(await page.getByRole('button', { name: tab, exact: true }).isVisible())) await page.locator('.content-select').first().click();
-  await page.getByRole('button', { name: tab, exact: true }).click();
-  await expect(page.getByRole('button', { name: tab, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const toggles = page.getByRole('button', { name: /^(Details|AI Chat)$/ });
+  if (!(await toggles.first().isVisible())) await page.locator('.content-select').first().click();
+  if (tab === 'Details') {
+    await page.getByRole('button', { name: 'Details', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'AI Chat', exact: true })).toBeVisible();
+  } else {
+    if (await page.getByRole('button', { name: 'AI Chat', exact: true }).isVisible()) await page.getByRole('button', { name: 'AI Chat', exact: true }).click();
+    await expect(page.getByLabel('Direction for your content')).toBeVisible();
+  }
 }
 
 const surfaces: Array<{ name: string; open: (page: Page) => Promise<unknown> }> = [

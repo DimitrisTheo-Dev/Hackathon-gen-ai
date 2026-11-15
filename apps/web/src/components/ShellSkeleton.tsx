@@ -98,7 +98,7 @@ export function ShellSkeleton({ leaving = false, entering = false, age }: { leav
         <div className="boot-main">
           <div className="boot-topbar"><i /><i /><i /></div>
           <div className="boot-view boot-home"><i className="boot-title" /><i className="boot-line" /><i className="boot-composer" /><span className="boot-chips"><i /><i /><i /><i /></span></div>
-          <div className="boot-view boot-canvas"><span className="boot-head"><i className="boot-title" /><i className="boot-line" /></span><span className="boot-cards"><i /><i /><i /></span></div>
+          <div className="boot-view boot-canvas"><span className="boot-head"><i className="boot-title" /><i className="boot-line" /><i className="boot-rail" /></span><span className="boot-cards"><i /><i /><i /></span></div>
           <div className="boot-view boot-page"><i className="boot-title" /><i className="boot-line" /><i className="boot-block" /><i className="boot-block" /></div>
           <div className="boot-view boot-grid"><i className="boot-title" /><i className="boot-line" /><span className="boot-posters"><i /><i /><i /><i /><i /></span></div>
           <div className="boot-view boot-clone"><i className="boot-title" /><i className="boot-line" /><span className="boot-clone-body"><span className="boot-clone-form"><i /><i className="is-area" /><i className="is-chips" /></span><i className="boot-clone-frame" /><i className="boot-clone-frame" /></span></div>

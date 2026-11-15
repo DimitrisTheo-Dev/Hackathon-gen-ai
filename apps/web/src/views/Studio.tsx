@@ -41,6 +41,7 @@ import type {
   StudioContext,
 } from "@castroom/contracts";
 import { FormatsContext } from "../director/HomeFormats";
+import { FlowRail } from "../components/FlowRail";
 import type { StudioClient } from "../data/client";
 import { ApiError } from "../data/client";
 import {
@@ -876,9 +877,10 @@ export function Studio({
             </div>
             {inProject && (
               <div className="segmented topbar-views" role="group" aria-label="Project view">
+                {/* The order a video is made in: write it, edit the video, then schedule it. */}
                 <button aria-pressed={view === "canvas"} onClick={() => go("canvas")}><Grid2X2 size={14} />Canvas</button>
-                <button aria-pressed={view === "schedule"} onClick={() => go("schedule")}><CalendarDays size={14} />Schedule</button>
                 <button aria-pressed={view === "video"} onClick={() => go("video")}><Film size={14} />Video</button>
+                <button aria-pressed={view === "schedule"} onClick={() => go("schedule")}><CalendarDays size={14} />Schedule</button>
               </div>
             )}
             <div className="topbar-right">
@@ -1041,6 +1043,18 @@ export function Studio({
                     <button className={`button ${hasTimes ? "primary" : "secondary"}`} disabled={busy || unsaved} aria-describedby={unsaved ? "review-blocked" : undefined} onClick={() => void prepare()}><CalendarDays size={15} />Review schedule</button>
                   </div>
                   {unsaved && <p className="draft-reminder" id="review-blocked">Save your edits before reviewing the schedule.</p>}
+                  {campaign.items.length > 0 && (
+                    <FlowRail
+                      campaign={campaign}
+                      view={view}
+                      canRender={context.capabilities.canRender}
+                      renderBlocker={context.capabilities.renderBlocker}
+                      onCanvas={() => go("canvas")}
+                      onVideo={() => go("video")}
+                      onSchedule={() => go("schedule")}
+                      onReview={() => { if (!busy && !unsaved) void prepare(); }}
+                    />
+                  )}
                 </header>
                 {view === "canvas" ? (
                   <div className="canvas">
@@ -1228,8 +1242,8 @@ export function Studio({
           <nav className="mobile-dock" aria-label="Workspace shortcuts">
             <button aria-current={sidebar ? "page" : undefined} onClick={() => setSidebar(true)}><Folder size={20}/><span>Projects</span></button>
             <button aria-current={view === "canvas" ? "page" : undefined} onClick={() => go("canvas")}><Grid2X2 size={20}/><span>Canvas</span></button>
-            <button aria-current={view === "schedule" ? "page" : undefined} onClick={() => go("schedule")}><CalendarDays size={20}/><span>Schedule</span></button>
             <button aria-current={view === "video" ? "page" : undefined} onClick={() => go("video")}><Film size={20}/><span>Video</span></button>
+            <button aria-current={view === "schedule" ? "page" : undefined} onClick={() => go("schedule")}><CalendarDays size={20}/><span>Schedule</span></button>
             <button onClick={() => {if(view==="home")setCreating(true);else if(!campaign)go("home");else {setSelected(current=>current??campaign?.items[0]?.id??null);setMobileChatOpen(true);}}}>{view==="home"?<Plus size={21}/>:<Sparkles size={20}/>}<span>{view==="home"?"Create":"Chat"}</span></button>
           </nav>
         </div>
@@ -1366,6 +1380,8 @@ export function Studio({
             setManifest(null);
             openPanel(target, "review");
           }}
+          onOpenVideo={() => { setManifest(null); go("video"); }}
+          onOpenSchedule={() => { setManifest(null); go("schedule"); }}
         />
       )}
       {grant && campaign && (
