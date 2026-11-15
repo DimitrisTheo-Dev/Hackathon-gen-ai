@@ -93,6 +93,18 @@ test("phrase coverage tolerates recognizer mistakes, including the brand name he
   assert.equal(sync.update("I Minas Kontis agree that face full may create an avatar of my face and voice"), sync.words.length);
 });
 
+test("the read-along follows a name heard in the other alphabet or misspelled, digits, and short words", () => {
+  // A Greek recognizer writes a Latin name in Greek letters; an English one spells it by ear.
+  const el = createReadAlongSync(consentStatement("Minas Kontis", "el"));
+  assert.equal(el.update("Εγώ Μηνάς Κόντης συμφωνώ να δημιουργήσει η Φέισφουλ ένα άβαταρ με το πρόσωπο και τη φωνή μου"), el.words.length);
+  assert.ok(phraseCoverage(consentStatement("Minas Kontis", "en"), "I Mina's Condis agree that Faceful may create an avatar of my face and voice") === 1);
+  // Numbers come back as digits, and "choose a" stays two words instead of becoming "choosea".
+  const meet = createReadAlongSync("We usually meet at seven, choose a quiet place and talk about music.");
+  let said = "";
+  for (const word of "we usually meet at 7 choose a quiet place and talk about music".split(" ")) meet.update((said += ` ${word}`));
+  assert.equal(meet.position, meet.words.length);
+});
+
 test("phrases count by everything heard along the way, not only by the last transcript a recognizer held", () => {
   const phrases = ["The quick brown fox jumps over the lazy dog.", "Bright morning sunshine warms the blue ocean.", consentStatement("Minas Kontis", "en")];
   const heard = createPhraseTracker(phrases);

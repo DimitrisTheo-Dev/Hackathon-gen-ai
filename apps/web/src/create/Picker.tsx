@@ -1,6 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
-import { LANGUAGES, matchesLanguage } from "./languages";
+import { LANGUAGES, languageOf, matchesLanguage } from "./languages";
+// The menu's own styles, for pages that show a language menu without the New project flow (the face scan).
+import "./new-project.css";
 
 /**
  * A small dropdown for the New project flow: a pill that names the setting and shows its value, and a menu of
@@ -8,7 +10,7 @@ import { LANGUAGES, matchesLanguage } from "./languages";
  * The menu is placed against the window, under the pill or above it when there is more room there, and kept on screen,
  * so a scrolling panel (the home composer's) never cuts it off and a pill near a phone's edge still opens fully.
  */
-export function Menu({ label, value, align = "start", disabled = false, hint, children }: { label: string; value: ReactNode; align?: "start" | "end"; disabled?: boolean; hint?: string; children: (close: () => void) => ReactNode }) {
+export function Menu({ label, value, align = "start", disabled = false, hint, variant = "pill", ariaLabel, id: triggerId, children }: { label: string; value: ReactNode; align?: "start" | "end"; disabled?: boolean; hint?: string; /** "flag": a round button holding only the value (a flag). */ variant?: "pill" | "flag"; ariaLabel?: string; id?: string; children: (close: () => void) => ReactNode }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -80,10 +82,16 @@ export function Menu({ label, value, align = "start", disabled = false, hint, ch
   }
   return (
     <div className="np-menu-wrap" ref={wrap} onKeyDown={open ? keys : undefined}>
-      <button ref={trigger} type="button" className={`np-select${open ? " is-open" : ""}`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} disabled={disabled} title={hint} onClick={() => setOpen((current) => !current)}>
-        <span className="np-select-label">{label}</span>
-        <span className="np-select-value">{value}</span>
-        <ChevronDown size={14} aria-hidden="true" />
+      <button ref={trigger} id={triggerId} type="button" className={`${variant === "flag" ? "np-flag-button" : "np-select"}${open ? " is-open" : ""}`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} aria-label={ariaLabel} disabled={disabled} title={hint ?? (variant === "flag" ? ariaLabel : undefined)} onClick={() => setOpen((current) => !current)}>
+        {variant === "flag" ? (
+          value
+        ) : (
+          <>
+            <span className="np-select-label">{label}</span>
+            <span className="np-select-value">{value}</span>
+            <ChevronDown size={14} aria-hidden="true" />
+          </>
+        )}
       </button>
       {open && (
         <div ref={menu} className={`np-menu np-menu-${align}`} id={id}>
@@ -131,5 +139,66 @@ export function LanguageList({ label, selected, exclude = [], limit, onPick }: {
         {!shown.length && <p className="np-menu-empty">No language matches “{query}”.</p>}
       </div>
     </>
+  );
+}
+
+/**
+ * Picks one language from a short list: a round flag that opens a menu of the choices, each with its flag and
+ * name. Every language switch in the app is this one control.
+ */
+export function LanguageFlagMenu({ label, value, options, onChange, disabled = false, align = "end", id }: { label: string; value: string; options: readonly string[]; onChange: (code: string) => void; disabled?: boolean; align?: "start" | "end"; id?: string }) {
+  const current = languageOf(value);
+  return (
+    <Menu variant="flag" label={label} ariaLabel={`${label}: ${current.name}`} value={<FlagCircle code={current.code} />} align={align} disabled={disabled} id={id}>
+      {(close) => (
+        <div role="listbox" aria-label={label}>
+          {options.map((code) => {
+            const language = languageOf(code);
+            return (
+              <Option key={code} selected={code === value} onSelect={() => { onChange(code); close(); }}>
+                <FlagCircle code={language.code} small />
+                <span lang={language.code}>{language.native}</span>
+                {language.native !== language.name && <span className="np-option-sub">{language.name}</span>}
+              </Option>
+            );
+          })}
+        </div>
+      )}
+    </Menu>
+  );
+}
+
+/**
+ * A language's flag in a circle. English and Greek, the languages the app's switches offer, are drawn so they
+ * fill the circle; any other language shows its emoji flag inside it.
+ */
+export function FlagCircle({ code, small = false }: { code: string; small?: boolean }) {
+  const clip = `flag-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const base = code.toLowerCase();
+  const className = small ? "np-flag-circle is-small" : "np-flag-circle";
+  if (base === "el")
+    return (
+      <svg className={className} viewBox="0 0 14 14" aria-hidden="true">
+        <rect width="27" height="18" fill="#0D5EAF" />
+        <path d="M0 3h27M0 7h27M0 11h27M0 15h27M5 0v10M0 5h10" stroke="#fff" strokeWidth="2" />
+      </svg>
+    );
+  if (base === "en" || base === "en-gb")
+    return (
+      <svg className={className} viewBox="15 0 30 30" aria-hidden="true">
+        <clipPath id={clip}>
+          <path d="M30 15h30v15zv15H0zH0V0zV0h30z" />
+        </clipPath>
+        <rect width="60" height="30" fill="#012169" />
+        <path d="M0 0l60 30m0-30L0 30" stroke="#fff" strokeWidth="6" />
+        <path d="M0 0l60 30m0-30L0 30" clipPath={`url(#${clip})`} stroke="#C8102E" strokeWidth="4" />
+        <path d="M30 0v30M0 15h60" stroke="#fff" strokeWidth="10" />
+        <path d="M30 0v30M0 15h60" stroke="#C8102E" strokeWidth="6" />
+      </svg>
+    );
+  return (
+    <span className={`${className} is-emoji`} aria-hidden="true">
+      {languageOf(code).flag}
+    </span>
   );
 }
