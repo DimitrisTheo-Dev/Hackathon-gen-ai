@@ -238,10 +238,10 @@ export function createRunner(config: RunnerConfig): Server & { stopWork: () => v
     delete env.RUNNER_ACCESS_KEY;
     delete env.CLAUDE_CODE_OAUTH_TOKEN;
     delete env.ANTHROPIC_API_KEY; // always use the subscription, never API billing
+    // The store token stays with the runner: Claude runs whatever a prompt or a project file tells it to, and the
+    // token opens this user's whole folder, Claude's saved sign-in included. The runner saves projects for it.
     delete env.STORE_URL;
     delete env.STORE_TOKEN;
-    // Claude may save files to this user's own folder too; the token opens nothing else.
-    if (hasStore(config)) { env.FACEFUL_STORE_URL = config.storeUrl!; env.FACEFUL_STORE_TOKEN = config.storeToken!; }
     const token = await storedToken();
     if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
     return env;
@@ -523,6 +523,14 @@ export function createRunner(config: RunnerConfig): Server & { stopWork: () => v
         return json(200, { restored: await restoreWorkspace(projectFrom(project), typeof key === "string" ? key : undefined) });
       }
       if (route === "POST /v1/sync") return json(200, await syncAll());
+      if (route === "POST /v1/store-token") {
+        // The machine renews its short-lived store token here while it stays awake. The gateway never forwards this route.
+        const { token } = (await readJson(req)) as { token?: unknown };
+        if (!config.storeUrl) throw new RequestError(409, "store_not_configured", "Cloud saving isn't set up on this runner.");
+        if (typeof token !== "string" || !/^fst\d\.[A-Za-z0-9._-]{20,400}$/.test(token)) throw new RequestError(400, "invalid_token", "That isn't a store token.");
+        config.storeToken = token;
+        return json(200, { ok: true });
+      }
       if (route === "POST /v1/run/stop") {
         const stopped = run !== null;
         run?.kill("SIGTERM");

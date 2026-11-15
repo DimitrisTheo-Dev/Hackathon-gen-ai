@@ -9,7 +9,7 @@
 // is fresh on every wake; the runner restores the user's Claude sign-in and each project from their own R2 folder,
 // and autosaves after every run.
 import { Container, getContainer } from "@cloudflare/containers";
-import { mintToken } from "../../workspace-store/src/index";
+import { MACHINE_STORE_TOKEN_TTL, mintToken } from "../../workspace-store/src/index";
 import { asSaveRecord, corsFor, createLineScanner, identify, isProjectId, limitProblem, limitsFrom, machineUsage, NOT_ENABLED, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, WAKE_SQL, type Identity, type LimitProblem, type SaveRecord, type Wake } from "./lib";
 
 export type Env = {
@@ -81,6 +81,8 @@ export class UserMachine extends Container<Env> {
   private readonly innerSecret = this.ctx.id.toString();
   private ready: Promise<void> | null = null;
   private booted = false;
+  /** When the runner's store token (12 hours) is due for a new one: halfway through its life. */
+  private storeTokenRenewAt = 0;
 
   private api(path: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
@@ -99,6 +101,15 @@ export class UserMachine extends Container<Env> {
     return limitProblem(machineUsage(results, at), limitsFrom(this.env), at, { waking });
   }
 
+  /** Hands the runner a fresh store token once the one it holds is halfway through its life. */
+  private async renewStoreToken(uid: string): Promise<void> {
+    if (Date.now() < this.storeTokenRenewAt) return;
+    const token = await mintToken(this.env.STORE_SIGNING_KEY, uid, MACHINE_STORE_TOKEN_TTL);
+    const response = await this.api("/v1/store-token", { method: "POST", body: JSON.stringify({ token }), headers: { "content-type": "application/json" } });
+    if (!response.ok) throw new Error(`the runner answered ${response.status}`);
+    this.storeTokenRenewAt = Date.now() + MACHINE_STORE_TOKEN_TTL * 500;
+  }
+
   /** Starts the container with this user's own storage token. Once per wake, within the user's limits. */
   private boot(uid: string, via: Identity["via"]): Promise<void> {
     // A container that went away by itself (a deploy, a crash) needs a full start, not the remembered one.
@@ -107,7 +118,8 @@ export class UserMachine extends Container<Env> {
       const db = this.env.DB;
       await this.ctx.storage.put("uid", uid);
       await touchMachine(db, uid, via, this.env.INSTANCE_TYPE);
-      if (!(await this.isUp())) {
+      const waking = !(await this.isUp());
+      if (waking) {
         // A stop that was never recorded is charged until now: rare, and it errs on the side of the spend cap.
         await db.prepare(WAKE_SQL.close).bind(now(), uid).run();
         const refused = await this.usageProblem(uid, true);
@@ -128,6 +140,8 @@ export class UserMachine extends Container<Env> {
         STORE_TOKEN: await mintToken(this.env.STORE_SIGNING_KEY, uid),
       };
       await this.startAndWaitForPorts({ ports: PORT, cancellationOptions: { instanceGetTimeoutMS: 60_000, portReadyTimeoutMS: 90_000 } });
+      // A container that was already up kept the token from its own start, of unknown age: renew it right away.
+      this.storeTokenRenewAt = waking ? Date.now() + MACHINE_STORE_TOKEN_TTL * 500 : 0;
       this.booted = true;
     })().catch(async (error) => {
       this.ready = null;
@@ -162,6 +176,7 @@ export class UserMachine extends Container<Env> {
       await this.env.DB.prepare("update machines set state = 'failed', updated_at = ? where user_id = ?").bind(now(), uid).run().catch(logFailure("marking the machine failed"));
       return problem(503, "machine_unavailable", "Your machine couldn't start. Try again in a moment.");
     }
+    await this.renewStoreToken(uid).catch(logFailure("renewing the store token"));
     const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
     const response = await this.api(`${url.pathname}${url.search}`, { method: request.method, body, headers: body ? { "content-type": "application/json" } : {} });
     return this.observe(uid, `${request.method} ${url.pathname}`, body, response);
@@ -207,6 +222,7 @@ export class UserMachine extends Container<Env> {
     if (!(await this.isUp())) return "asleep";
     const uid = await this.ctx.storage.get<string>("uid");
     try {
+      if (uid) await this.renewStoreToken(uid).catch(logFailure("renewing the store token"));
       const synced = await this.api("/v1/sync", { method: "POST" });
       if (synced.status === 409) return "busy"; // the run autosaves by itself when it ends
       if (synced.ok && uid) {
@@ -301,6 +317,8 @@ async function route(request: Request, url: URL, env: Env, who: Identity): Promi
     return json(200, { saves: results });
   }
 
+  // Only the machine itself hands its runner a store token.
+  if (url.pathname === "/v1/store-token") return problem(404, "not_found", "Unknown endpoint.");
   // Everything else is the runner's own API, on this user's machine. This wakes the machine if it sleeps.
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
   return machine.fetch(new Request(`http://machine${url.pathname}${url.search}`, { method: request.method, headers: identity, body }));

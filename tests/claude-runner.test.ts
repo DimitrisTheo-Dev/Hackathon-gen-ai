@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createServer as createNetServer, type AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { mintToken } from "../apps/workspace-store/src/index";
+import { mintToken, revocationKey } from "../apps/workspace-store/src/index";
 import { memoryBucket, serveStore } from "./support/memory-bucket";
 import { buildRunArgs, corsHeaders, createRunner, extractLoginUrl, isSubscriptionToken, keyMatches, parseRunRequest, restoreHome, summarizeAuth, type RunnerConfig } from "../apps/claude-runner/server";
 
@@ -40,7 +40,7 @@ else if (args[0] === "auth" && args[1] === "login") {
   process.stdin.on("end", () => {
     const at = args.indexOf("--resume");
     const sid = at >= 0 ? args[at + 1] : "11111111-2222-3333-4444-555555555555";
-    out({ type: "system", subtype: "init", session_id: sid, model: "claude-test", permissionMode: args[args.indexOf("--permission-mode") + 1], cwd: process.cwd(), apiKeySeen: Boolean(process.env.ANTHROPIC_API_KEY), runnerKeySeen: Boolean(process.env.RUNNER_ACCESS_KEY), tokenSeen: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN), storeSeen: Boolean(process.env.FACEFUL_STORE_URL && process.env.FACEFUL_STORE_TOKEN) });
+    out({ type: "system", subtype: "init", session_id: sid, model: "claude-test", permissionMode: args[args.indexOf("--permission-mode") + 1], cwd: process.cwd(), apiKeySeen: Boolean(process.env.ANTHROPIC_API_KEY), runnerKeySeen: Boolean(process.env.RUNNER_ACCESS_KEY), tokenSeen: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN), storeSeen: Object.values(process.env).some((value) => /^fst\\d\\./.test(value || "")) });
     if (prompt === "wait") { setTimeout(() => {}, 20000); return; }
     if (prompt.startsWith("write ")) { const [, name, ...rest] = prompt.split(" "); fs.writeFileSync(name, rest.join(" ")); }
     out({ type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text: "Echo" } } });
@@ -237,7 +237,7 @@ async function cloud(uid = "minas") {
   const secret = "w".repeat(64);
   const { bucket, objects } = memoryBucket();
   const store = await serveStore({ BUCKET: bucket, STORE_SIGNING_KEY: secret });
-  return { objects, store: { url: store.url, token: await mintToken(secret, uid) }, close: async () => { store.server.closeAllConnections(); await new Promise((done) => store.server.close(done)); } };
+  return { bucket, objects, secret, store: { url: store.url, token: await mintToken(secret, uid) }, close: async () => { store.server.closeAllConnections(); await new Promise((done) => store.server.close(done)); } };
 }
 const label = (event: Record<string, unknown>) => (typeof event.event === "string" ? event.event : event.type);
 const runProject = async (runner: Awaited<ReturnType<typeof startRunner>>, project: string, prompt: string) => lines(await runner.call("/v1/run", { method: "POST", body: JSON.stringify({ prompt, project }) }));
@@ -329,4 +329,24 @@ test("without a store nothing is saved and the endpoints say so", async () => {
     assert.deepEqual((await runProject(runner, "demo", "hi")).map(label), ["started", "system", "stream_event", "assistant", "result", "exit"]);
     assert.equal((await (await runner.call("/v1/sync", { method: "POST" })).json()).configured, false);
   } finally { await runner.close(); }
+});
+
+test("Claude never sees the store token, and the machine hands the runner a new one when it must", async (t) => {
+  const storage = await cloud();
+  t.after(() => storage.close());
+  const runner = await startRunner(storage.store);
+  t.after(() => runner.close());
+  const events = await runProject(runner, "demo", "write a.txt one");
+  assert.equal(events[1].storeSeen, false, "no environment variable of Claude's holds a store token");
+  assert.equal(events.at(-1)?.event, "saved");
+
+  // The token leaks and is revoked: saving stops until the machine renews it.
+  await storage.bucket.put(revocationKey("minas"), new TextEncoder().encode("leaked").buffer as ArrayBuffer);
+  const refused = await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "demo" }) });
+  assert.equal(refused.status, 502);
+  assert.equal((await runner.call("/v1/store-token", { method: "POST", body: JSON.stringify({ token: "not-a-token" }) })).status, 400);
+  const fresh = await mintToken(storage.secret, "minas", 3600, Date.now() + 2000);
+  assert.equal((await runner.call("/v1/store-token", { method: "POST", body: JSON.stringify({ token: fresh }) })).status, 200);
+  assert.equal((await runner.call("/v1/store-token", { method: "POST", key: "wrong", body: JSON.stringify({ token: fresh }) })).status, 401);
+  assert.equal((await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "demo" }) })).status, 201);
 });

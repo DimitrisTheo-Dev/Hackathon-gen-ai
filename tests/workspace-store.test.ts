@@ -1,27 +1,54 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cleanKey, handle, mintToken, verifyToken, MAX_OBJECT_BYTES } from "../apps/workspace-store/src/index";
+import { createHmac } from "node:crypto";
+import { cleanKey, handle, mintToken, revocationKey, verifyToken, MAX_OBJECT_BYTES } from "../apps/workspace-store/src/index";
 import { memoryBucket } from "./support/memory-bucket";
 
 const SECRET = "s".repeat(64);
 const call = (env: Parameters<typeof handle>[1], path: string, init: RequestInit & { token?: string } = {}) =>
   handle(new Request(`https://store.test${path}`, { ...init, headers: { ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}), ...(init.headers as Record<string, string> | undefined) } }), env);
 
-test("tokens are per user and can't be forged", async () => {
+test("tokens are per user, expire, and can't be forged", async () => {
   const alice = await mintToken(SECRET, "alice");
-  assert.match(alice, /^fst1\.alice\.[A-Za-z0-9_-]{43}$/);
-  assert.equal(await verifyToken(SECRET, `Bearer ${alice}`), "alice");
+  assert.match(alice, /^fst2\.1\.alice\.\d+\.\d+\.[A-Za-z0-9_-]{43}$/);
+  const claims = await verifyToken(SECRET, `Bearer ${alice}`);
+  assert.equal(claims?.uid, "alice");
+  assert.equal(claims!.expiresAt - claims!.issuedAt, 12 * 3600, "a machine's token lives 12 hours");
+  assert.equal(await verifyToken(SECRET, `Bearer ${alice}`, Date.now() + 12 * 3_600_000 + 1000), null, "expired");
   assert.equal(await verifyToken(SECRET, `Bearer ${alice.replace("alice", "bob")}`), null);
   assert.equal(await verifyToken("t".repeat(64), `Bearer ${alice}`), null);
   assert.equal(await verifyToken(SECRET, null), null);
+  const legacy = `fst1.alice.${createHmac("sha256", SECRET).update("fst1:alice").digest("base64url")}`;
+  assert.equal(await verifyToken(SECRET, `Bearer ${legacy}`), null, "the old tokens that never expired are refused");
+  assert.equal((await verifyToken(`2:${"n".repeat(64)},1:${SECRET}`, `Bearer ${alice}`))?.uid, "alice", "still valid while its key version is kept");
   await assert.rejects(mintToken(SECRET, "Alice!"), /User ids/);
   await assert.rejects(mintToken("short", "alice"), /32/);
+  await assert.rejects(mintToken(SECRET, "alice", 91 * 86_400), /90 days/);
 });
 
-test("the CLI mints the same token as the Worker", async () => {
-  const cli = execFileSync(process.execPath, ["apps/workspace-store/mint-token.mjs", "alice"], { env: { ...process.env, FACEFUL_STORE_SIGNING_KEY: SECRET } }).toString();
-  assert.equal(cli, await mintToken(SECRET, "alice"));
+test("the CLI mints tokens the Worker accepts, for a set time", async () => {
+  const mint = (...args: string[]) => execFileSync(process.execPath, ["apps/workspace-store/mint-token.mjs", ...args], { env: { ...process.env, FACEFUL_STORE_SIGNING_KEY: SECRET }, stdio: "pipe" }).toString();
+  const cli = await verifyToken(SECRET, `Bearer ${mint("alice")}`);
+  assert.deepEqual([cli?.uid, cli!.expiresAt - cli!.issuedAt], ["alice", 30 * 86_400]);
+  assert.equal((await verifyToken(SECRET, `Bearer ${mint("alice", "12h")}`))?.expiresAt! - Math.floor(Date.now() / 1000) <= 12 * 3600, true);
+  assert.throws(() => mint("alice", "120d"), /at most 90d/);
+});
+
+test("one user's tokens can be revoked: everything issued before the marker is refused", async () => {
+  const { bucket, objects } = memoryBucket();
+  const env = { BUCKET: bucket, STORE_SIGNING_KEY: SECRET };
+  const before = await mintToken(SECRET, "alice", 3600, Date.now() - 5000);
+  const bob = await mintToken(SECRET, "bob", 3600, Date.now() - 5000);
+  assert.equal((await call(env, "/v1/objects", { token: before })).status, 200);
+  await bucket.put(revocationKey("alice"), new TextEncoder().encode("leaked").buffer as ArrayBuffer);
+  const refused = await call(env, "/v1/objects", { token: before });
+  assert.equal(refused.status, 401);
+  assert.equal(((await refused.json()) as { error: { code: string } }).error.code, "token_revoked");
+  assert.equal((await call(env, "/v1/objects", { token: bob })).status, 200, "other users are untouched");
+  assert.equal((await call(env, "/v1/objects", { token: await mintToken(SECRET, "alice", 3600, Date.now() + 2000) })).status, 200, "a token minted afterwards works");
+  assert.equal((await call(env, `/v1/objects/..%2F..%2F${revocationKey("alice").replace("/", "%2F")}`, { token: before, method: "DELETE" })).status, 401);
+  assert.ok(objects.has("revocations/alice"));
 });
 
 test("keys can't climb out of the user's folder", () => {

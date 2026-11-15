@@ -1,6 +1,7 @@
 // Faceful workspace store: the only way into the faceful-workspaces R2 bucket.
-// Each user's machine holds a token that opens users/<uid>/ and nothing else.
+// Each user's machine holds a token that opens users/<uid>/ and nothing else, for a limited time.
 // R2 keys never leave Cloudflare; the Worker reaches the bucket through its binding.
+import { isUserId, mintSignedToken, parseKeyring, verifySignedToken, type TokenClaims } from "./signed-token";
 
 export type StoredObject = { key: string; size: number; uploaded: Date; httpEtag: string; customMetadata?: Record<string, string> };
 export type StoredBody = StoredObject & { body: ReadableStream; httpMetadata?: { contentType?: string } };
@@ -11,39 +12,34 @@ export interface StoreBucket {
   delete(key: string): Promise<void>;
   list(options: { prefix: string; cursor?: string; limit?: number; include?: ("httpMetadata" | "customMetadata")[] }): Promise<{ objects: StoredObject[]; truncated: boolean; cursor?: string }>;
 }
+/** STORE_SIGNING_KEY is a keyring (signed-token.ts): a bare secret, or "2:<new>,1:<old>" while rotating. */
 export type Env = { BUCKET: StoreBucket; STORE_SIGNING_KEY: string };
 
 export const MAX_OBJECT_BYTES = 95 * 1024 * 1024; // Workers accept request bodies up to 100 MB
-const encoder = new TextEncoder();
+export { isUserId };
 
-function base64url(bytes: ArrayBuffer): string {
-  let binary = "";
-  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+/**
+ * Store tokens: fst2.<key version>.<uid>.<issued>.<expires>.<HMAC>. The machines gateway gives each awake machine one
+ * for 12 hours and renews it halfway; mint-token.mjs makes longer ones (up to 90 days) for a runner on your own server.
+ */
+export const STORE_TOKEN = { kind: "fst2", audience: "faceful-workspace-store", maxTtlSeconds: 90 * 86_400 } as const;
+export const MACHINE_STORE_TOKEN_TTL = 12 * 3600;
+export async function mintToken(signingKey: string, uid: string, ttlSeconds: number = MACHINE_STORE_TOKEN_TTL, now = Date.now()): Promise<string> {
+  const keyring = parseKeyring(signingKey);
+  if (!keyring) throw new Error("STORE_SIGNING_KEY must be at least 32 characters, or a keyring like 2:<secret>,1:<older secret>.");
+  if (ttlSeconds > STORE_TOKEN.maxTtlSeconds) throw new Error("Store tokens live 90 days at most.");
+  return mintSignedToken(keyring, STORE_TOKEN.kind, STORE_TOKEN.audience, uid, ttlSeconds, now);
 }
-async function sign(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return base64url(await crypto.subtle.sign("HMAC", key, encoder.encode(message)));
+export async function verifyToken(signingKey: string, authorization: string | null, now = Date.now()): Promise<TokenClaims | null> {
+  const token = /^Bearer (\S+)$/.exec(authorization ?? "")?.[1] ?? "";
+  return verifySignedToken(parseKeyring(signingKey), STORE_TOKEN.kind, STORE_TOKEN.audience, token, STORE_TOKEN.maxTtlSeconds, now);
 }
-
-/** A user id is a Supabase user UUID or a short slug. */
-export const isUserId = (value: string) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(value);
-
-/** Token for one user's machine: fst1.<uid>.<HMAC-SHA256(secret, "fst1:<uid>")>. */
-export async function mintToken(secret: string, uid: string): Promise<string> {
-  if (!secret || secret.length < 32) throw new Error("STORE_SIGNING_KEY must be at least 32 characters.");
-  if (!isUserId(uid)) throw new Error("User ids are lowercase letters, digits and dashes.");
-  return `fst1.${uid}.${await sign(secret, `fst1:${uid}`)}`;
-}
-
-export async function verifyToken(secret: string, authorization: string | null): Promise<string | null> {
-  const match = /^Bearer fst1\.([a-z0-9][a-z0-9-]{0,63})\.([A-Za-z0-9_-]{43})$/.exec(authorization ?? "");
-  if (!match || !secret || secret.length < 32) return null;
-  const expected = await sign(secret, `fst1:${match[1]}`);
-  let difference = 0;
-  for (let index = 0; index < expected.length; index++) difference |= expected.charCodeAt(index) ^ match[2].charCodeAt(index);
-  return difference === 0 ? match[1] : null;
-}
+/**
+ * Revokes one user's store tokens: any object at this key refuses every token issued before it was written. It sits
+ * outside users/, so no token can write or remove it. The next wake mints a new token, so this is for a token that
+ * leaked; taking a machine away is MACHINE_ALLOWED_USERS on the gateway.
+ */
+export const revocationKey = (uid: string) => `revocations/${uid}`;
 
 /** Keys are relative to the user's folder: no leading slash, no empty, "." or ".." segments. */
 export function cleanKey(raw: string, { prefix = false } = {}): string | null {
@@ -74,9 +70,11 @@ const problem = (status: number, code: string, message: string) => json({ error:
 export async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") return json({ ok: true });
-  const uid = await verifyToken(env.STORE_SIGNING_KEY, request.headers.get("authorization"));
-  if (!uid) return problem(401, "unauthorized", "Missing or invalid store token.");
-  const root = `users/${uid}/`;
+  const claims = await verifyToken(env.STORE_SIGNING_KEY, request.headers.get("authorization"));
+  if (!claims) return problem(401, "unauthorized", "Missing, expired or invalid store token.");
+  const revoked = await env.BUCKET.head(revocationKey(claims.uid));
+  if (revoked && claims.issuedAt * 1000 <= revoked.uploaded.getTime()) return problem(401, "token_revoked", "This store token was revoked. A machine gets a new one when it wakes.");
+  const root = `users/${claims.uid}/`;
 
   if (url.pathname === "/v1/objects") {
     if (request.method !== "GET") return problem(405, "method_not_allowed", "List with GET.");
