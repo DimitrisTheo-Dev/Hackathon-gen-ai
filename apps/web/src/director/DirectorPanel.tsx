@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
-import { ArrowDown, ArrowRight, ArrowUp, CalendarDays, Check, ChevronDown, CreditCard, FileText, LayoutGrid, LayoutTemplate, Paperclip, PenLine, RotateCcw, Search, UserRound, Video } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, CalendarDays, Check, ChevronDown, CreditCard, FileText, LayoutGrid, LayoutTemplate, Palette, Paperclip, PenLine, RotateCcw, Search, UserRound, Video } from 'lucide-react';
 import type { Campaign, ContentItem, DirectorTurnResult, LibraryTemplate, StudioContext } from '@castroom/contracts';
 import { ApiError } from '../data/client';
 import { Mark, Notice } from '../components/ui';
@@ -232,10 +232,11 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
               <button type="button" className="text-button" onClick={()=>suggest('Plan a campaign')}><CalendarDays size={14} aria-hidden="true"/>Plan a campaign</button>
               <button type="button" className="text-button" onClick={()=>suggest('Find existing content')}><Search size={14} aria-hidden="true"/>Find existing content</button>
               <button type="button" className="text-button" onClick={onCreate}><PenLine size={14} aria-hidden="true"/>Write my own script</button>
+              <ViewLink view="brand" onOpen={onSources} className="text-button"><Palette size={14} aria-hidden="true"/>{context.brand.name?`${context.brand.name} brand kit`:'Brand kit'}</ViewLink>
             </div>
           </>:<>
             <div className="director-suggestions home-chips">{starters.map((prompt,index)=>{const Icon=starterIcon[prompt];return <button key={prompt} style={{'--i':index} as CSSProperties} onClick={()=>suggest(prompt)}>{Icon&&<Icon size={15} aria-hidden="true"/>}<span>{prompt}</span></button>;})}</div>
-            <div className="director-quick-actions"><button className="text-button" onClick={onCreate}><PenLine size={13} aria-hidden="true"/>Create with my own script</button></div>
+            <div className="director-quick-actions"><button className="text-button" onClick={onCreate}><PenLine size={13} aria-hidden="true"/>Create with my own script</button><ViewLink view="brand" onOpen={onSources} className="text-button"><Palette size={13} aria-hidden="true"/>{context.brand.name?`${context.brand.name} brand kit`:'Brand kit'}</ViewLink></div>
           </>}
           {/* The way back to this project's drafts and its conversation. */}
           {campaign.items.length>0&&<button type="button" className="home-continue" onClick={onShowContent}>

@@ -44,8 +44,11 @@ test('a persona is created, gets a look with a photo, is backed by a consent, an
   await page.goto('/studio/?view=personas');
   await expect(page.getByRole('heading', { name: 'Personas', level: 1 })).toBeVisible();
   await expect(page.getByText('No personas yet.')).toBeVisible();
+  // The empty state sells the idea and shows the three steps before anything is created.
+  await expect(page.getByRole('heading', { name: 'Put a real face on your videos' })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: /Face scan.*about 1 min/ })).toBeVisible();
 
-  await page.getByRole('button', { name: 'New persona' }).click();
+  await page.getByRole('button', { name: 'Create a persona' }).click();
   const form = page.getByRole('dialog', { name: 'New persona' });
   await form.getByLabel('Name').fill('Dr. Maria');
   await form.getByLabel(/Who they are/).fill('A calm dietitian who explains one idea per video.');
@@ -54,7 +57,7 @@ test('a persona is created, gets a look with a photo, is backed by a consent, an
 
   const detail = page.getByRole('dialog', { name: 'Dr. Maria' });
   await expect(detail.getByText('Needs consent')).toBeVisible();
-  await expect(detail.getByRole('button', { name: 'Record consent now' })).toBeVisible();
+  await expect(detail.getByRole('button', { name: 'Start the face scan' })).toBeVisible();
   const [{ id: personaId }] = await list();
   await expect(detail.getByText('Greek (Ελληνικά)')).toBeVisible();
 
@@ -101,7 +104,7 @@ test('a persona is created, gets a look with a photo, is backed by a consent, an
   await back.getByRole('button', { name: 'Withdraw consent' }).click();
   await back.getByRole('button', { name: 'Withdraw and delete recordings' }).click();
   await expect(back.getByText(/withdrew their consent/)).toBeVisible();
-  await expect(back.getByRole('button', { name: 'Record consent now' })).toBeVisible();
+  await expect(back.getByRole('button', { name: 'Start the face scan' })).toBeVisible();
 
   await back.getByRole('button', { name: 'Delete persona' }).click();
   await back.getByRole('group', { name: 'Confirm deletion' }).getByRole('button', { name: 'Delete persona' }).click();
@@ -141,7 +144,7 @@ test.describe('the face scan inside the Personas tab', () => {
     const { api } = await signIn(page);
     const persona = await api('/v1/studio/operations/create_persona', { name: 'Dr. Maria', description: '', language: 'en', operationKey: crypto.randomUUID() });
     await page.goto(`/studio/?view=personas&persona=${persona.id}`);
-    await page.getByRole('dialog', { name: 'Dr. Maria' }).getByRole('button', { name: 'Record consent now' }).click();
+    await page.getByRole('dialog', { name: 'Dr. Maria' }).getByRole('button', { name: 'Start the face scan' }).click();
 
     // The capture replaces the persona list, inside the studio shell.
     const scan = page.getByRole('region', { name: 'Scan your face' });
@@ -156,9 +159,14 @@ test.describe('the face scan inside the Personas tab', () => {
     // The real checkbox is visually hidden behind the drawn box; people click its label.
     await scan.getByText(/I consent to an avatar/).click();
     await expect(scan.getByRole('checkbox')).toBeChecked();
-    await scan.getByRole('button', { name: 'Start' }).click();
+    // The consent statement they will read aloud is shown before they start.
+    await expect(scan.getByText(/I, Maria Papadopoulou, agree that Faceful may create an avatar/)).toBeVisible();
+    await scan.getByRole('button', { name: 'Continue' }).click();
+    // Get ready: the camera is explained before the browser asks for it (granted here, so no prompt follows).
+    await expect(scan.getByRole('heading', { name: 'Get ready' })).toBeVisible();
+    await scan.getByRole('button', { name: /Start the scan|Allow camera and microphone/ }).click();
     // The stand-in camera shows no face: once the tracker is running it says so.
-    await expect(scan.getByText('No face', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(scan.getByText('Looking for your face…', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => page.evaluate(() => (document.querySelector('.lk-video') as HTMLVideoElement | null)?.videoWidth ?? 0)).toBeGreaterThan(0);
     await page.screenshot({ path: testInfo.outputPath('6-scan-camera.png') });
     // On a phone the stage still fits the screen.

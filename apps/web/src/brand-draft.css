@@ -1,0 +1,95 @@
+/*
+ * "Draft this from your website" on the Brand kit page (views/BrandDraft.tsx). Tokens from /design.css; the
+ * shared .button, .text-button, .icon-button and .field styles are reused. A calm, optional assist: a quiet
+ * subtle surface, raised only on the empty first run. Motion is opacity/transform only, 200ms ease-out, and
+ * reduced motion keeps the fade.
+ */
+@layer polish {
+  .bkd { margin-block-start: 18px; padding: 14px 16px; border-radius: 16px; background: var(--subtle); }
+  .bkd.is-first { padding: 20px; border: 1px solid transparent; background: var(--surface); box-shadow: var(--elev-1); }
+  .bkd-form { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); align-items: center; gap: 10px 20px; }
+  .bkd.is-first .bkd-form { grid-template-columns: minmax(0, 1fr); }
+  .bkd-copy { display: flex; align-items: flex-start; gap: 12px; min-inline-size: 0; }
+  .bkd-mark { display: grid; place-items: center; flex: 0 0 auto; inline-size: 30px; block-size: 30px; border-radius: 9px; background: var(--surface); color: var(--ink-secondary); box-shadow: inset 0 0 0 1px rgba(42,42,39,.06); }
+  .bkd.is-first .bkd-mark { inline-size: 40px; block-size: 40px; border-radius: 12px; background: var(--art-wash); color: var(--ink); }
+  .bkd-copy h2 { font-size: 14px; font-weight: 550; line-height: 1.35; letter-spacing: 0; color: var(--ink); }
+  .bkd.is-first .bkd-copy h2 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .bkd-copy p { margin-block-start: 2px; max-inline-size: 60ch; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .bkd-row { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+  .bkd-row .field { flex: 1 1 auto; min-inline-size: 0; min-block-size: 38px; background: var(--surface); }
+  .app-frame .bkd-go { flex: 0 0 auto; gap: 6px; block-size: 38px; min-block-size: 38px; padding-block: 0; padding-inline: 14px; }
+  .bkd-form > :is(.bk-error, .bkd-status, .bkd-done, .bkd-problem) { grid-column: 1 / -1; margin: 0; }
+  .bkd-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+  .app-frame .bkd-status .text-button { min-block-size: 28px; padding: 0; font-size: 12.5px; font-weight: 550; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border); }
+  .bkd-done { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; line-height: 1.5; color: var(--positive-ink); }
+  .bkd-done svg { flex: 0 0 auto; margin-block-start: 2px; }
+  /* Empty, it stays in the page as a live region but takes no row. */
+  .bkd-done:not([data-on]) { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .bkd-problem { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 14px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+  .bkd-problem strong { display: block; font-size: 13.5px; font-weight: 550; line-height: 1.4; }
+  .bkd-problem p { margin-block-start: 2px; max-inline-size: 60ch; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .app-frame .bkd-problem .button { gap: 6px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
+  /* ── the review card ── */
+  .bkd-review { margin-block-start: 12px; padding: 18px; border: 1px solid transparent; border-radius: 18px; background: var(--surface); box-shadow: var(--elev-2); animation: bkd-in 220ms var(--ease-out) both; }
+  .bkd-review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .bkd-review-head h2 { font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .bkd-review-head p { margin-block-start: 3px; max-inline-size: 62ch; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .app-frame .bkd-review-head .icon-button { flex: 0 0 auto; margin: -6px -6px 0 0; }
+  .bkd-note { margin-block-start: 12px; padding: 10px 12px; border-radius: 10px; background: var(--warning-surface); font-size: 13px; line-height: 1.5; color: var(--warning-ink); text-wrap: pretty; }
+  .bkd-fields { display: grid; margin: 14px 0 0; padding: 0; list-style: none; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--border); }
+  .bkd-fields > li { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 10px 16px; padding: 14px 16px; transition: opacity 160ms ease; }
+  .bkd-fields > li + li { border-block-start: 1px solid var(--border); }
+  /* An unticked suggestion steps back to the secondary text colour (still 4.5:1), never below it. */
+  .bkd-fields > li:not([data-on]) .bkd-new :is(p, .bkd-list) { color: var(--text-secondary); }
+  .bkd-fields > li:not([data-on]) .bkd-new .bkd-swatch { opacity: .6; }
+  .bkd-pick { display: grid; grid-template-columns: auto minmax(0, 1fr); align-content: start; gap: 2px 10px; cursor: pointer; }
+  .bkd-pick input { grid-row: span 2; inline-size: 18px; block-size: 18px; margin: 1px 0 0; accent-color: var(--ink); cursor: pointer; }
+  .bkd-pick span { font-size: 13.5px; font-weight: 550; line-height: 1.4; color: var(--ink); }
+  .bkd-pick small { font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
+  .bkd-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-inline-size: 0; }
+  .bkd-compare small { display: block; margin-block-end: 3px; font-size: 11.5px; font-weight: 550; line-height: 1.3; letter-spacing: .01em; color: var(--text-secondary); }
+  .bkd-compare p, .bkd-list { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; text-wrap: pretty; }
+  .bkd-now p, .bkd-now .bkd-list { color: var(--text-secondary); }
+  .bkd-compare .bkd-empty { color: var(--text-muted); font-style: normal; }
+  .bkd-list { display: grid; gap: 4px; padding-inline-start: 16px; }
+  .bkd-color { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+  .bkd-swatch { flex: 0 0 auto; inline-size: 18px; block-size: 18px; border-radius: 6px; background: var(--swatch); box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); }
+  .bkd-none, .bkd-matching { margin-block-start: 12px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .bkd-offerings { margin-block-start: 16px; padding-block-start: 14px; border-block-start: 1px solid var(--border); }
+  .bkd-offerings h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13.5px; font-weight: 550; line-height: 1.4; }
+  .bkd-offerings p { margin-block-start: 2px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .bkd-offerings ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+  .bkd-offerings li { padding: 5px 11px; border-radius: 999px; background: var(--subtle); font-size: 12.5px; line-height: 1.35; color: var(--ink); overflow-wrap: anywhere; }
+  .bkd-review > .bk-error { margin-block-start: 12px; }
+  .bkd-review-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-block-start: 16px; }
+  .bkd-review-foot p { min-inline-size: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .bkd-review-foot a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border); }
+  .bkd-review-foot > div { display: flex; gap: 8px; margin-inline-start: auto; }
+  .app-frame .bkd-review-foot .button { gap: 6px; }
+
+  @keyframes bkd-in { from { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes bkd-in { from { opacity: 0; } }
+  }
+  @media (max-width: 760px) {
+    .bkd-form { grid-template-columns: minmax(0, 1fr); }
+    .bkd-row .field { font-size: 16px; min-block-size: 44px; }
+    .app-frame .bkd-go { block-size: 44px; min-block-size: 44px; }
+    .bkd-review { padding: 16px 14px; }
+    .bkd-fields > li { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+    .bkd-pick { min-block-size: 44px; align-content: center; }
+    .bkd-review-foot > div { inline-size: 100%; }
+    .bkd-review-foot .button { flex: 1 1 0; min-block-size: 44px; }
+  }
+  @media (max-width: 420px) {
+    .bkd-compare { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  }
+  @media (prefers-contrast: more) {
+    .bkd, .bkd-review, .bkd-problem { box-shadow: 0 0 0 1px var(--ink); }
+  }
+}
+
+/* Unlayered, like the shared focus rules it refines: the review card takes focus itself, so its ring is inset. */
+.bkd-review:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.bkd-review:focus:not(:focus-visible) { outline: none; }
