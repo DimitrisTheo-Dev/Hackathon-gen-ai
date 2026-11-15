@@ -51,8 +51,8 @@ const FINAL_STEP: number = STEP.agentCard;
  * The cast: four original, featureless figures drawn here in SVG. They are not photographs, not
  * real people and not anyone else's characters; they stand in for the presenters a draft can use.
  */
-export type PresenterId = "eleni" | "nikos" | "daphne" | "iris";
-export const cast: Record<PresenterId, { name: string; skin: string; shade: string; hair: string; top: string; trim: string }> = {
+type PresenterId = "eleni" | "nikos" | "daphne" | "iris";
+const cast: Record<PresenterId, { name: string; skin: string; shade: string; hair: string; top: string; trim: string }> = {
   eleni: { name: "Eleni", skin: "#e9b893", shade: "#d7a07b", hair: "#4a2c20", top: "#f6efe2", trim: "#e4d8c2" },
   nikos: { name: "Nikos", skin: "#d8a47f", shade: "#c28c68", hair: "#2b2420", top: "#3e5a66", trim: "#32495380" },
   daphne: { name: "Daphne", skin: "#a9714e", shade: "#8f5c3e", hair: "#2a1a16", top: "#e3ae3f", trim: "#cc972c" },
@@ -119,7 +119,7 @@ function PresenterFace({ who }: { who: PresenterId }) {
  * A reel-style caption: the script line over the presenter, each word lighting up as it is "spoken".
  * A still illustration passes `spoken` to hold one word lit instead.
  */
-export function Caption({ words, className = "", spoken }: { words: readonly string[]; className?: string; spoken?: number }) {
+function Caption({ words, className = "", spoken }: { words: readonly string[]; className?: string; spoken?: number }) {
   return (
     <span className={`fd-caption-line ${className}`}>
       <span className="fd-caption-text">

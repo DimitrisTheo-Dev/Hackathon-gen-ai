@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 
 /** `phase` is where in its 20 s loop each reel starts, so no two play in step. */
@@ -31,15 +31,13 @@ const noFaceTemplates: readonly Clip[] = [
 /** Shared so only one reel plays with sound at a time. */
 let unmuted: HTMLVideoElement | null = null;
 
-/** A 9:16 reel that plays muted while on screen; tapping it turns its sound on. */
-function Reel({ src, title, note, phase }: { src: string; title: string; note: string; phase: number }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState(true);
+/** Plays a muted looping video while it is on screen, from `phase` seconds in; pauses it off screen. */
+export function useLoopInView(video: RefObject<HTMLVideoElement | null>, phase: number, onVolume?: (muted: boolean) => void) {
   useEffect(() => {
     const element = video.current;
     if (!element) return;
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const sync = () => setMuted(element.muted);
+    const sync = () => onVolume?.(element.muted);
     const seek = () => { if (element.duration > phase) element.currentTime = phase; };
     element.addEventListener("volumechange", sync);
     element.addEventListener("loadedmetadata", seek, { once: true });
@@ -49,7 +47,14 @@ function Reel({ src, title, note, phase }: { src: string; title: string; note: s
     }, { threshold: 0.5 });
     observer.observe(element);
     return () => { observer.disconnect(); element.removeEventListener("volumechange", sync); element.removeEventListener("loadedmetadata", seek); };
-  }, [phase]);
+  }, [video, phase, onVolume]);
+}
+
+/** A 9:16 reel that plays muted while on screen; tapping it turns its sound on. */
+function Reel({ src, title, note, phase }: { src: string; title: string; note: string; phase: number }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+  useLoopInView(video, phase, setMuted);
   function toggleSound() {
     const element = video.current;
     if (!element) return;

@@ -803,3 +803,5 @@
   .sc-row .sc-reel { scroll-snap-align: start; }
   .sc-rail { grid-auto-columns: 46%; }
 }
+.lb-reel .lb-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; background: var(--l-subtle); }
+.lb-reel:has(.lb-video)::after { content: none; }
