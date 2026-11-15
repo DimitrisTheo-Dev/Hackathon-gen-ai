@@ -44,6 +44,8 @@ interface Props {
   onComplete?(result: LikenessResult): void;
   /** Shown on the last screen, e.g. a link back to the studio. */
   doneAction?: { label: string; href: string };
+  /** The persona this consent is recorded for, when the person came from the Personas tab. */
+  personaId?: string;
 }
 
 type Step = "intro" | "loading" | "scan" | "speech" | "review" | "saving" | "done";
@@ -190,7 +192,7 @@ function MirroredClip({ src, labels }: { src: string; labels: { play: string; pa
   );
 }
 
-export default function LikenessCapture({ open, api, defaultName = "", onClose, onComplete, doneAction }: Props) {
+export default function LikenessCapture({ open, api, defaultName = "", onClose, onComplete, doneAction, personaId }: Props) {
   // Greek for a Greek browser, from the first paint; the toggle on the intro changes it.
   const [language, setLanguage] = useState<LikenessLanguage>(() => (typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("el") ? "el" : "en"));
   const [name, setName] = useState(defaultName);
@@ -599,6 +601,7 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
         speechVideoKey,
         stills: Object.fromEntries(stills.map(([pose], i) => [pose, stillKeys[i]])),
         report,
+        ...(personaId ? { personaId } : {}),
       });
       releaseAll();
       go("done");
@@ -607,7 +610,7 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
       setError((failure as Error).message);
       go("review");
     }
-  }, [api, go, language, name, onComplete, phrases, releaseAll, report]);
+  }, [api, go, language, name, onComplete, personaId, phrases, releaseAll, report]);
 
   const close = useCallback(() => {
     releaseAll();

@@ -72,6 +72,7 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | `GET /v1/studio/items/:id/versions` | Immutable version history |
 | `GET /v1/studio/jobs/:id` | Render job status and event trail |
 | `GET /v1/studio/templates` | Curated templates |
+| `GET /v1/studio/personas` | Personas with their consent status and looks; photo links are signed for 15 minutes and only for signed-in people |
 | `GET /v1/studio/billing` | Plan status and credit balance from server truth |
 | `POST /v1/studio/director/turn` | AI Creative Director turn (see §8) |
 | `POST /v1/studio/workspace/select` | Remember the active organization |
@@ -80,7 +81,7 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | `POST /v1/worker/render/*` | Render worker protocol (§7) |
 | `GET /v1/cron/tick` | Sweep stuck renders; process due publish jobs |
 
-Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
+Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`, and for personas (signed-in members with `content:edit`, never agents) `create_persona`, `update_persona`, `delete_persona`, `withdraw_persona_consent`, `persona_image_upload_url`, `create_persona_look`, `update_persona_look`, `delete_persona_look`. A persona's consent is recorded by the person at `/face-scan?persona=<id>`: `POST /v1/studio/likeness/consents` with `personaId` links it when the persona has no live consent, and answers `personaId: null` otherwise. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
 
 **Limits.** JSON bodies on `/v1` and `/mcp` are capped at 256 KB (`413 validation_error`; a declared `Content-Length` over the cap is refused before reading). Requests are rate limited in fixed one-minute windows counted in Postgres (`engine_rate_limit_hit`), so limits hold across function instances:
 
@@ -168,7 +169,7 @@ A POST may carry 1–10 JSON-RPC messages (otherwise `-32600`); every message co
 
 ## 10. Data model
 
-Tables (all with RLS enabled): `organizations`, `memberships`, `user_state`, `brand_profiles`, `projects`, `content_items`, `content_versions`, `media_assets`, `render_jobs`, `job_events`, `audit_events`, `operations`, `schedule_manifests`, `publish_jobs`, `provider_connections`, `agent_connections`, `billing_customers`, `billing_state`, `checkout_sessions`, `stripe_events`, `credit_ledger`, plus the earlier `castroom_director_access` / `castroom_director_entries`.
+Tables (all with RLS enabled): `organizations`, `memberships`, `user_state`, `brand_profiles`, `projects`, `content_items`, `content_versions`, `media_assets`, `render_jobs`, `job_events`, `audit_events`, `operations`, `schedule_manifests`, `publish_jobs`, `provider_connections`, `agent_connections`, `billing_customers`, `billing_state`, `checkout_sessions`, `stripe_events`, `credit_ledger`, `likeness_consents`, `personas`, `persona_looks` (one consent backs at most one persona; looks hold private R2 photo keys), plus the earlier `castroom_director_access` / `castroom_director_entries`.
 
 Browsers can `SELECT` their own organization's projects, items, versions, media rows, jobs, events, audit, manifests and publish jobs. Browsers cannot write any engine table, and cannot read ledgers, tokens, idempotency records, billing or Stripe events. All writes go through the engine with the server secret key. Project chat access (`castroom_director_access`) is granted by the engine when a project is created.
 

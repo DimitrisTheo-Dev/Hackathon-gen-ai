@@ -550,6 +550,16 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     getChannels: unavailable,
     connectChannel: unavailable,
     disconnectChannel: unavailable,
+    // Personas are made from a face scan kept in private storage, which the local preview does not have.
+    listPersonas: async () => [],
+    createPersona: unavailable,
+    updatePersona: unavailable,
+    deletePersona: unavailable,
+    withdrawPersonaConsent: unavailable,
+    uploadPersonaPhoto: unavailable,
+    createPersonaLook: unavailable,
+    updatePersonaLook: unavailable,
+    deletePersonaLook: unavailable,
     updateBrand: async (raw) => {
       const input = validate(updateBrandInputSchema, raw);
       return mutate("update_brand", input, brandSchema, (state) => {

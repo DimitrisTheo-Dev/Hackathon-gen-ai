@@ -7,6 +7,7 @@ import { connectChannel, disconnectChannel, getChannelStatus } from "./channels.
 import { directorTurn } from "./director.js";
 import { EngineError } from "./errors.js";
 import { likenessLiveToken, likenessUploadUrl, revokeLikenessConsent, saveLikenessConsent } from "./likeness.js";
+import { createPersona, createPersonaLook, deletePersona, deletePersonaLook, listPersonas, personaConsentToWithdraw, personaImageUploadUrl, updatePersona, updatePersonaLook } from "./personas.js";
 import type { Planner } from "./llm.js";
 import { authenticateWithLimits, principalSubject, refuseCredential, RequestLimits } from "./ratelimit.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
@@ -94,6 +95,15 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   create_sample_project: createSampleProject,
   create_checkout: createCheckout,
   create_portal: createPortal,
+  // Personas (personas.ts): signed-in members who can edit content; the consent itself is recorded at /face-scan.
+  create_persona: createPersona,
+  update_persona: updatePersona,
+  delete_persona: deletePersona,
+  withdraw_persona_consent: async (deps, ctx, raw) => revokeLikenessConsent(deps, ctx, await personaConsentToWithdraw(deps, ctx, raw)),
+  persona_image_upload_url: personaImageUploadUrl,
+  create_persona_look: createPersonaLook,
+  update_persona_look: updatePersonaLook,
+  delete_persona_look: deletePersonaLook,
   connect_channel: connectChannel,
   disconnect_channel: disconnectChannel,
   create_run_grant: async () => {
@@ -127,6 +137,7 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
   if (read && (match = path.match(/^\/items\/([^/]+)\/versions$/))) return json(await listVersions(deps, ctx, decodeURIComponent(match[1])));
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
+  if (read && path === "/personas") return json(await listPersonas(deps, ctx));
   if (read && path === "/billing") return json(await getBillingStatus(deps, ctx));
   if (read && path === "/channels") return json(await getChannelStatus(deps, ctx));
   if (post && path === "/workspace/select") {

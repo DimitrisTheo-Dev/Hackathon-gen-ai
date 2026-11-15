@@ -24,6 +24,8 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   stripe_events: [{ columns: ["event_id"] }],
   credit_ledger: [{ columns: ["org_id", "ref"] }],
   castroom_director_access: [{ columns: ["user_id", "workspace_id", "campaign_id"] }],
+  // supabase/migrations/20261115130000_personas.sql: one consent backs at most one persona.
+  personas: [{ columns: ["consent_id"], where: (r) => r.consent_id != null }],
 };
 
 function matches(row: Row, filter: Filter): boolean {

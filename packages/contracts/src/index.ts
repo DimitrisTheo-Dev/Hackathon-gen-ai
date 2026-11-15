@@ -580,8 +580,100 @@ export const likenessConsentInputSchema = z
     speechVideoKey: z.string().min(1).max(512),
     stills: z.partialRecord(likenessPoseSchema, z.string().min(1).max(512)),
     report: likenessReportSchema,
+    /** The persona this consent is recorded for (the Personas tab sends people to /face-scan?persona=<id>). */
+    personaId: idSchema.optional(),
   })
   .strict();
 export type LikenessConsentInput = z.infer<typeof likenessConsentInputSchema>;
-export const likenessConsentResultSchema = z.object({ id: idSchema, passed: z.boolean() });
+export const likenessConsentResultSchema = z.object({
+  id: idSchema,
+  passed: z.boolean(),
+  /** The persona the consent now backs, or null when none was named or it could not take this consent. */
+  personaId: idSchema.nullable().optional(),
+});
 export type LikenessConsentResult = z.infer<typeof likenessConsentResultSchema>;
+
+// ── Personas: presenters made from one person's face scan and spoken consent, each with one or more looks. ──
+export const PERSONA_LIMIT = 50;
+export const PERSONA_LOOK_LIMIT = 20;
+export const PERSONA_MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+/** needs_consent: no scan yet; ready: backed by a live consent; consent_withdrawn: the person withdrew it. */
+export const personaStatusSchema = z.enum(["needs_consent", "ready", "consent_withdrawn"]);
+export type PersonaStatus = z.infer<typeof personaStatusSchema>;
+export const personaConsentSchema = z.object({
+  id: idSchema,
+  subjectName: z.string(),
+  language: likenessLanguageSchema,
+  createdAt: instantSchema,
+  revokedAt: instantSchema.nullable(),
+  /** Short-lived link to the straight-on still from the scan. Null once withdrawn, for agents, or without storage. */
+  photoUrl: z.url().nullable(),
+  /** The person who recorded it, and workspace owners and admins, can withdraw it. */
+  canWithdraw: z.boolean(),
+});
+export type PersonaConsent = z.infer<typeof personaConsentSchema>;
+export const personaLookSchema = z.object({
+  id: idSchema,
+  personaId: idSchema,
+  name: z.string(),
+  description: z.string(),
+  hasImage: z.boolean(),
+  /** Short-lived link to the reference photo; null when there is none, for agents, or without storage. */
+  imageUrl: z.url().nullable(),
+  position: z.number().int().nonnegative(),
+  createdAt: instantSchema,
+  updatedAt: instantSchema,
+});
+export type PersonaLook = z.infer<typeof personaLookSchema>;
+export const personaSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  description: z.string(),
+  language: likenessLanguageSchema,
+  status: personaStatusSchema,
+  consent: personaConsentSchema.nullable(),
+  looks: z.array(personaLookSchema),
+  createdAt: instantSchema,
+  updatedAt: instantSchema,
+});
+export type Persona = z.infer<typeof personaSchema>;
+
+const personaName = z.string().trim().min(1).max(80);
+const personaText = z.string().trim().max(1000);
+export const createPersonaInputSchema = z
+  .object({ name: personaName, description: personaText.default(""), language: likenessLanguageSchema.default("en"), operationKey: z.uuid() })
+  .strict();
+export type CreatePersonaInput = z.input<typeof createPersonaInputSchema>;
+export const updatePersonaInputSchema = z
+  .object({ personaId: idSchema, name: personaName.optional(), description: personaText.optional(), language: likenessLanguageSchema.optional() })
+  .strict();
+export type UpdatePersonaInput = z.infer<typeof updatePersonaInputSchema>;
+export const personaRefInputSchema = z.object({ personaId: idSchema }).strict();
+export type PersonaRefInput = z.infer<typeof personaRefInputSchema>;
+export const personaImageUploadInputSchema = z
+  .object({
+    personaId: idSchema,
+    type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+    size: z.number().int().positive().max(PERSONA_MAX_IMAGE_BYTES),
+    /** SHA-256 of the exact bytes; the link accepts this one file only. */
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type PersonaImageUploadInput = z.infer<typeof personaImageUploadInputSchema>;
+export const createPersonaLookInputSchema = z
+  .object({
+    personaId: idSchema,
+    name: personaName,
+    description: personaText.default(""),
+    /** A key from a persona image upload link for this persona, once the photo is stored. */
+    imageKey: z.string().min(1).max(512).nullable().default(null),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export type CreatePersonaLookInput = z.input<typeof createPersonaLookInputSchema>;
+export const updatePersonaLookInputSchema = z
+  .object({ lookId: idSchema, name: personaName.optional(), description: personaText.optional(), imageKey: z.string().min(1).max(512).nullable().optional() })
+  .strict();
+export type UpdatePersonaLookInput = z.infer<typeof updatePersonaLookInputSchema>;
+export const personaLookRefInputSchema = z.object({ lookId: idSchema }).strict();
+export type PersonaLookRefInput = z.infer<typeof personaLookRefInputSchema>;

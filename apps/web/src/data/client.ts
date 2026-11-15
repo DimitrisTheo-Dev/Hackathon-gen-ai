@@ -22,6 +22,11 @@ import {
   type Brand,
   type RemoveSourceInput,
   type UpdateBrandInput,
+  type CreatePersonaInput,
+  type CreatePersonaLookInput,
+  type Persona,
+  type UpdatePersonaInput,
+  type UpdatePersonaLookInput,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -202,6 +207,18 @@ export interface StudioClient {
   addSource(input: AddSourceInput): Promise<Campaign>;
   /** Removes a source from a project and from every draft that cited it. */
   removeSource(input: RemoveSourceInput): Promise<Campaign>;
+  /** Presenters made from a face scan and spoken consent, each with its looks. Photo links are short-lived. */
+  listPersonas(): Promise<Persona[]>;
+  createPersona(input: CreatePersonaInput): Promise<Persona>;
+  updatePersona(input: UpdatePersonaInput): Promise<Persona>;
+  deletePersona(personaId: string): Promise<void>;
+  /** Withdraws the persona's consent: its recordings are deleted and the persona can no longer be used. */
+  withdrawPersonaConsent(personaId: string): Promise<void>;
+  /** Stores a reference photo for one of the persona's looks and returns its key for createPersonaLook/updatePersonaLook. */
+  uploadPersonaPhoto(personaId: string, photo: Blob): Promise<string>;
+  createPersonaLook(input: CreatePersonaLookInput): Promise<Persona>;
+  updatePersonaLook(input: UpdatePersonaLookInput): Promise<Persona>;
+  deletePersonaLook(lookId: string): Promise<Persona>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {

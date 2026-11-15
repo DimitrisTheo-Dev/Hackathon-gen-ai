@@ -20,6 +20,13 @@ import {
   brandSchema,
   removeSourceInputSchema,
   updateBrandInputSchema,
+  createPersonaInputSchema,
+  createPersonaLookInputSchema,
+  likenessUploadTicketSchema,
+  personaImageUploadInputSchema,
+  personaSchema,
+  updatePersonaInputSchema,
+  updatePersonaLookInputSchema,
 } from "@castroom/contracts";
 import {
   ApiError,
@@ -333,5 +340,33 @@ export function createLiveClient(
         body,
       );
     },
+    listPersonas: () => request("/personas", z.array(personaSchema)),
+    createPersona: async (input) => request("/operations/create_persona", personaSchema, validate(createPersonaInputSchema, input)),
+    updatePersona: async (input) => request("/operations/update_persona", personaSchema, validate(updatePersonaInputSchema, input)),
+    deletePersona: async (personaId) => {
+      await request("/operations/delete_persona", z.object({ deleted: z.literal(true) }), { personaId: validate(idSchema, personaId) });
+    },
+    withdrawPersonaConsent: async (personaId) => {
+      await request("/operations/withdraw_persona_consent", z.object({ revoked: z.literal(true) }), { personaId: validate(idSchema, personaId) }, { timeoutMs: 30_000 });
+    },
+    uploadPersonaPhoto: async (personaId, photo) => {
+      const digest = await crypto.subtle.digest("SHA-256", await photo.arrayBuffer());
+      const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const input = personaImageUploadInputSchema.safeParse({ personaId, type: photo.type, size: photo.size, sha256 });
+      if (!input.success) throw new ApiError("validation_error", "Use a JPEG, PNG or WebP photo under 15 MB.");
+      const ticket = await request("/operations/persona_image_upload_url", likenessUploadTicketSchema, input.data);
+      let put: Response;
+      try {
+        // Straight to private storage; the link accepts exactly these bytes.
+        put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: photo, credentials: "omit", cache: "no-store" });
+      } catch {
+        throw new ApiError("provider_unavailable", "The photo did not upload. Check the connection and try again.");
+      }
+      if (!put.ok) throw new ApiError("provider_unavailable", "The photo did not upload. Check the connection and try again.");
+      return ticket.key;
+    },
+    createPersonaLook: async (input) => request("/operations/create_persona_look", personaSchema, validate(createPersonaLookInputSchema, input)),
+    updatePersonaLook: async (input) => request("/operations/update_persona_look", personaSchema, validate(updatePersonaLookInputSchema, input)),
+    deletePersonaLook: async (lookId) => request("/operations/delete_persona_look", personaSchema, { lookId: validate(idSchema, lookId) }),
   };
 }

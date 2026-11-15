@@ -14,6 +14,7 @@ import {
 } from "../../contracts/src/index.js";
 import { audit, requireHuman, type Ctx, type EngineDeps } from "./access.js";
 import { EngineError, deny } from "./errors.js";
+import { linkPersonaConsent, personaAwaitingConsent } from "./personas.js";
 import { UnconfiguredFileStore, type FileStore } from "./r2.js";
 import { selectOne } from "./store.js";
 import { parse } from "./studio.js";
@@ -30,6 +31,7 @@ import { parse } from "./studio.js";
  *   • the stored sentence is rebuilt here from the name, so its wording is always ours;
  *   • withdrawing deletes the recordings and keeps the row as the record that consent was withdrawn.
  * The liveness checks are computed in the browser. They are kept as evidence, not treated as verified.
+ * A consent recorded for a persona (/face-scan?persona=<id>) is linked to it once saved; see personas.ts.
  */
 export const LIKENESS_TABLE = "likeness_consents";
 const UPLOAD_TTL_SECONDS = 10 * 60;
@@ -124,6 +126,8 @@ export async function saveLikenessConsent(deps: EngineDeps, ctx: Ctx, raw: unkno
     throw new EngineError("validation_error", passed ? "A recording is too large to save. Scan again." : "This capture did not pass its checks, so it was not saved. Scan again.");
   }
 
+  // Looked up before saving, so the link below only ever replaces what was there when the person started.
+  const persona = input.personaId ? await personaAwaitingConsent(deps, ctx, input.personaId) : undefined;
   const id = crypto.randomUUID();
   const createdAt = deps.now().toISOString();
   const checks = { passed, checks: input.report.checks };
@@ -146,6 +150,7 @@ export async function saveLikenessConsent(deps: EngineDeps, ctx: Ctx, raw: unkno
       liveness: checks,
       user_agent: client.userAgent,
       ip_address: client.ipAddress,
+      persona_id: persona?.id ?? null,
     };
     await files.put(manifestKey, new TextEncoder().encode(JSON.stringify(manifest, null, 2)), "application/json");
   } catch {
@@ -174,7 +179,8 @@ export async function saveLikenessConsent(deps: EngineDeps, ctx: Ctx, raw: unkno
     revoked_at: null,
   });
   await audit(deps, ctx, { action: "Recorded a face scan and spoken consent", objectId: id, outcome: `Saved privately with ${Object.keys(stills).length} stills` });
-  return parse(likenessConsentResultSchema, { id, passed });
+  const linked = persona ? await linkPersonaConsent(deps, ctx, persona, id) : false;
+  return parse(likenessConsentResultSchema, { id, passed, personaId: linked ? persona!.id : null });
 }
 
 /**

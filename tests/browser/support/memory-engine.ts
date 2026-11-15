@@ -13,6 +13,7 @@
  *   • recordings are PUT to `/__e2e/files/<key>`, which checks the SHA-256 header the way R2 does, and are
  *     kept in memory only; with FACEFUL_R2_* in the environment they go to the real bucket instead, straight
  *     from the browser (serve on an origin the bucket's CORS rule allows). `/__e2e/likeness` lists what was saved;
+ *   • stored files (scan stills, persona photos) are read back through GET `/__e2e/files/<key>`;
  *   • with HUMANLIKE_TRANSCRIBE_KEY in the environment, live transcription uses Humanlike's real socket.
  * Nothing here is imported by application code or by the deployed functions.
  */
@@ -50,11 +51,15 @@ class E2EStore extends MemoryStore {
   constructor(origin: string) { super(); this.media = new E2EMedia(origin); }
 }
 
-/** Private files with upload links that point back at this server. */
+/** Private files with upload and download links that point back at this server. */
 class E2EFiles extends MemoryFileStore {
   constructor(private readonly origin: string) { super(); }
   override async uploadUrl(key: string, options: { sha256Hex: string; contentType: string }) {
     return { ...(await super.uploadUrl(key, options)), url: `${this.origin}/__e2e/files/${key}` };
+  }
+  // Persona photos and scan stills are shown in the studio through these links.
+  override async downloadUrl(key: string) {
+    return `${this.origin}/__e2e/files/${key}`;
   }
 }
 /** An unsigned session only this harness accepts (`claims` below), in the shape the Supabase client stores. */
@@ -139,6 +144,12 @@ export function createMemoryEngine(origin: string) {
       // Trying the capture by hand: sign this browser in as a stand-in person (kept across reloads), then open it.
       const page = `<!doctype html><meta charset="utf-8"><title>Opening the face scan…</title><script>if (!localStorage.getItem(${JSON.stringify(sessionKey)})) localStorage.setItem(${JSON.stringify(sessionKey)}, ${JSON.stringify(JSON.stringify(standInSession()))}); location.replace("/face-scan/");</script>`;
       return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    }
+    if (request.method === "GET" && pathname.startsWith("/__e2e/files/")) {
+      // Stands in for R2's signed GET: the link is the permission, like the upload link above.
+      const object = memoryFiles.objects.get(decodeURIComponent(pathname.slice("/__e2e/files/".length)));
+      if (!object) return new Response("Not found", { status: 404 });
+      return new Response(object.bytes, { headers: { "Content-Type": object.contentType, "Cache-Control": "no-store" } });
     }
     if (request.method === "PUT" && pathname.startsWith("/__e2e/files/")) {
       // Stands in for R2's signed PUT: the link is the permission, and the body must match the declared checksum.
