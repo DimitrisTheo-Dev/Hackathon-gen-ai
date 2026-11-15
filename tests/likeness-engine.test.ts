@@ -293,15 +293,17 @@ test("the R2 signer reproduces AWS's published SigV4 presigned URL, and upload l
   await assert.rejects(r2.remove("../escape"), /not valid/);
 });
 
-test("only the face scan page may use the camera and microphone, and its files may compile WebAssembly", () => {
+test("only the face scan page and the studio (its Personas tab) may use the camera and microphone, and the build files may compile WebAssembly", () => {
   const config = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8")) as { headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>; rewrites: Array<{ source: string; destination: string }>; proxy: { matcher: string[] } };
   const header = (source: string, key: string) => config.headers.find((rule) => rule.source === source)?.headers.find((entry) => entry.key === key)?.value ?? "";
-  // The site-wide rule keeps both switched off and skips the two paths that carry their own policy.
+  // The site-wide rule keeps both switched off and skips the paths that carry their own policy.
   const site = config.headers[0];
-  assert.equal(site.source, "/((?!face-scan|assets/).*)");
+  assert.equal(site.source, "/((?!face-scan|studio|assets/).*)");
   assert.equal(header(site.source, "Permissions-Policy"), "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()");
   assert.equal(header(site.source, "Content-Security-Policy").includes("wasm-unsafe-eval"), false);
-  for (const source of ["/face-scan", "/face-scan/"]) {
+  // The Personas tab records a consent in place, so the studio carries the same policy as the face scan page.
+  const recording = ["/face-scan", "/face-scan/", "/studio/", "/studio/:path*"];
+  for (const source of recording) {
     assert.equal(header(source, "Permissions-Policy"), "camera=(self), microphone=(self), geolocation=(), payment=(), usb=(), browsing-topics=()");
     const policy = header(source, "Content-Security-Policy");
     for (const needed of ["script-src 'self' 'wasm-unsafe-eval'", "worker-src 'self'", "media-src 'self' blob:", "wss://api.humanlike.co", "frame-ancestors 'none'", "object-src 'none'"]) assert.ok(policy.includes(needed), `${source}: ${needed}`);
@@ -312,11 +314,15 @@ test("only the face scan page may use the camera and microphone, and its files m
     assert.equal(header(source, "X-Robots-Tag"), "noindex, nofollow");
     assert.equal(config.rewrites.find((rule) => rule.source === source)?.destination, "/studio/index.html");
   }
+  // The landing page and every other page stay under the site-wide rule, without either.
+  const siteRule = new RegExp(`^${site.source}$`);
+  for (const path of ["/", "/pricing", "/docs/", "/oauth/consent", "/claude-login-test/", "/pitch/", "/dev/studio/"]) assert.match(path, siteRule);
+  for (const path of ["/studio", "/studio/", "/studio/index.html", "/face-scan/", "/assets/app.js"]) assert.doesNotMatch(path, siteRule);
   // A worker runs under the headers of its own script, so the build files carry the WebAssembly allowance.
   assert.ok(header("/assets/(.*)", "Content-Security-Policy").includes("script-src 'self' 'wasm-unsafe-eval'"));
   assert.equal(header("/assets/(.*)", "X-Content-Type-Options"), "nosniff");
   // Skipping the site-wide rule must not drop any of its other protections on these paths.
-  for (const source of ["/assets/(.*)", "/face-scan", "/face-scan/"])
+  for (const source of ["/assets/(.*)", ...recording])
     for (const key of ["Strict-Transport-Security", "Cross-Origin-Opener-Policy", "Referrer-Policy", "X-Frame-Options"]) assert.equal(header(source, key), header(site.source, key), `${source}: ${key}`);
   assert.match(config.proxy.matcher[0], /\|face-scan[|)]/);
 });

@@ -3,7 +3,8 @@
 -- A persona is a presenter a workspace can put in its videos: a name, a short description and a language,
 -- made from one person's face scan and spoken consent (public.likeness_consents). Each persona needs its own,
 -- new consent: one consent backs at most one persona, and a persona without a live consent cannot be used.
--- The consent is recorded by the person themself at /face-scan?persona=<id>; nobody can attach someone else's.
+-- The consent is recorded by the person themself, in the studio's Personas tab or on their own device at
+-- /face-scan?persona=<id>; nobody can attach someone else's.
 --
 -- A look is one way the persona appears on screen: what they wear, their hair, the setting, with an optional
 -- reference photo. A persona can have several looks; every look is covered by the persona's consent.

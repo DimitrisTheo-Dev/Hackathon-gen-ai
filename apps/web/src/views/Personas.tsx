@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ImagePlus, LoaderCircle, PenLine, Plus, ScanFace, Trash2, UserRound } from "lucide-react";
 import { PERSONA_LOOK_LIMIT, type Persona, type PersonaLook, type PersonaStatus } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
 import { CopyButton, Modal, Notice } from "../components/ui";
+import { sessionLikenessApi, sessionName } from "../likeness/session";
 import "../personas.css";
+
+// The capture and its on-device face tracker load only when someone starts a scan.
+const LikenessCapture = lazy(() => import("../likeness/LikenessCapture"));
 
 const LANGUAGES = [
   { code: "en", name: "English" },
@@ -22,7 +26,8 @@ const scanLink = (personaId: string) => `/face-scan?persona=${encodeURIComponent
 
 /**
  * Personas: presenters for the workspace's videos (packages/engine/src/personas.ts). Each one is made from a face
- * scan with spoken consent, recorded by the person themself at /face-scan, and can appear in several looks.
+ * scan with spoken consent, recorded by the person themself, and can appear in several looks. The scan runs right
+ * here in the tab; someone recording on their own device uses the /face-scan?persona=<id> link instead.
  */
 export function Personas({ client, role }: { client: StudioClient; role: string }) {
   const canEdit = role === "owner" || role === "admin" || role === "editor";
@@ -31,6 +36,7 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
   const [creating, setCreating] = useState(false);
   // Coming back from a face scan lands on the persona it was for.
   const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(location.search).get("persona"));
+  const [scanFor, setScanFor] = useState<Persona | null>(null);
   const reloads = useRef(0);
   const load = useCallback(() => {
     let active = true;
@@ -52,6 +58,19 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
     if (url.searchParams.has("persona")) { url.searchParams.delete("persona"); history.replaceState(history.state, "", url); }
   };
   const open = personas?.find((persona) => persona.id === openId) ?? null;
+
+  if (scanFor)
+    return (
+      <PersonaScan
+        persona={scanFor}
+        onExit={() => {
+          // Back to the persona, with its consent fresh from the engine.
+          setOpenId(scanFor.id);
+          setScanFor(null);
+          load();
+        }}
+      />
+    );
 
   return (
     <div className="pa">
@@ -100,11 +119,39 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
           canEdit={canEdit}
           onChange={replace}
           onReload={load}
+          onRecord={() => setScanFor(open)}
           onDeleted={() => { setPersonas((list) => list?.filter((p) => p.id !== open.id) ?? null); close(); }}
           onClose={close}
           onExpired={refresh}
         />
       )}
+    </div>
+  );
+}
+
+/** The face scan for one persona, in place of the persona list. Leaving it, or finishing, returns to the persona. */
+function PersonaScan({ persona, onExit }: { persona: Persona; onExit: () => void }) {
+  const api = useMemo(() => sessionLikenessApi(), []);
+  const [name, setName] = useState("");
+  useEffect(() => {
+    let active = true;
+    void sessionName().then((value) => { if (active) setName(value); });
+    return () => { active = false; };
+  }, []);
+  return (
+    <div className="pa pa-scan">
+      <Suspense fallback={<p className="pa-loading" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Opening the face scan…</p>}>
+        <LikenessCapture
+          open
+          embedded
+          api={api}
+          defaultName={name}
+          personaId={persona.id}
+          context={`Persona · ${persona.name}`}
+          onClose={onExit}
+          doneAction={{ label: `Back to ${persona.name}`, onClick: onExit }}
+        />
+      </Suspense>
     </div>
   );
 }
@@ -162,6 +209,7 @@ function PersonaDetail({
   canEdit,
   onChange,
   onReload,
+  onRecord,
   onDeleted,
   onClose,
   onExpired,
@@ -171,6 +219,8 @@ function PersonaDetail({
   canEdit: boolean;
   onChange: (persona: Persona) => void;
   onReload: () => void;
+  /** Opens the face scan for this persona inside the tab. */
+  onRecord: () => void;
   onDeleted: () => void;
   onClose: () => void;
   onExpired: () => void;
@@ -228,10 +278,10 @@ function PersonaDetail({
                   : "Before this persona can be used, the person it is based on scans their face and reads a consent statement aloud. It takes about two minutes, on a phone or a laptop with a camera."}
               </p>
               <div className="pa-consent-actions">
-                <a className="button primary" href={scanLink(persona.id)}><ScanFace size={16} aria-hidden="true" />Record consent now</a>
+                <button className="button primary" onClick={onRecord}><ScanFace size={16} aria-hidden="true" />Record consent now</button>
                 <CopyButton value={absoluteScanLink} label="Copy link for them" />
               </div>
-              <p className="pa-note">The link works for members of this workspace. They sign in, and the consent is saved under their own name.</p>
+              <p className="pa-note">Record now if you are the person, on this device. Otherwise send them the link: it works for members of this workspace, and the consent is saved under their own name.</p>
             </div>
           )}
         </section>
