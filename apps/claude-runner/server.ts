@@ -222,7 +222,12 @@ async function storeFetch(config: RunnerConfig, path: string, init: RequestInit 
   try { response = await fetch(`${config.storeUrl}${path}`, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${config.storeToken}` } }); }
   catch { throw new RequestError(502, "store_unreachable", "Couldn't reach cloud storage. Try again."); }
   if (response.status === 404) return null;
-  if (!response.ok) throw new RequestError(502, "store_error", `Cloud storage answered ${response.status}.`);
+  if (!response.ok) {
+    // The folder's limits come back as they are, so the page can say what to do; anything else is the store's problem.
+    const refused = (await response.json().catch(() => null)) as { error?: { code?: unknown; message?: unknown } } | null;
+    if ([409, 507].includes(response.status) && typeof refused?.error?.code === "string" && typeof refused.error.message === "string") throw new RequestError(response.status, refused.error.code, refused.error.message);
+    throw new RequestError(502, "store_error", `Cloud storage answered ${response.status}.`);
+  }
   return response;
 }
 async function homeEntries(config: RunnerConfig): Promise<string[]> {
@@ -314,7 +319,15 @@ export function createRunner(config: RunnerConfig): Server & { stopWork: () => v
     const savedAt = new Date();
     const key = kind === "auto" ? autosaveKeyFor(project) : saveKeyFor(project, savedAt);
     const { body, files, sha256 } = await pack(projectDir(project), ["."], WORKSPACE_EXCLUDES);
-    await storeFetch(config, `/v1/objects/${key}`, { method: "PUT", body, headers: { "Content-Type": "application/gzip", "x-store-meta": JSON.stringify({ files: String(files), sha256, project, kind }) } });
+    const put = () => storeFetch(config, `/v1/objects/${key}`, { method: "PUT", body, headers: { "Content-Type": "application/gzip", "x-store-meta": JSON.stringify({ files: String(files), sha256, project, kind }) } });
+    try { await put(); }
+    catch (error) {
+      // A project keeps the newest versions the store allows: the oldest makes room for this one.
+      const oldest = error instanceof RequestError && error.code === "too_many_versions" ? (await listSaves(project)).saves.at(-1) : undefined;
+      if (!oldest) throw error;
+      await storeFetch(config, `/v1/objects/${oldest.key}`, { method: "DELETE" });
+      await put();
+    }
     return { key, project, kind, bytes: body.length, files, sha256, savedAt: savedAt.toISOString() };
   }
   async function listSaves(project: string) {

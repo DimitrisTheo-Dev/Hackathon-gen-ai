@@ -9,3 +9,9 @@ workers_dev = true
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "faceful-workspaces"
+
+# Per-user limits (src/index.ts storeLimits). Writes past them are refused with 507 quota_exceeded or 409.
+[vars]
+USER_QUOTA_BYTES = "5368709120"     # 5 GB in all
+MAX_VERSIONS_PER_PROJECT = "30"     # the runner removes a project's oldest version to make room for a new one
+MAX_PROJECTS_PER_USER = "100"

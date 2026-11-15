@@ -12,8 +12,8 @@ export interface StoreBucket {
   delete(key: string): Promise<void>;
   list(options: { prefix: string; cursor?: string; limit?: number; include?: ("httpMetadata" | "customMetadata")[] }): Promise<{ objects: StoredObject[]; truncated: boolean; cursor?: string }>;
 }
-/** STORE_SIGNING_KEY is a keyring (signed-token.ts): a bare secret, or "2:<new>,1:<old>" while rotating. */
-export type Env = { BUCKET: StoreBucket; STORE_SIGNING_KEY: string };
+/** STORE_SIGNING_KEY is a keyring (signed-token.ts): a bare secret, or "2:<new>,1:<old>" while rotating. Limits: storeLimits. */
+export type Env = { BUCKET: StoreBucket; STORE_SIGNING_KEY: string; USER_QUOTA_BYTES?: string; MAX_VERSIONS_PER_PROJECT?: string; MAX_PROJECTS_PER_USER?: string };
 
 export const MAX_OBJECT_BYTES = 95 * 1024 * 1024; // Workers accept request bodies up to 100 MB
 export { isUserId };
@@ -50,6 +50,50 @@ export function cleanKey(raw: string, { prefix = false } = {}): string | null {
   const parts = key.split("/");
   if (prefix && parts.at(-1) === "") parts.pop();
   return parts.every((part) => part !== "" && part !== "." && part !== "..") ? key : null;
+}
+
+/** The only keys a runner writes (apps/claude-runner/server.ts): a project's autosave and saved versions, and Claude's sign-in. */
+const WRITABLE = /^(?:private\/claude-home\.tar\.gz|projects\/([A-Za-z0-9][A-Za-z0-9-]{0,63})\/(autosave\.tar\.gz|saves\/[0-9TZ-]{1,40}\.tar\.gz))$/;
+export const isWritableKey = (key: string) => WRITABLE.test(key);
+
+export type StoreLimits = { bytes: number; versionsPerProject: number; projects: number };
+const count = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
+/** Per user: 5 GB in all, 30 saved versions of each project, 100 projects, unless the Worker's vars say otherwise. */
+export const storeLimits = (env: Pick<Env, "USER_QUOTA_BYTES" | "MAX_VERSIONS_PER_PROJECT" | "MAX_PROJECTS_PER_USER">): StoreLimits => ({
+  bytes: count(env.USER_QUOTA_BYTES, 5 * 1024 ** 3),
+  versionsPerProject: count(env.MAX_VERSIONS_PER_PROJECT, 30),
+  projects: count(env.MAX_PROJECTS_PER_USER, 100),
+});
+/** Every object in one user's folder and its size, keyed relative to the folder. The limits keep this to a few pages. */
+async function folderSizes(bucket: StoreBucket, root: string): Promise<Map<string, number>> {
+  const sizes = new Map<string, number>();
+  let cursor: string | undefined;
+  do {
+    const page = await bucket.list({ prefix: root, cursor, limit: 1000 });
+    for (const item of page.objects) sizes.set(item.key.slice(root.length), item.size);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return sizes;
+}
+const inGb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(bytes < 1024 ** 3 ? 2 : 1)} GB`;
+/** Why writing `length` bytes at `key` would take the folder past its limits, or null. Replacing an object frees its old size. */
+export function quotaProblem(sizes: Map<string, number>, key: string, length: number, limits: StoreLimits): { status: number; code: string; message: string } | null {
+  let used = 0;
+  for (const size of sizes.values()) used += size;
+  if (used - (sizes.get(key) ?? 0) + length > limits.bytes)
+    return { status: 507, code: "quota_exceeded", message: `Your cloud folder is full: ${inGb(used)} of ${inGb(limits.bytes)} used. Remove large files or build output from the project, then save again.` };
+  const [, project, file] = WRITABLE.exec(key) ?? [];
+  if (!project || sizes.has(key)) return null;
+  const projects = new Set([...sizes.keys()].map((stored) => /^projects\/([^/]+)\//.exec(stored)?.[1]).filter(Boolean));
+  if (!projects.has(project) && projects.size >= limits.projects)
+    return { status: 409, code: "too_many_projects", message: `Your cloud folder already holds ${limits.projects} projects, the most it can.` };
+  const versions = [...sizes.keys()].filter((stored) => stored.startsWith(`projects/${project}/saves/`)).length;
+  if (file !== "autosave.tar.gz" && versions >= limits.versionsPerProject)
+    return { status: 409, code: "too_many_versions", message: `This project already keeps ${limits.versionsPerProject} saved versions, the most it can.` };
+  return null;
 }
 
 function metadataFrom(header: string | null): Record<string, string> | null {
@@ -97,9 +141,13 @@ export async function handle(request: Request, env: Env): Promise<Response> {
 
   switch (request.method) {
     case "PUT": {
+      if (!isWritableKey(key)) return problem(400, "invalid_key", "Only a project's autosave (projects/<project>/autosave.tar.gz), its saved versions (projects/<project>/saves/<time>.tar.gz) and Claude's sign-in (private/claude-home.tar.gz) are stored.");
       const length = Number(request.headers.get("content-length"));
       if (!Number.isFinite(length) || length <= 0) return problem(411, "length_required", "Send a Content-Length with a non-empty body.");
       if (length > MAX_OBJECT_BYTES) return problem(413, "too_large", `Objects are limited to ${MAX_OBJECT_BYTES} bytes.`);
+      // Two writes racing past the check can overshoot by one object; one machine writes at a time, so that is the bound.
+      const refused = quotaProblem(await folderSizes(env.BUCKET, root), key, length, storeLimits(env));
+      if (refused) return problem(refused.status, refused.code, refused.message);
       const customMetadata = metadataFrom(request.headers.get("x-store-meta"));
       if (customMetadata === null) return problem(400, "invalid_metadata", "x-store-meta must be a small JSON object of strings.");
       const stored = await env.BUCKET.put(full, request.body, { httpMetadata: { contentType: request.headers.get("content-type") ?? "application/octet-stream" }, customMetadata });

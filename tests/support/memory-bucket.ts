@@ -22,9 +22,11 @@ export function memoryBucket() {
       return describe(key);
     },
     async delete(key) { objects.delete(key); },
-    async list({ prefix, limit = 1000 }) {
+    async list({ prefix, cursor, limit = 1000 }) {
       const keys = [...objects.keys()].filter((key) => key.startsWith(prefix)).sort();
-      return { objects: keys.slice(0, limit).map((key) => describe(key)!), truncated: keys.length > limit, cursor: keys.length > limit ? "next" : undefined };
+      const start = Number(cursor ?? 0) || 0;
+      const truncated = start + limit < keys.length;
+      return { objects: keys.slice(start, start + limit).map((key) => describe(key)!), truncated, cursor: truncated ? String(start + limit) : undefined };
     },
   };
   return { bucket, objects };

@@ -234,10 +234,10 @@ test("a stop signal ends the run and the runner exits cleanly, as a container's 
   }
 });
 
-async function cloud(uid = "minas") {
+async function cloud(uid = "minas", limits: Record<string, string> = {}) {
   const secret = "w".repeat(64);
   const { bucket, objects } = memoryBucket();
-  const store = await serveStore({ BUCKET: bucket, STORE_SIGNING_KEY: secret });
+  const store = await serveStore({ BUCKET: bucket, STORE_SIGNING_KEY: secret, ...limits });
   return { bucket, objects, secret, store: { url: store.url, token: await mintToken(secret, uid) }, close: async () => { store.server.closeAllConnections(); await new Promise((done) => store.server.close(done)); } };
 }
 const label = (event: Record<string, unknown>) => (typeof event.event === "string" ? event.event : event.type);
@@ -404,4 +404,31 @@ test("CLAUDE_HOME_KEY must be 32 bytes in base64", () => {
   assert.equal(loadConfig({ ...base, CLAUDE_HOME_KEY: randomBytes(32).toString("base64") }).homeKey?.length, 32);
   assert.equal(loadConfig({ ...base, CLAUDE_HOME_KEY: randomBytes(32).toString("base64url") }).homeKey?.length, 32);
   assert.throws(() => loadConfig({ ...base, CLAUDE_HOME_KEY: "too-short" }), /32 random bytes/);
+});
+
+test("a full cloud folder is reported as such, and a project keeps its newest versions", async (t) => {
+  const storage = await cloud("minas", { MAX_VERSIONS_PER_PROJECT: "2" });
+  t.after(() => storage.close());
+  const runner = await startRunner(storage.store);
+  t.after(() => runner.close());
+  await runProject(runner, "p1", "write a.txt one");
+  const keys: string[] = [];
+  for (let index = 0; index < 3; index++) {
+    const saved = await runner.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "p1" }) });
+    assert.equal(saved.status, 201);
+    keys.push((await saved.json()).save.key);
+  }
+  const listed = await (await runner.call("/v1/workspace?project=p1")).json();
+  assert.deepEqual(listed.saves.map((item: { key: string }) => item.key), [keys[2], keys[1]], "the oldest made room for the newest");
+
+  const tiny = await cloud("maria", { USER_QUOTA_BYTES: "10" });
+  t.after(() => tiny.close());
+  const crowded = await startRunner(tiny.store);
+  t.after(() => crowded.close());
+  const events = await runProject(crowded, "demo", "write a.txt one");
+  assert.equal(events.at(-1)?.event, "save_failed");
+  assert.match(String(events.at(-1)?.message), /cloud folder is full/);
+  const refused = await crowded.call("/v1/workspace/save", { method: "POST", body: JSON.stringify({ project: "demo" }) });
+  assert.equal(refused.status, 507);
+  assert.equal((await refused.json()).error.code, "quota_exceeded");
 });
