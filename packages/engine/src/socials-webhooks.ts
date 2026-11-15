@@ -227,28 +227,45 @@ const YOUTUBE_TOPIC = /^https:\/\/www\.youtube\.com\/xml\/feeds\/videos\.xml\?ch
 const youtubeTopic = (channel: string) => `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channel}`;
 const xmlText = (value: string | undefined) => value?.replace(/&(amp|lt|gt|quot|apos|#39);/g, (_, name) => ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'" })[name as string] ?? "");
 const xmlTag = (block: string, name: string) => xmlText(block.match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1]);
+/**
+ * The address registered for each channel carries `channel` and `token`, the hex HMAC-SHA256 of the channel ID with
+ * the hub secret. Anyone can ask the hub to subscribe the bare address, and a request for an address the hub already
+ * knows replaces that subscription's secret, so its deliveries would stop verifying. Without the token nobody else
+ * can name this engine's address for a channel, and the handshake and deliveries both refuse what lacks it.
+ */
+const youtubeToken = (secret: string, channel: string) => createHmac("sha256", secret).update(`youtube-callback.${channel}`).digest("hex");
+export const youtubeCallback = (appBaseUrl: string, secret: string, channel: string) => `${appBaseUrl}/v1/socials/youtube/webhook?${new URLSearchParams({ channel, token: youtubeToken(secret, channel) })}`;
+/** The channel a callback address was registered for, when its token is genuine; null otherwise. */
+function youtubeCallbackChannel(secret: string, query: URLSearchParams | undefined): string | null {
+  const channel = query?.get("channel") ?? "";
+  return YOUTUBE_CHANNEL.test(channel) && hmacMatches("sha256", secret, `youtube-callback.${channel}`, query?.get("token")) ? channel : null;
+}
 
 /**
  * YouTube pushes through Google's PubSubHubbub hub: an Atom feed when a channel uploads a video or edits its title
  * or description. Nothing is configured in a console. The engine asks the hub for each connected channel
- * (`subscribe`) with a secret, and the hub signs each delivery with it: `X-Hub-Signature: sha1=<HMAC-SHA1 of the body>`.
+ * (`subscribe`) with a secret and its own callback address (youtubeCallback), and the hub signs each delivery with
+ * the secret: `X-Hub-Signature: sha1=<HMAC-SHA1 of the body>`.
  */
 const youtubeWebhook: WebhookAdapter = {
   source: "youtube",
   async handshake(deps, query) {
+    const config = deps.config.socials.native.youtube;
     const challenge = query.get("hub.challenge") ?? "";
     const channel = query.get("hub.topic")?.match(YOUTUBE_TOPIC)?.[1];
     const mode = query.get("hub.mode");
-    if (!deps.config.socials.native.youtube || !channel || !CHALLENGE.test(challenge) || (mode !== "subscribe" && mode !== "unsubscribe")) return null;
+    // Only the address this engine registered for that very channel is confirmed (the hub keeps its query string).
+    if (!config || !channel || channel !== youtubeCallbackChannel(config.hubSecret, query) || !CHALLENGE.test(challenge) || (mode !== "subscribe" && mode !== "unsubscribe")) return null;
     // Anyone can ask the hub to subscribe or unsubscribe this address. Only what matches the connected accounts
     // is confirmed: subscribing a channel that is connected, unsubscribing one that no longer is.
     const [connected] = await deps.store.select("provider_connections", { platform: "youtube", external_account_id: channel }, { limit: 1 });
     return Boolean(connected) === (mode === "subscribe") ? plain(challenge) : null;
   },
-  verify(deps, headers, rawBody) {
+  verify(deps, headers, rawBody, query) {
     const config = deps.config.socials.native.youtube ?? off("YouTube");
     const header = headers.get("x-hub-signature") ?? "";
-    return header.startsWith("sha1=") && hmacMatches("sha1", config.hubSecret, rawBody, header.slice(5));
+    // Sent to an address this engine registered, and signed with the secret it registered there.
+    return youtubeCallbackChannel(config.hubSecret, query) !== null && header.startsWith("sha1=") && hmacMatches("sha1", config.hubSecret, rawBody, header.slice(5));
   },
   parse(rawBody) {
     const events: Draft[] = [];
@@ -269,7 +286,7 @@ const youtubeWebhook: WebhookAdapter = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       // The hub confirms with a GET to the callback (the handshake above) before it starts delivering.
-      body: new URLSearchParams({ "hub.callback": `${deps.config.appBaseUrl}/v1/socials/youtube/webhook`, "hub.mode": "subscribe", "hub.topic": youtubeTopic(channel), "hub.verify": "async", "hub.secret": config.hubSecret, "hub.lease_seconds": "864000" }).toString(),
+      body: new URLSearchParams({ "hub.callback": youtubeCallback(deps.config.appBaseUrl, config.hubSecret, channel), "hub.mode": "subscribe", "hub.topic": youtubeTopic(channel), "hub.verify": "async", "hub.secret": config.hubSecret, "hub.lease_seconds": "864000" }).toString(),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new Error(`hub answered ${response.status}`);

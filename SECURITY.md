@@ -28,6 +28,8 @@ Faceful lets people and their AI agents draft, render, schedule and pay for shor
 
 **Payments are sandbox-only and webhook-driven.** Live Stripe keys are refused at configuration, and live-mode objects are refused at runtime (`config.ts`, `billing-stripe.ts`). Clients choose a plan key, never a price ID or amount. Return URLs come from `APP_BASE_URL`, never from the request. Plan and credits change only inside the webhook handler, after signature verification on the raw body, deduplicated by event ID, and with subscription state re-read from Stripe. Credits are granted once per invoice.
 
+**Social deliveries prove their sender.** Deliveries to `/v1/socials/:platform/webhook` are checked against the exact bytes with that platform's own signature, or with `SOCIALS_WEBHOOK_SECRET` for the generic format (`socials-webhooks.ts`, `socials-events.ts`). For YouTube the engine registers its own callback address per channel at Google's hub, carrying an HMAC-SHA256 token of the channel ID keyed by `YOUTUBE_WEBHOOK_SECRET`. The hub's handshake and every delivery must present it, so nobody else can subscribe that address or replace the secret that signs its deliveries.
+
 **Rate limits.** These live in `packages/engine/src/ratelimit.ts`, backed by `engine_rate_limit_hit` in `supabase/migrations/20261115010000_rate_limit_buckets.sql`. One atomic Postgres statement counts each request in fixed one-minute windows, so limits hold across all function instances. The table is unlogged, has RLS on and no grants, and the function is `security definer` and callable only by `service_role`. Each call also deletes up to 20 expired buckets, so the table stays bounded.
 
 | Bucket | Applies to | Keyed by | Default per minute | Override |

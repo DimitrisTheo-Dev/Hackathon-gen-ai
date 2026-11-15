@@ -119,8 +119,8 @@ export interface WebhookAdapter {
   source: string;
   /** Answers the check a platform makes (a GET) when the address is registered: what to send back, or null to refuse. */
   handshake?(deps: EngineDeps, query: URLSearchParams): WebhookAnswer | null | Promise<WebhookAnswer | null>;
-  /** True only when the delivery provably came from the sender. Works on the exact bytes received. */
-  verify(deps: EngineDeps, headers: Headers, rawBody: string): boolean;
+  /** True only when the delivery provably came from the sender. Works on the exact bytes received (and the address's query). */
+  verify(deps: EngineDeps, headers: Headers, rawBody: string, query?: URLSearchParams): boolean;
   /** One delivery → the events in it, in the shared shape. */
   parse(rawBody: string): { source?: string; events: SocialEventInput[] };
   /**
@@ -183,13 +183,13 @@ export async function socialWebhookHandshake(deps: EngineDeps, platformId: strin
 }
 
 /** POST /v1/socials/:platform/webhook. No member session: the signature is the credential. */
-export async function receiveSocialWebhook(deps: EngineDeps, platformId: string, headers: Headers, rawBody: string) {
+export async function receiveSocialWebhook(deps: EngineDeps, platformId: string, headers: Headers, rawBody: string, query?: URLSearchParams) {
   const platform = requirePlatform(platformId);
   // The generic format announces itself with its signature header; anything else is the platform's own.
   const native = headers.has(SIGNATURE_HEADER) ? undefined : webhookAdapters[platform];
   const adapter = native ?? signedWebhook;
   if (rawBody.length > MAX_DELIVERY_BYTES) throw new EngineError("validation_error", "The delivery is too large.");
-  if (!adapter.verify(deps, headers, rawBody)) throw new EngineError("unauthenticated", "This delivery's signature is missing, too old or wrong.");
+  if (!adapter.verify(deps, headers, rawBody, query)) throw new EngineError("unauthenticated", "This delivery's signature is missing, too old or wrong.");
   const delivery = adapter.parse(rawBody);
   // A platform retries anything not answered with success, so one entry of its delivery that does not fit the
   // shared shape is left out instead of failing the rest. The generic format was already checked strictly.

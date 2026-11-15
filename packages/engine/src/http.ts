@@ -254,7 +254,7 @@ async function socials(deps: HttpDeps, request: Request, path: string, correlati
       // Like the Stripe webhook, a genuine delivery is not rate limited: a platform retries what is refused, and a
       // dropped delivery loses activity. A delivery whose signature is refused counts as a failed credential.
       try {
-        return json(await receiveSocialWebhook(deps, match[1], request.headers, await readBoundedText(request)));
+        return json(await receiveSocialWebhook(deps, match[1], request.headers, await readBoundedText(request), query));
       } catch (error) {
         if (error instanceof EngineError && error.code === "unauthenticated") await refuseCredential(limits, policies, error);
         throw error;
