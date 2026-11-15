@@ -352,6 +352,78 @@
 .fd-proposal.is-applied .fd-apply { opacity: 0; transform: scale(.94); }
 .fd-proposal.is-applied .fd-saved { opacity: 1; transform: none; }
 
+/* ── Act two: the first draft opens in the video editor ──
+   The canvas trades its cards for a preview, the template, persona and brand kit, and a multi-track timeline.
+   Motion is transform and opacity only; the playhead travels the lanes' own width (container units). */
+.fd-view { display: grid; grid-template-columns: auto auto; gap: .2em; padding: .22em; }
+.fd-view-option { display: flex; align-items: center; gap: .45em; padding: .28em .7em; border-radius: .5em; color: var(--l-text-2); transition: background-color 260ms ease, color 260ms ease; }
+.fd-view-option:first-child, .fd.is-video .fd-view-option:last-child { background: var(--l-subtle); color: var(--l-ink); }
+.fd.is-video .fd-view-option:first-child { background: transparent; color: var(--l-text-2); }
+.fd.is-video .fd-track { opacity: 0; transform: translateY(-1.2em) scale(.97); transition: opacity 240ms ease-out, transform 480ms var(--l-ease-out); }
+.fd-video { position: absolute; inset: 12.8em 2em auto 2em; display: grid; grid-template-columns: 14.6em minmax(0, 1fr); grid-template-areas: "preview side" "dest dest"; gap: 1.3em 1.6em; opacity: 0; transform: translateY(1.2em); transition: opacity 320ms ease-out 120ms, transform 560ms var(--l-ease-out) 120ms; }
+.fd-video.is-in { opacity: 1; transform: none; }
+.fd-video-preview { grid-area: preview; position: relative; isolation: isolate; aspect-ratio: 9 / 16; border-radius: 1.1em; overflow: hidden; background: radial-gradient(120% 64% at 50% 20%, #f4f7f5, rgba(244, 247, 245, 0) 72%), linear-gradient(188deg, #e2e6de, #c4d7dc 58%, #a6c4d1); box-shadow: 0 .1em .2em rgba(42, 42, 39, .06), 0 1.4em 2.8em -1.4em rgba(42, 42, 39, .4); }
+.fd-video-preview::after { content: ""; position: absolute; inset: 58% 0 0; background: linear-gradient(180deg, rgba(30, 27, 20, 0), rgba(30, 27, 20, .3)); pointer-events: none; }
+.fd-video-preview .fd-stage { transform: translate(-3%, 0) scale(1.12); }
+.fd-video-card { position: absolute; z-index: 1; inset: 2.6em 1em auto; padding: .5em .6em; border-radius: .65em; background: #fff; box-shadow: 0 .3em 1em -.4em rgba(42, 42, 39, .45); font-size: .78em; font-weight: 650; text-align: center; color: var(--l-ink); opacity: 0; transform: translateY(-.5em) scale(.94); transition: opacity 240ms ease-out, transform 460ms var(--l-ease-out); }
+.fd-video.has-edit .fd-video-card { opacity: 1; transform: none; }
+/* Karaoke captions: the spoken word turns yellow, then hands over to the next. */
+.fd-karaoke { position: absolute; z-index: 1; inset: auto .8em 1.5em; text-align: center; font-size: 1.05em; font-weight: 700; line-height: 1.35; letter-spacing: -.015em; color: #fff; text-shadow: 0 .06em .35em rgba(20, 18, 14, .45); }
+.fd-karaoke i { font-style: normal; }
+.fd-video.is-playing .fd-karaoke i { animation: fd-karaoke 620ms steps(1); animation-delay: calc(var(--w) * 620ms + 240ms); }
+@keyframes fd-karaoke { from, to { color: #ffd65a; } }
+.fd-progress { position: absolute; z-index: 1; inset: auto .8em .6em; height: .24em; border-radius: 999px; background: rgba(255, 255, 255, .35); overflow: hidden; }
+.fd-progress i { display: block; height: 100%; border-radius: inherit; background: #fff; transform: scaleX(0); transform-origin: left; }
+.fd-video.is-playing .fd-progress i { transform: scaleX(1); transition: transform 3600ms linear; }
+.fd-video-side { grid-area: side; display: grid; align-content: start; gap: .9em; min-width: 0; }
+.fd-video-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7em; }
+.fd-video-facts > span { display: grid; gap: .25em; min-width: 0; padding: .62em .75em; border: 1px solid var(--l-border); border-radius: .8em; background: var(--l-surface); }
+.fd-video-facts small { font-size: .7em; color: var(--l-text-2); }
+.fd-video-facts b { display: flex; align-items: center; gap: .38em; min-width: 0; overflow: hidden; font-size: .84em; white-space: nowrap; text-overflow: ellipsis; }
+.fd-video-facts svg { flex: none; width: .95em; height: .95em; }
+.fd-swatch { flex: none; width: .82em; height: .82em; border-radius: 50%; background: #5f6c66; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+.fd-timeline { position: relative; display: grid; gap: .4em; padding: .7em .8em .85em; border: 1px solid var(--l-border); border-radius: .95em; background: var(--l-surface); box-shadow: var(--l-lift); }
+.fd-ruler { display: flex; justify-content: space-between; margin-left: 6.1em; font-size: .62em; color: var(--l-text-2); font-variant-numeric: tabular-nums; }
+.fd-ruler i { font-style: normal; }
+.fd-lane { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); align-items: center; gap: .6em; height: 2.45em; }
+.fd-lane > small { font-size: .7em; color: var(--l-text-2); }
+.fd-lane-body { position: relative; height: 100%; border-radius: .45em; background: var(--l-bg); }
+.fd-clip { position: absolute; top: .26em; bottom: .26em; left: calc(var(--from) * 1%); width: calc((var(--to) - var(--from)) * 1%); display: flex; align-items: center; gap: .35em; padding: 0 .55em; box-sizing: border-box; border-radius: .38em; overflow: hidden; white-space: nowrap; font-size: .64em; font-weight: 600; }
+.fd-clip em { font-style: normal; padding: .05em .45em; border-radius: 999px; background: rgba(255, 255, 255, .2); font-size: .86em; }
+.fd-clip-picture { background: #c6d9df; color: #22343b; }
+.fd-clip-broll { background: #e7d8a6; color: #5a4a1c; }
+.fd-clip-card { justify-content: space-between; background: var(--l-ink); color: #fff; opacity: 0; transform: translateY(-.7em) scale(.9); transition: opacity 240ms ease-out, transform 460ms var(--l-ease-out); }
+.fd-video.has-edit .fd-clip-card { opacity: 1; transform: none; }
+.fd-clip-voice { gap: .14em; padding: 0 .4em; background: #ebe8df; }
+.fd-clip-voice i { flex: 1 1 0; height: calc(var(--h) * .86%); min-width: 0; border-radius: 999px; background: #8f8a7c; }
+.fd-clip-music { background: linear-gradient(90deg, rgba(207, 228, 214, .35), #cfe4d6 16%, #cfe4d6 84%, rgba(207, 228, 214, .35)); color: #2c5a43; }
+.fd-clip-word { justify-content: center; padding: 0 .3em; background: var(--l-warning-bg); color: var(--l-warning); font-size: .58em; }
+.fd-playhead-track { position: absolute; top: 1.75em; bottom: .6em; left: calc(.8em + 3.4em + .6em); right: .8em; container-type: inline-size; pointer-events: none; }
+.fd-playhead { position: absolute; top: 0; bottom: 0; left: -.07em; width: .14em; border-radius: 999px; background: #e0533d; box-shadow: 0 0 0 .16em rgba(224, 83, 61, .16); }
+.fd-video.is-playing .fd-playhead { transform: translateX(100cqw); transition: transform 3600ms linear; }
+.fd-files { display: flex; align-items: center; gap: .5em; min-width: 0; overflow: hidden; }
+.fd-files small { margin-right: .2em; font-size: .72em; color: var(--l-text-2); white-space: nowrap; }
+.fd-files span { display: inline-flex; align-items: center; gap: .35em; padding: .38em .65em; border: 1px solid var(--l-border); border-radius: .6em; background: var(--l-surface); font-size: .74em; font-weight: 550; white-space: nowrap; }
+.fd-files svg { width: .95em; height: .95em; color: var(--l-text-2); }
+.fd-destinations { grid-area: dest; display: flex; align-items: center; gap: .6em; opacity: 0; transform: translateY(.6em); transition: opacity 260ms ease-out, transform 440ms var(--l-ease-out); }
+.fd-video.has-destinations .fd-destinations { opacity: 1; transform: none; }
+.fd-destination { display: inline-flex; align-items: center; gap: .42em; padding: .42em .85em .42em .7em; border: 1px solid var(--l-border); border-radius: 999px; background: var(--l-surface); font-size: .84em; font-weight: 550; }
+.fd-destination svg { width: 1em; height: 1em; }
+.fd-destination-slot { display: inline-flex; align-items: center; gap: .45em; margin-left: auto; padding: .42em .85em .42em .7em; border: 1px solid #f0dfae; border-radius: 999px; background: var(--l-warning-bg); color: var(--l-warning); font-size: .84em; font-weight: 550; }
+.fd-destination-slot i { width: .5em; height: .5em; border-radius: 50%; background: #e0a100; }
+.fd-destination-slot small { font-weight: 400; }
+/* The chat keeps its newest messages in view: earlier ones slide up under the header, the way a thread scrolls. */
+.fd-chat { overflow: hidden; }
+.fd-chat-head { position: relative; z-index: 1; background: var(--l-surface); }
+.fd-thread { transition: transform 560ms var(--l-ease-out); }
+.fd.is-video .fd-thread { transform: translateY(var(--thread-shift, -11.5em)); }
+.fd.has-edit-msg .fd-thread { --thread-shift: -17.5em; }
+.fd-agent-msg { display: grid; gap: .3em; padding: .75em .85em; border: 1px solid #d6e6dc; border-radius: 1em; background: #f3f8f4; }
+.fd-agent-msg .fd-who { color: #2c5a43; }
+.fd-agent-msg p { font-size: .92em; line-height: 1.45; }
+.fd-agent-msg code { padding: .05em .35em; border-radius: .35em; background: #fff; font: 600 .9em/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.landing-demo[data-playing="false"] .fd-karaoke i { animation-play-state: paused; }
+
 /* One composer, two poses: centred on the empty studio, then docked under the chat it became. */
 .fd-composer { position: absolute; z-index: 3; left: 57em; top: 31em; width: 36em; height: 9.4em; margin: -4.7em 0 0 -18em; border: 1px solid #dcd9cf; border-radius: 1.5em; background: var(--l-surface); box-shadow: 0 .12em .3em rgba(42, 42, 39, .05), 0 1.6em 3.6em -1.4em rgba(42, 42, 39, .3); transition: transform 600ms var(--l-ease-drawer), box-shadow 420ms ease, opacity 240ms ease-out; }
 .fd.is-docked .fd-composer { transform: translate(28em, 19.57em) scale(.6444); box-shadow: 0 .1em .3em rgba(42, 42, 39, .06); }
@@ -410,6 +482,15 @@
   .fd-user { justify-self: end; }
   .fd-composer { left: 19.5em; top: 33.5em; width: 35em; margin-left: -17.5em; }
   .fd.is-docked .fd-composer { transform: translate(0, 22.07em) scale(1.028); }
+  /* Act two on a phone: the preview and a compact timeline side by side above the sheet. */
+  .fd-video { inset: 12.2em 1.4em auto; grid-template-columns: 10.4em minmax(0, 1fr); grid-template-areas: "preview side"; gap: 1em; }
+  .fd-video-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5em; }
+  .fd-video-facts > span:nth-child(3), .fd-destinations, .fd-ruler, .fd-files, .fd-clip-card em { display: none; }
+  .fd-lane { grid-template-columns: 3.1em minmax(0, 1fr); height: 2em; gap: .45em; }
+  .fd-timeline { gap: .32em; padding: .6em .6em .7em; }
+  .fd-playhead-track { top: .6em; left: calc(.6em + 3.1em + .45em); right: .6em; }
+  .fd-karaoke { font-size: .9em; inset: auto .6em 1.3em; }
+  .fd.is-video .fd-thread, .fd.has-edit-msg .fd-thread { transform: none; }
 }
 
 /* ───────────── Sections ───────────── */

@@ -12,6 +12,21 @@
   .tl-intro h1 { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; }
   .tl-intro > p { margin-block-start: 6px; max-inline-size: 62ch; font-size: 14px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
   .tl-loading, .tl-empty { margin-block-start: 24px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+  /* Skeleton: the real grid's geometry with quiet bars; a slow shimmer only where motion is welcome. */
+  .tl-skeleton i { display: block; border-radius: 6px; background: var(--subtle); }
+  .tl-skeleton .tl-card { cursor: default; }
+  .tl-sk-title { inline-size: 150px; block-size: 18px; }
+  .tl-sk-note { inline-size: min(420px, 80%); block-size: 12px; margin-block-start: 4px; }
+  .tl-sk-name { inline-size: 62%; block-size: 14px; }
+  .tl-sk-line { inline-size: 92%; block-size: 11px; margin-block-start: 3px; }
+  .tl-sk-line.short { inline-size: 40%; }
+  .tl-skeleton .tl-poster, .tl-skeleton i { background: linear-gradient(100deg, var(--subtle) 30%, #F7F6F2 50%, var(--subtle) 70%) 0 0 / 300% 100%; animation: tl-shimmer 1.6s linear infinite; }
+  @keyframes tl-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  .tl-failed { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; max-inline-size: 640px; margin-block-start: 24px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .tl-failed-icon { display: grid; place-items: center; inline-size: 30px; block-size: 30px; border-radius: 50%; background: var(--danger-surface); color: var(--danger); }
+  .tl-failed p { display: grid; gap: 2px; font-size: 13px; line-height: 1.45; }
+  .tl-failed strong { font-weight: 600; color: var(--ink); }
+  .tl-failed span { color: var(--text-secondary); text-wrap: pretty; }
 
   .tl-family { margin-block-start: 34px; }
   .tl-family-head { display: grid; gap: 4px; margin-block-end: 16px; }
@@ -83,6 +98,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .tl-card, .tl-poster, .tl-poster img, .tl-stills img, .tl-video-bar, .tl-video-big { transition: none; }
+    .tl-skeleton .tl-poster, .tl-skeleton i { animation: none; }
     .tl-card:hover .tl-poster { transform: none; }
   }
 }

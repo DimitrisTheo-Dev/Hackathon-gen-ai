@@ -19,6 +19,8 @@
   .cv-link, .cv-brief { display: grid; gap: 6px; }
   .cv-link > label, .cv-brief > label, .cv-traits legend, .cv h2 { font-size: 13.5px; font-weight: 600; letter-spacing: -.005em; color: var(--ink); }
   .cv h2 { margin-block-end: 10px; }
+  /* Step numbers: the form reads as three steps, link, brief, what to clone. */
+  .cv-step { display: inline-grid; place-items: center; inline-size: 20px; block-size: 20px; margin-inline-end: 8px; border-radius: 50%; background: var(--ink); color: var(--surface); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; vertical-align: 1px; }
   .cv-note { font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
   .cv-muted { color: var(--text-muted); }
   .cv-error { font-size: 13px; line-height: 1.5; color: var(--danger); text-wrap: pretty; }
@@ -31,14 +33,22 @@
 
   /* ── players and empty frames ── */
   .cv-frame { box-sizing: border-box; display: block; inline-size: 100%; aspect-ratio: 9 / 16; border-radius: var(--radius-lg); overflow: hidden; background: #15161A; }
-  .cv-frame.is-empty { display: grid; place-items: center; padding: 24px; background: var(--subtle); box-shadow: inset 0 0 0 1px var(--border); text-align: center; font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .cv-frame.is-empty { display: grid; place-items: center; padding: 24px; border: 1px dashed #D3D0C6; background: var(--surface); text-align: center; font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+  .cv-empty { display: grid; justify-items: center; gap: 12px; }
+  .cv-platforms { display: flex; gap: 6px; }
+  .cv-platforms > span { display: grid; place-items: center; inline-size: 34px; block-size: 34px; border-radius: 50%; background: var(--subtle); color: var(--text-muted); transition: background-color var(--dur-base) ease, color var(--dur-base) ease; }
+  .cv-platforms > span[data-on] { background: var(--ink); color: var(--surface); }
+  .cv-brand-mark { display: grid; place-items: center; inline-size: 44px; block-size: 44px; border-radius: 12px; background: var(--ink); color: #fff; font-size: 19px; font-weight: 650; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
   .cv-frame.is-empty p { display: inline-flex; align-items: center; gap: 8px; max-inline-size: 24ch; }
   .cv-player.is-landscape { aspect-ratio: 16 / 9; }
   .cv-player.is-instagram { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
   .cv-player iframe { display: block; inline-size: 100%; block-size: 100%; border: 0; }
   video.cv-frame { object-fit: contain; }
   .cv-wait { display: grid; gap: 6px; max-inline-size: 26ch; }
-  .cv-wait strong { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .cv-wait strong { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--ink); }
+  /* A waiting job breathes; a finished one does not. */
+  .cv-live { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--warning-ink); animation: cv-pulse 1.6s var(--ease-out) infinite; }
+  @keyframes cv-pulse { 0% { box-shadow: 0 0 0 0 rgba(116,83,28,.32); } 70% { box-shadow: 0 0 0 7px rgba(116,83,28,0); } 100% { box-shadow: 0 0 0 0 rgba(116,83,28,0); } }
   .cv-wait span { font-size: 13px; }
 
   .cv-source-meta { display: grid; gap: 4px; margin-block-start: 12px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
@@ -49,6 +59,9 @@
   /* ── what to clone: plain toggles with a check box. On is a dark edge and a filled box; off is a light edge. ── */
   .cv-traits { min-inline-size: 0; border: 0; }
   .cv-traits legend { margin-block-end: 10px; }
+  .cv-group { display: grid; gap: 8px; }
+  .cv-group + .cv-group { margin-block-start: 14px; }
+  .cv-group-label { font-size: 12px; font-weight: 550; letter-spacing: .01em; color: var(--text-muted); }
   .cv-tags { display: flex; flex-wrap: wrap; gap: 8px; }
   .cv-trait { position: relative; display: inline-flex; align-items: center; gap: 9px; min-block-size: 40px; box-sizing: border-box; padding: 8px 14px 8px 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 13.5px; font-weight: 500; line-height: 1.3; color: var(--text-secondary); cursor: pointer; user-select: none; transition: border-color var(--dur-base) ease, color var(--dur-base) ease, transform var(--dur-press) var(--ease-out); }
   .cv-trait input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
@@ -67,11 +80,36 @@
   .cv-start-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
   .cv-start-row .button { min-inline-size: 132px; min-block-size: 44px; padding-inline: 20px; font-size: 14px; }
 
+  /* ── loading: the form's own geometry with quiet bars (views/page-skeletons.tsx) ── */
+  .cv-skeleton i { display: block; border-radius: 6px; background: linear-gradient(100deg, var(--subtle) 30%, #F7F6F2 50%, var(--subtle) 70%) 0 0 / 300% 100%; animation: cv-shimmer 1.6s linear infinite; }
+  .cv-sk-label { inline-size: 110px; block-size: 14px; margin-block: 3px 4px; }
+  .cv-sk-label.wide { inline-size: 210px; }
+  .cv-sk-note { inline-size: min(360px, 80%); block-size: 11px; }
+  .cv-skeleton .cv-sk-input { block-size: 44px; border-radius: 10px; }
+  .cv-skeleton .cv-sk-area { block-size: 168px; border-radius: 10px; }
+  .cv-skeleton .cv-sk-chip { block-size: 40px; border-radius: 10px; }
+  .cv-skeleton .cv-sk-button { inline-size: 132px; block-size: 44px; border-radius: 12px; }
+  .cv-skeleton .cv-frame.is-empty { border-style: solid; border-color: var(--border); }
+  @keyframes cv-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
   /* ── jobs ── */
   .cv-jobs { margin-block-start: 44px; }
   .cv-jobs .notice { margin: 0 0 12px; }
+  /* A failed list says what failed and why, with the retry beside it. */
+  .cv-jobs-failed { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .cv-jobs-failed-icon { display: grid; place-items: center; inline-size: 30px; block-size: 30px; border-radius: 50%; background: var(--danger-surface); color: var(--danger); }
+  .cv-jobs-failed p { display: grid; gap: 2px; font-size: 13px; line-height: 1.45; }
+  .cv-jobs-failed strong { font-weight: 600; color: var(--ink); }
+  .cv-jobs-failed span { color: var(--text-secondary); text-wrap: pretty; }
+  /* Loading rows keep the list's exact geometry, so the real rows replace them without a jump. */
+  .cv-jobs-skeleton .cv-job-thumb, .cv-jobs-skeleton i { background: var(--subtle); }
+  .cv-jobs-skeleton i { display: block; block-size: 10px; border-radius: 5px; }
+  .cv-jobs-skeleton .cv-job-main { gap: 9px; padding-block-start: 6px; }
+  .cv-jobs-skeleton .cv-job-main i:first-child { inline-size: min(280px, 60%); }
+  .cv-jobs-skeleton .cv-job-main i:last-child { inline-size: min(420px, 85%); }
+  .cv-jobs-skeleton .cv-job-state i { inline-size: 90px; margin-block-start: 6px; }
   .cv-jobs ul { list-style: none; border-block-start: 1px solid var(--border); }
-  .cv-job { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px 4px; border-block-end: 1px solid var(--border); }
+  .cv-job, .cv-jobs-skeleton > li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px 4px; border-block-end: 1px solid var(--border); }
   .cv-job-thumb { display: grid; place-items: center; inline-size: 48px; block-size: 48px; overflow: hidden; border-radius: 10px; background: var(--subtle); color: var(--text-secondary); }
   .cv-job-thumb img { inline-size: 100%; block-size: 100%; object-fit: cover; }
   .cv-job-main { display: grid; gap: 3px; min-inline-size: 0; }
@@ -101,6 +139,8 @@
     .cv-result { grid-area: result; }
     /* Start-aligned, or a stretched item would fill its area and have nowhere to stick. */
     .cv-source, .cv-result { position: sticky; inset-block-start: 16px; align-self: start; }
+    /* "This becomes yours": an arrow in the gap between the original and your version. */
+    .cv-becomes { position: absolute; z-index: 1; inset-block-start: 50%; inset-inline-start: -12px; display: grid; place-items: center; inline-size: 26px; block-size: 26px; border-radius: 50%; background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 2px 8px rgba(42,42,39,.08); transform: translate(-50%, -50%); }
   }
   @container (min-width: 940px) and (max-width: 1080px) {
     .cv-form { grid-template-columns: minmax(0, 1fr) 236px 236px; }
@@ -111,16 +151,21 @@
     .cv-frame { max-inline-size: 360px; }
     .cv-player.is-landscape { max-inline-size: 100%; }
     .cv-result .cv-frame.is-empty { aspect-ratio: auto; min-block-size: 132px; max-inline-size: 100%; }
+    .cv-becomes { display: none; }
   }
 
   @media (max-width: 760px) {
     .cv { padding: 20px 16px 112px; }
-    .cv-job { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
+    .cv-job, .cv-jobs-skeleton > li { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
     .cv-job-thumb { inline-size: 44px; block-size: 44px; }
     .cv-job-state { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px 10px; justify-items: start; text-align: start; }
     .cv-start-row .button { flex: 1 1 100%; }
+    .cv-jobs-failed { grid-template-columns: auto minmax(0, 1fr); }
+    .cv-jobs-failed > .button { grid-column: 2; justify-self: start; }
   }
   @media (prefers-reduced-motion: reduce) {
     .cv-trait, .cv-trait:active { transition: border-color var(--dur-base) ease, color var(--dur-base) ease; transform: none; }
+    .cv-live { animation: none; }
+    .cv-skeleton i { animation: none; }
   }
 }

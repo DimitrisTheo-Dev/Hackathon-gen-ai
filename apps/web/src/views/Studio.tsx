@@ -60,6 +60,7 @@ import { useAutoGrow } from "../lib/use-auto-grow";
 import { rememberPanel } from "../components/ShellSkeleton";
 import "../studio.css";
 import "../channels.css";
+import { CloneSkeleton, TemplatesSkeleton } from "./page-skeletons";
 
 // Views a person opens occasionally load on demand, then stay cached. They are warmed when the browser is idle.
 const loadConnect = () => import("./Connect");
@@ -928,11 +929,11 @@ export function Studio({
                 <button className="text-button" onClick={()=>go("connect")}><Plug size={13} aria-hidden="true"/>Connect your agent</button>
               </div>
             </div>) : view === "home" ? null : view === "templates" ? (
-              <Suspense fallback={<ViewSkeleton />}><TemplateLibrary client={client} /></Suspense>
+              <Suspense fallback={<TemplatesSkeleton />}><TemplateLibrary client={client} /></Suspense>
             ) : view === "personas" ? (
               <Suspense fallback={<ViewSkeleton />}><Personas client={client} role={context.workspace.role} /></Suspense>
             ) : view === "clone" ? (
-              fixture ? null : <Suspense fallback={<ViewSkeleton />}><CloneVideo client={client} context={context} /></Suspense>
+              fixture ? null : <Suspense fallback={<CloneSkeleton />}><CloneVideo client={client} context={context} /></Suspense>
             ) : view === "billing" ? (
               <Suspense fallback={<ViewSkeleton />}><Billing
                 client={client}
