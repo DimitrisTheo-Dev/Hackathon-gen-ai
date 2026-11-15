@@ -258,6 +258,9 @@ test("where reviews are not set up, regulated items are blocked with a clear mes
   const read = await env.call(`/v1/studio/items/${health.id}/review`, "user:u1");
   assert.equal(read.status, 503);
   assert.equal(((await read.json()) as any).error.message, UNAVAILABLE_MESSAGE);
+  const run = await post(env, "review_content", "user:u1", { itemId: health.id, operationKey: key() });
+  assert.equal(run.status, 503);
+  assert.equal(run.body.error.message, UNAVAILABLE_MESSAGE);
 
   // Without the products table either, the studio context still opens and the gate still holds by script alone.
   env.deps.store.select = (async (table: string, ...rest: unknown[]) => {

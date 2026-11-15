@@ -72,17 +72,21 @@ async function latestRow(deps: EngineDeps, ctx: Ctx, itemId: string): Promise<Ro
   return rows[0] ?? null;
 }
 
-/** GET /v1/studio/items/:itemId/review: the item's latest review, or null when it has none. */
-export async function getLatestReview(deps: EngineDeps, ctx: Ctx, itemId: string): Promise<ContentReview | null> {
-  requireScope(ctx, "campaign:read");
-  const item = await loadItem(deps, ctx, itemId);
-  let row: Row | null;
+/** A store call on the products or reviews tables. Where they are missing (or unreachable), the caller is told so plainly. */
+async function reviewTables<T>(call: () => Promise<T>): Promise<T> {
   try {
-    row = await latestRow(deps, ctx, item.id);
+    return await call();
   } catch (error) {
     if (error instanceof EngineError && error.code === "provider_unavailable") throw new EngineError("provider_unavailable", UNAVAILABLE_MESSAGE);
     throw error;
   }
+}
+
+/** GET /v1/studio/items/:itemId/review: the item's latest review, or null when it has none. */
+export async function getLatestReview(deps: EngineDeps, ctx: Ctx, itemId: string): Promise<ContentReview | null> {
+  requireScope(ctx, "campaign:read");
+  const item = await loadItem(deps, ctx, itemId);
+  const row = await reviewTables(() => latestRow(deps, ctx, item.id));
   return row ? reviewContract(row) : null;
 }
 
@@ -195,7 +199,12 @@ export async function reviewContent(deps: ReviewDeps, ctx: Ctx, raw: unknown): P
     const item = await loadItem(deps, ctx, input.itemId);
     const project = await loadProject(deps, ctx, item.project_id);
     const script = String(item.script ?? "");
-    const [brandRow, products] = await Promise.all([selectOne(deps.store, "brand_profiles", { org_id: ctx.org.id }), workspaceProducts(deps, ctx, { photos: false })]);
+    // The products and reviews tables first: where they are missing, nothing else (and no model call) runs.
+    const [brandRow, products, previous] = await Promise.all([
+      selectOne(deps.store, "brand_profiles", { org_id: ctx.org.id }),
+      reviewTables(() => workspaceProducts(deps, ctx, { photos: false })),
+      reviewTables(() => latestRow(deps, ctx, item.id)),
+    ]);
     const brandRules = brandContract(brandRow, ctx.org.name).rules;
     const sources = (Array.isArray(project.sources) ? project.sources : []).map((source: Row) => ({ id: String(source.id), title: String(source.title ?? ""), excerpt: String(source.excerpt ?? "") }));
     const notes: string[] = [];
@@ -271,10 +280,9 @@ export async function reviewContent(deps: ReviewDeps, ctx: Ctx, raw: unknown): P
     const status = reviewStatus(domain, claims, findings, false);
 
     // Strictly increasing per item, so "the latest review" is never a tie.
-    const previous = await latestRow(deps, ctx, item.id);
     const now = deps.now().getTime();
     const createdAt = new Date(previous ? Math.max(now, new Date(previous.created_at).getTime() + 1) : now).toISOString();
-    const row = await deps.store.insert(REVIEWS_TABLE, {
+    const row = await reviewTables(() => deps.store.insert(REVIEWS_TABLE, {
       id: crypto.randomUUID(),
       org_id: ctx.org.id,
       project_id: item.project_id,
@@ -291,7 +299,7 @@ export async function reviewContent(deps: ReviewDeps, ctx: Ctx, raw: unknown): P
       approval: null,
       created_by: ctx.actorId,
       created_at: createdAt,
-    });
+    }));
     const blocking = blockingCount({ claims, findings });
     await audit(deps, ctx, {
       projectId: item.project_id,
@@ -316,11 +324,11 @@ export async function approveReview(deps: EngineDeps, ctx: Ctx, raw: unknown): P
   if (!APPROVERS.has(ctx.role)) throw new EngineError("forbidden", "Only workspace owners, admins and reviewers can approve a content review.");
   const input = parse(approveReviewInputSchema, raw);
   return idempotent(deps, ctx, "approve_review", input.operationKey, input, async () => {
-    const review = await selectOne(deps.store, REVIEWS_TABLE, { id: input.reviewId, org_id: ctx.org.id });
+    const review = await reviewTables(() => selectOne(deps.store, REVIEWS_TABLE, { id: input.reviewId, org_id: ctx.org.id }));
     if (!review) throw new EngineError("not_found", "This review was not found in your workspace.");
     const item = await loadItem(deps, ctx, review.item_id);
     if (review.item_revision !== item.revision) throw new EngineError("revision_conflict", "The script changed after this review. Run a new review.");
-    const latest = await latestRow(deps, ctx, item.id);
+    const latest = await reviewTables(() => latestRow(deps, ctx, item.id));
     if (latest && latest.id !== review.id) throw new EngineError("revision_conflict", "A newer review of this item exists. Open it and approve that one.");
     if (review.approval) return reviewContract(review);
     const domain = review.domain as RegulatedDomain;
@@ -336,7 +344,7 @@ export async function approveReview(deps: EngineDeps, ctx: Ctx, raw: unknown): P
       throw new EngineError("validation_error", `This review still has ${blocking} blocking item${blocking === 1 ? "" : "s"}. Write at least 20 characters saying why ${blocking === 1 ? "it is" : "they are"} acceptable.`);
     const approval = { by: input.by, credential: input.credential, note: input.note, principalId: ctx.actorId, at: deps.now().toISOString() };
     // Compare-and-swap: two approvers at once cannot both record theirs.
-    const [row] = await deps.store.update(REVIEWS_TABLE, { id: review.id, org_id: ctx.org.id, approval: null }, { approval, status: "approved" });
+    const [row] = await reviewTables(() => deps.store.update(REVIEWS_TABLE, { id: review.id, org_id: ctx.org.id, approval: null }, { approval, status: "approved" }));
     if (!row) throw new EngineError("revision_conflict", "Someone approved this review just now. Reload it.");
     await audit(deps, ctx, {
       projectId: review.project_id,
