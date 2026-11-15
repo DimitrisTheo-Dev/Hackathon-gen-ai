@@ -37,6 +37,7 @@ This file was regenerated from the shipped CSS on 15 November 2026. The tokens l
 - **Controls:** a 2px ink ring, 2px outside the edge.
 - **Fields:** a 1px inset line, with no halo.
 - **Composite controls** (composers, search, OTP): the wrapper draws the one indicator.
+- **Create's preference pills** (Format, Length, Language, Presenter): the pill lights up instead of being ringed. Its edge turns golden `--highlight-edge` (dashed while unset, solid once set), with a warm fill and a 3px amber glow. Focus appears at once and fades out; forced-colors mode gets a system outline.
 - **Rows inside a clipped list:** an inset ring that follows the list's corners.
 - **A dialog that takes focus itself:** an inset ring.
 - **Cascade:** these rules are unlayered, so a refinement of them must be unlayered too.
