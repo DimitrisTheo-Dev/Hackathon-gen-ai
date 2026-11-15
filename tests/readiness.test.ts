@@ -74,6 +74,7 @@ test("status describes the deployment it runs on: configured capabilities turn o
   assert.equal(buildPublicStatus({ ...fullEnv, STRIPE_MODE: "live" }).engine.billing, "not_configured");
   assert.equal(buildPublicStatus({ ...fullEnv, STRIPE_WEBHOOK_SECRET: "" }).engine.billing, "not_configured");
   assert.equal(buildPublicStatus({ ...engineEnv, AI_GATEWAY_API_KEY: "gateway" }).engine.director, "ai");
+  assert.equal(buildPublicStatus({ ...engineEnv, GEMINI_API_KEY: "gemini" }).engine.director, "ai");
 });
 
 test("public status agrees with what the engine itself accepts as configuration", () => {
@@ -82,7 +83,7 @@ test("public status agrees with what the engine itself accepts as configuration"
     { ...fullEnv, RENDER_WORKER_TOKEN: "too-short" }, { ...fullEnv, RENDER_WORKER_TOKEN: `  ${"y".repeat(32)}  ` },
     { ...fullEnv, STRIPE_SECRET_KEY: "rk_test_restricted" }, { ...fullEnv, STRIPE_SECRET_KEY: "sk_live_x" }, { ...fullEnv, STRIPE_MODE: "production" },
     { ...fullEnv, STRIPE_PRICE_ID_DEMO: "prod_wrong_object" }, { ...fullEnv, STRIPE_WEBHOOK_SECRET: "not-a-signing-secret" },
-    { ...fullEnv, ANTHROPIC_API_KEY: "   " }, { ...engineEnv, AI_GATEWAY_API_KEY: "gateway" },
+    { ...fullEnv, ANTHROPIC_API_KEY: "   " }, { ...engineEnv, AI_GATEWAY_API_KEY: "gateway" }, { ...engineEnv, GEMINI_API_KEY: "gemini" },
   ];
   for (const env of variants) {
     const config = loadConfig(env);

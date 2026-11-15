@@ -193,9 +193,9 @@ Media is stored at `media/<org>/<item>/r<revision>-<job>.<ext>` in a private buc
 - **Create** saves a project and its drafts immediately (free and reversible). Nothing is rendered or scheduled.
 - **Edit, schedule, render, schedule review, checkout** come back as a `plan` of typed actions (`revise`, `render`, `review_schedule`, `checkout`). A person applies each one; each runs through the normal operation with its scope, revision and quota checks.
 - The model has no tools and no credentials. Its output is schema-validated; item IDs outside the current project are dropped; presenters that are not authorized for the workspace and language are dropped. Source text, earlier messages and workspace content are passed as data.
-- Without `ANTHROPIC_API_KEY` the director runs in `basic` mode: lookups, credits and schedule review work, and it says plainly that it cannot write.
+- Without a model key (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY` or the AI Gateway) the director runs in `basic` mode: lookups, credits and schedule review work, and it says plainly that it cannot write.
 
-Model: `claude-opus-5-5` through the Anthropic SDK, structured output, low effort, with server-side refusal fallback enabled (`fallbacks: "default"`). Override with `DIRECTOR_MODEL`.
+Model: with `GEMINI_API_KEY`, `gemini-4-hydrogen` through Google's `generateContent` API (key in the `x-goog-api-key` header), the plan's JSON Schema as `responseJsonSchema`, thinking level `low`, one retry on a server error. With `ANTHROPIC_API_KEY`, `claude-opus-5-5` through the Anthropic SDK, structured output, low effort, with server-side refusal fallback enabled (`fallbacks: "default"`); if both keys are set, Anthropic is used unless `DIRECTOR_PROVIDER=gemini`. Override the model with `DIRECTOR_MODEL`. Either way the reply is validated against the same plan schema before anything is saved.
 
 ## 9. MCP
 

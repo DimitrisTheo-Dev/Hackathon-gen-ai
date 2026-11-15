@@ -57,7 +57,89 @@ export interface Planner {
   plan(input: { system: string; user: string }): Promise<PlannerOutput>;
 }
 
-export function createPlanner(config: LlmConfig): Planner {
+/** Parses the model's final text as a plan. Anything that is not exactly a valid plan changes nothing. */
+function readPlan(text: string): PlannerOutput {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new EngineError("provider_unavailable", "The creative model returned an unreadable plan. Nothing was changed; try again.");
+  }
+  const parsed = plannerOutputSchema.safeParse(json);
+  if (!parsed.success) throw new EngineError("provider_unavailable", "The creative model returned an invalid plan. Nothing was changed; try again.");
+  return parsed.data;
+}
+
+const declined = () => new EngineError("unsupported", "The creative model declined this request. Rephrase it, or edit the script yourself in Details.");
+const tooLong = () => new EngineError("provider_unavailable", "The plan was too long to finish. Ask for fewer items at once.");
+
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta";
+/** The plan's JSON Schema in the subset Gemini accepts (`anyOf`, `["string","null"]`, `enum`, `description`). */
+function geminiResponseSchema() {
+  const { $schema: _dialect, ...schema } = z.toJSONSchema(plannerOutputSchema);
+  return schema;
+}
+/** Why Gemini stopped. Anything other than these two means the content was withheld. */
+const GEMINI_FINISHED = new Set(["STOP", "MAX_TOKENS"]);
+interface GeminiResponse {
+  promptFeedback?: { blockReason?: string };
+  candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
+}
+
+/**
+ * Gemini through Google's own `generateContent` API. The key travels in a header, never in the URL, and the
+ * response is constrained to the same plan schema the Anthropic path uses, then validated again here.
+ */
+function createGeminiPlanner(config: LlmConfig, fetchImpl: typeof fetch): Planner {
+  const url = `${GEMINI_API_URL}/models/${encodeURIComponent(config.model)}:generateContent`;
+  const responseJsonSchema = geminiResponseSchema();
+  return {
+    async plan({ system, user }) {
+      const body = JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: {
+          maxOutputTokens: 16000,
+          responseMimeType: "application/json",
+          responseJsonSchema,
+          // Interactive planning: keep latency down.
+          thinkingConfig: { thinkingLevel: "low" },
+        },
+      });
+      let response: Response | undefined;
+      // One retry on a server error, as the Anthropic client does.
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          response = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": config.apiKey ?? "" }, body, signal: AbortSignal.timeout(90_000) });
+        } catch {
+          throw new EngineError("provider_unavailable", "The creative model could not be reached. Nothing was changed.");
+        }
+        if (response.status < 500) break;
+      }
+      if (!response!.ok) {
+        const status = response!.status;
+        const error = ((await response!.json().catch(() => null)) as { error?: { status?: string; details?: Array<{ reason?: string }> } } | null)?.error;
+        const reasons = (error?.details ?? []).map((detail) => detail.reason);
+        if (status === 429) throw new EngineError("quota_exceeded", "The creative model is busy. Nothing was changed; try again in a moment.", { retryAfterSeconds: 20 });
+        if (status === 401 || status === 403 || reasons.includes("API_KEY_INVALID"))
+          throw new EngineError("provider_unavailable", "The creative model rejected this deployment’s credentials. Nothing was changed.");
+        console.error(JSON.stringify({ level: "error", event: "planner_error", provider: "gemini", status, reason: error?.status ?? null }));
+        throw new EngineError("provider_unavailable", "The creative model could not prepare a plan. Nothing was changed; try again.");
+      }
+      const data = (await response!.json().catch(() => null)) as GeminiResponse | null;
+      if (data?.promptFeedback?.blockReason) throw declined();
+      const candidate = data?.candidates?.[0];
+      if (candidate?.finishReason === "MAX_TOKENS") throw tooLong();
+      if (candidate?.finishReason && !GEMINI_FINISHED.has(candidate.finishReason)) throw declined();
+      // Thought summaries, if any, are not part of the answer.
+      const text = (candidate?.content?.parts ?? []).flatMap((part) => (typeof part.text === "string" && !part.thought ? [part.text] : [])).join("");
+      return readPlan(text);
+    },
+  };
+}
+
+export function createPlanner(config: LlmConfig, fetchImpl: typeof fetch = globalThis.fetch): Planner {
+  if (config.provider === "gemini") return createGeminiPlanner(config, fetchImpl);
   const firstParty = config.provider === "anthropic";
   async function client() {
     if (firstParty) return new Anthropic({ apiKey: config.apiKey, timeout: 90_000, maxRetries: 1 });
@@ -98,18 +180,9 @@ export function createPlanner(config: LlmConfig): Planner {
         }
         throw new EngineError("provider_unavailable", "The creative model could not be reached. Nothing was changed.");
       }
-      if (response.stop_reason === "refusal") throw new EngineError("unsupported", "The creative model declined this request. Rephrase it, or edit the script yourself in Details.");
-      if (response.stop_reason === "max_tokens") throw new EngineError("provider_unavailable", "The plan was too long to finish. Ask for fewer items at once.");
-      const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
-      let json: unknown;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        throw new EngineError("provider_unavailable", "The creative model returned an unreadable plan. Nothing was changed; try again.");
-      }
-      const parsed = plannerOutputSchema.safeParse(json);
-      if (!parsed.success) throw new EngineError("provider_unavailable", "The creative model returned an invalid plan. Nothing was changed; try again.");
-      return parsed.data;
+      if (response.stop_reason === "refusal") throw declined();
+      if (response.stop_reason === "max_tokens") throw tooLong();
+      return readPlan(response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""));
     },
   };
 }
