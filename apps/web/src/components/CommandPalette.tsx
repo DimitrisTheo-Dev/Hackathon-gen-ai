@@ -1,15 +1,16 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Search, Folder, FileVideo, Plus, Plug, CalendarDays } from "lucide-react";
+import { Search, Folder, FileVideo, Plus, Plug, CalendarDays, Palette } from "lucide-react";
 import type { Campaign } from "@castroom/contracts";
 import { Modal } from "./ui";
 
-export function CommandPalette({ campaigns, onClose, onCampaign, onItem, onCreate, onConnect, onReview }: {
+export function CommandPalette({ campaigns, onClose, onCampaign, onItem, onCreate, onConnect, onBrand, onReview }: {
   campaigns: Campaign[];
   onClose: () => void;
   onCampaign: (id: string) => void;
   onItem: (campaignId: string, itemId: string) => void;
   onCreate: () => void;
   onConnect: () => void;
+  onBrand?: () => void;
   onReview?: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -22,8 +23,9 @@ export function CommandPalette({ campaigns, onClose, onCampaign, onItem, onCreat
     ...campaigns.flatMap(c => c.items.map(i => ({ id: i.id, group: "Content", title: i.title, detail: `${c.title} · v${i.revision}`, Icon: FileVideo, run: () => onItem(c.id, i.id) }))),
     { id: "new", group: "Actions", title: "Create a campaign", detail: "Start with your company brief", Icon: Plus, run: onCreate },
     { id: "connect", group: "Actions", title: "Connect your agent", detail: "Codex or Claude Code setup", Icon: Plug, run: onConnect },
+    ...(onBrand ? [{ id: "brand", group: "Actions", title: "Brand kit", detail: "Name, voice, colour, guardrails and products", Icon: Palette, run: onBrand }] : []),
     ...(onReview ? [{ id: "review", group: "Actions", title: "Review schedule", detail: "Inspect the exact publishing manifest", Icon: CalendarDays, run: onReview }] : []),
-  ].filter(e => `${e.title} ${e.detail}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [campaigns, query, onCampaign, onItem, onCreate, onConnect, onReview]);
+  ].filter(e => `${e.title} ${e.detail}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [campaigns, query, onCampaign, onItem, onCreate, onConnect, onBrand, onReview]);
   const chosen = Math.min(active, Math.max(0, entries.length - 1));
   function execute(index: number) { const entry = entries[index]; if (entry) { onClose(); entry.run(); } }
   return <Modal title="Find in your studio" onClose={onClose} animateEntry={false}>

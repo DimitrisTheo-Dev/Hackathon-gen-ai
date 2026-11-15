@@ -10,6 +10,7 @@ import {
   CreditCard,
   Clock3,
   FileText,
+  Palette,
   Film,
   Folder,
   Grid2X2,
@@ -820,7 +821,6 @@ export function Studio({
             {!fixture && <button className={view === "clone" ? "active" : ""} aria-current={view==="clone"?"page":undefined} title="Clone a video" onClick={() => go("clone")}><CopyPlus size={16} /><span>Clone a video</span></button>}
             <button className={view === "schedule" ? "active" : ""} aria-current={view==="schedule"?"page":undefined} title="Schedule" onClick={() => go("schedule")}><CalendarDays size={16} /><span>Schedule</span></button>
             {!fixture && <button className={view === "personas" ? "active" : ""} aria-current={view==="personas"?"page":undefined} title="Personas" onClick={() => go("personas")}><UserRound size={16} /><span>Personas</span></button>}
-            <button className={view === "brand" ? "active" : ""} aria-current={view==="brand"?"page":undefined} title="Brand kit" onClick={() => go("brand")}><FileText size={16} /><span>Brand kit</span></button>
             {!fixture && <button className={view === "billing" ? "active" : ""} aria-current={view==="billing"?"page":undefined} title="Billing" onClick={() => go("billing")}><CreditCard size={16} /><span>Billing</span></button>}
           </nav>
           <div className="projects-heading">
@@ -844,6 +844,11 @@ export function Studio({
             })}
           </nav>
           <div className="sidebar-bottom">
+            {/* Workspace settings live here, beside agents and credits: set once, opened rarely. */}
+            <button className={`sidebar-row ${view === "brand" ? "selected" : ""}`} aria-current={view === "brand" ? "page" : undefined} title="Brand kit" onClick={() => go("brand")}>
+              <Palette size={16} />
+              <span>Brand kit</span>
+            </button>
             <button className={`sidebar-row agent-status ${view === "connect" ? "selected" : ""}`} title="Agents" onClick={() => go("connect")}>
               <Plug size={16} />
               <span>Agents</span>
@@ -938,6 +943,7 @@ export function Studio({
               <div className="home-actions" aria-label="Other ways to start">
                 <button className="text-button" onClick={()=>setCreating(true)}><PenLine size={13} aria-hidden="true"/>Create with my own script</button>
                 <button className="text-button" onClick={()=>go("connect")}><Plug size={13} aria-hidden="true"/>Connect your agent</button>
+                <button className="text-button" onClick={()=>go("brand")}><Palette size={13} aria-hidden="true"/>{context.brand.name ? `${context.brand.name} brand kit` : "Brand kit"}</button>
               </div>
             </div>) : view === "home" ? null : view === "templates" ? (
               <Suspense fallback={<TemplatesSkeleton />}><TemplateLibrary client={client} /></Suspense>
@@ -987,6 +993,7 @@ export function Studio({
                   void fetchCampaign(id).catch(() => undefined);
                 }}
                 onStartProject={() => go("home")}
+                draftFromWebsite={!fixture}
               /></Suspense>
             ) : !campaign && view === "schedule" && !fixture ? (
               // No project yet: channels can still be connected here, and Google returns to this view to finish connecting.
@@ -1401,7 +1408,7 @@ export function Studio({
           )}
         </Modal>
       )}
-      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => setCreating(true)} onConnect={() => go("connect")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
+      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => setCreating(true)} onConnect={() => go("connect")} onBrand={() => go("brand")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
     </div>
   );
 }
