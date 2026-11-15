@@ -17,7 +17,9 @@
  *   RENDER_CONCURRENCY      Chrome tabs per render (default: Remotion's choice)
  *   CHROME_EXECUTABLE       optional path to Chrome; Remotion's headless shell is used otherwise
  *   CHROME_MODE             "headless-shell" (default) or "chrome-for-testing" (needed for a desktop Chrome)
- *   MEDIA_HOST_ALLOWLIST    extra hosts (comma separated) that linked media may come from
+ *   SUPABASE_URL            the engine's Supabase project URL: its signed media links come from this host
+ *   FACEFUL_R2_ACCOUNT_ID   the engine's R2 account: draft files come from <account>.r2.cloudflarestorage.com
+ *   MEDIA_HOST_ALLOWLIST    more exact host names (comma separated) that linked media may come from
  *   WORK_DIR                scratch folder for renders (default: the OS temp folder)
  */
 import { createHash } from "node:crypto";
@@ -28,6 +30,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundle } from "@remotion/bundler";
 import { makeCancelSignal, renderMedia, selectComposition } from "@remotion/renderer";
+import { allowedMediaUrl, mediaHosts, stageMedia, type StagedMedia } from "./media.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -37,8 +40,8 @@ const WORKER_ID = (env.WORKER_ID ?? hostname()).replace(/[^A-Za-z0-9._:-]/g, "-"
 const POLL_MS = Math.max(1, Number(env.POLL_SECONDS ?? 5)) * 1000;
 const WORK_DIR = env.WORK_DIR ?? join(tmpdir(), "faceful-reel-worker");
 const ONCE = process.argv.includes("--once");
-/** Linked (non-file) media may only come from these hosts; draft files are signed links from the engine. */
-const ALLOWED_HOSTS = ["r2.cloudflarestorage.com", "supabase.co", ...(env.MEDIA_HOST_ALLOWLIST ?? "").split(",").map((host) => host.trim()).filter(Boolean)];
+/** Every media file, signed draft-file links included, may only come from these exact hosts (media.ts). */
+const MEDIA_HOSTS = mediaHosts(env);
 
 if (!/^https?:\/\//.test(API) || TOKEN.length < 32) {
   console.error("Set FACEFUL_API_URL and REEL_WORKER_TOKEN (at least 32 characters).");
@@ -76,15 +79,6 @@ async function call<T>(path: string, body: unknown): Promise<T> {
   return payload as T;
 }
 
-function allowedHost(url: string) {
-  try {
-    const { protocol, hostname: host } = new URL(url);
-    return protocol === "https:" && ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
-  } catch {
-    return false;
-  }
-}
-
 let serveUrl: string | null = null;
 async function bundled() {
   if (serveUrl) return serveUrl;
@@ -103,17 +97,15 @@ async function bundled() {
 }
 
 async function render(job: Job) {
-  const linked = [...job.composition.video, ...job.composition.audio].map((clip) => clip.source).filter((source) => source.kind === "url").map((source) => source.url!);
-  const refused = linked.filter((url) => !allowedHost(url));
+  const clips = [...job.composition.video, ...job.composition.audio];
+  const linked = clips.map((clip) => clip.source).filter((source) => source.kind === "url").map((source) => source.url!);
+  const refused = linked.filter((url) => !allowedMediaUrl(url, MEDIA_HOSTS));
   if (refused.length) throw new Error(`Linked media from hosts this worker does not allow: ${[...new Set(refused.map((url) => new URL(url).host))].join(", ")}. Upload them as draft files instead.`);
+  const itemMedia = clips.some((clip) => clip.source.kind === "item_media") ? job.itemMedia : null;
 
-  const inputProps = { composition: job.composition, media: { itemMedia: job.itemMedia?.url ?? null, files: Object.fromEntries(Object.entries(job.files).map(([id, file]) => [id, { url: file.url, mime: file.mime }])) } };
-  const url = await bundled();
-  const browserExecutable = env.CHROME_EXECUTABLE || null;
-  const chromeMode = env.CHROME_MODE === "chrome-for-testing" ? "chrome-for-testing" : "headless-shell";
-  const composition = await selectComposition({ serveUrl: url, id: "Reel", inputProps, browserExecutable, chromeMode, logLevel: "warn" });
   await mkdir(WORK_DIR, { recursive: true });
   const output = join(WORK_DIR, `${job.id}.mp4`);
+  const staging = join(WORK_DIR, job.id);
   const { cancelSignal, cancel } = makeCancelSignal();
   let lastBeat = 0;
   let stopped: Error | null = null;
@@ -127,9 +119,22 @@ async function render(job: Job) {
       }
     }
   };
-  // The lease is renewed by progress reports; a heartbeat keeps it alive through slow stretches.
+  // The lease is renewed by progress reports; a heartbeat keeps it alive through downloads and slow stretches.
   const heartbeat = setInterval(() => void beat(0), Math.max(30, job.leaseSeconds / 3) * 1000);
+  let staged: StagedMedia | null = null;
   try {
+    // The renderer only ever sees 127.0.0.1 copies; media.ts fetched each one from an allowed host.
+    staged = await stageMedia([...linked, ...(itemMedia ? [itemMedia.url] : []), ...Object.values(job.files).map((file) => file.url)], staging, MEDIA_HOSTS);
+    const local = staged.url;
+    const relink = <T extends { source: { kind: string; url?: string } }>(clip: T): T => (clip.source.kind === "url" ? { ...clip, source: { ...clip.source, url: local(clip.source.url!) } } : clip);
+    const inputProps = {
+      composition: { ...job.composition, video: job.composition.video.map(relink), audio: job.composition.audio.map(relink) },
+      media: { itemMedia: itemMedia ? local(itemMedia.url) : null, files: Object.fromEntries(Object.entries(job.files).map(([id, file]) => [id, { url: local(file.url), mime: file.mime }])) },
+    };
+    const url = await bundled();
+    const browserExecutable = env.CHROME_EXECUTABLE || null;
+    const chromeMode = env.CHROME_MODE === "chrome-for-testing" ? "chrome-for-testing" : "headless-shell";
+    const composition = await selectComposition({ serveUrl: url, id: "Reel", inputProps, browserExecutable, chromeMode, logLevel: "warn" });
     await renderMedia({
       composition,
       serveUrl: url,
@@ -152,13 +157,15 @@ async function render(job: Job) {
         void beat(progress);
       },
     });
+    return { output, durationSeconds: composition.durationInFrames / composition.fps };
   } catch (error) {
     if (stopped) throw stopped;
     throw error;
   } finally {
     clearInterval(heartbeat);
+    await staged?.close();
+    await rm(staging, { recursive: true, force: true });
   }
-  return { output, durationSeconds: composition.durationInFrames / composition.fps };
 }
 
 async function deliver(job: Job, output: string, durationSeconds: number) {
@@ -199,7 +206,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const)
     running = false;
   });
 
-log("started", { api: API, allowedHosts: ALLOWED_HOSTS, workDir: resolve(WORK_DIR) });
+log("started", { api: API, mediaHosts: MEDIA_HOSTS, workDir: resolve(WORK_DIR) });
+if (!MEDIA_HOSTS.length) log("no_media_hosts", { message: "Set SUPABASE_URL and FACEFUL_R2_ACCOUNT_ID (the engine's), or MEDIA_HOST_ALLOWLIST: renders with media fail until then." });
 while (running) {
   let worked = false;
   try {
