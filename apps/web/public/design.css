@@ -7,6 +7,7 @@
   --subtle: #F0EFEA; --muted-surface: #ECEAE4; --border: #E4E2DA;
   --green: #3AA676; --positive-ink: #246B4C; --positive-surface: #EDF5EF;
   --highlight: #FFB000; --highlight-soft: rgba(255,176,0,.38);
+  --highlight-edge: #B47A00; /* the golden line that still reads on white (3.7:1); pure #FFB000 is 1.8:1 */
   --warning-ink: #74531C; --warning-surface: #FFF4D9;
   --danger: #A23E3E; --danger-surface: #FFF1EF; --danger-border: #E6C8C1;
   --focus: #2A2A27; --canvas: var(--background); --paper: var(--background);
