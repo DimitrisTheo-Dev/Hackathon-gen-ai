@@ -14,9 +14,10 @@ test('chat-first home docks the same conversation and exact edits update the can
 for(const width of [390,320])test(`mobile chat home ${width}: request, results and conversation resume`,async({page})=>{
  await page.setViewportSize({width,height:844});await page.goto('/dev/studio/');await expect(page.getByRole('heading',{name:'What will we create today?'})).toBeVisible();await expect(page.getByRole('button',{name:/switch project$/})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:evidence(`home-${width}.png`)});
- await page.getByLabel('Direction for your content').fill('Create a 15-second video');await page.getByRole('button',{name:'Prepare action plan'}).click();await expect(page.getByRole('dialog',{name:'Content editor'})).toBeVisible();await expect(page.locator('.director-turn').last()).toContainText('not connected');
+ // A campaign stays with the Director (one new video would open the New project flow instead).
+ await page.getByLabel('Direction for your content').fill('Plan three short videos for next week');await page.getByRole('button',{name:'Prepare action plan'}).click();await expect(page.getByRole('dialog',{name:'Content editor'})).toBeVisible();await expect(page.locator('.director-turn').last()).toContainText('not connected');
  await page.getByRole('button',{name:'Preview',exact:true}).click();await expect(page.locator('.content-card')).toHaveCount(3);await expect(page.locator('.editor')).toBeHidden();
- await page.getByRole('navigation',{name:'Workspace shortcuts'}).getByRole('button',{name:'Chat',exact:true}).click();await expect(page.locator('.director-turn').last()).toContainText('Create a 15-second video');await expect(page.getByLabel('Direction for your content')).toBeVisible();
+ await page.getByRole('navigation',{name:'Workspace shortcuts'}).getByRole('button',{name:'Chat',exact:true}).click();await expect(page.locator('.director-turn').last()).toContainText('Plan three short videos for next week');await expect(page.getByLabel('Direction for your content')).toBeVisible();
 });
 
 test('unsent directions survive item and Details switches; prior playback stays honest',async({page})=>{

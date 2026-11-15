@@ -167,7 +167,7 @@ const scripted: Planner = {
         reply: "I drafted a 15-second reel for BeWell.",
         project: {
           title: "BeWell launch reel", brandName: "BeWell", brandDescription: "A festival companion app.", audience: "Festival visitors", tone: "Friendly", language: greek ? "el" : "en",
-          items: [{ title: greek ? "Γνώρισε το BeWell" : "Meet BeWell", script: greek ? "Γεια σου! Αυτό είναι το BeWell. Οργάνωσε τη μέρα σου στο φεστιβάλ." : "Hi! Meet BeWell. Plan your festival day in one place.", caption: "Meet BeWell.", avatarId: null, schedule: /monday/i.test(request) ? [{ platform: "instagram", localDateTime: "2026-11-16T09:00" }] : [] }],
+          items: [{ title: greek ? "Γνώρισε το BeWell" : "Meet BeWell", script: greek ? "Γεια σου! Αυτό είναι το BeWell. Οργάνωσε τη μέρα σου στο φεστιβάλ." : "Hi! Meet BeWell. Plan your festival day in one place.", caption: "Meet BeWell.", avatarId: null, language: null, schedule: /monday/i.test(request) ? [{ platform: "instagram", localDateTime: "2026-11-16T09:00" }] : [] }],
         },
       };
     }

@@ -51,6 +51,16 @@ import {
   type ContentReview,
   type Product,
   type VideoClip,
+  beatsFromText,
+  completeTakeInputSchema,
+  draftScriptInputSchema,
+  draftScriptResultSchema,
+  startTakeInputSchema,
+  TAKE_MAX_PARTS,
+  TAKE_PART_BYTES,
+  takePartInputSchema,
+  takeUploadSchema,
+  workingTitle,
 } from "@castroom/contracts";
 import {
   ApiError,
@@ -58,7 +68,8 @@ import {
   validate,
   type StudioClient,
 } from "./client";
-import { FIXTURE_UPLOAD_PREFIX, fixtureBlobs } from "./fixture-uploads";
+import { dropFixtureParts, FIXTURE_UPLOAD_PREFIX, fixtureBlobs, joinFixtureParts } from "./fixture-uploads";
+import { samplePersonas } from "./sample-personas";
 import { nextClipId, windowAt } from "../video/model";
 
 /** Explicit development-only transport. Never import it from the live transport. */
@@ -800,7 +811,8 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     connectChannel: unavailable,
     disconnectChannel: unavailable,
     // Personas are made from a face scan kept in private storage, which the local preview does not have.
-    listPersonas: async () => [],
+    // `?faces=sample` lists fictional presenters instead, to see the New project Look step with faces.
+    listPersonas: async () => samplePersonas(),
     createPersona: unavailable,
     updatePersona: unavailable,
     deletePersona: unavailable,
@@ -919,6 +931,53 @@ export function createFixtureClient(storage?: Storage): StudioClient {
         state.fileTexts[file.id] = text;
         return withUrl(state, file);
       });
+    },
+    // No model runs in this browser-only workspace: the description is split into lines, exactly as a workspace
+    // without AI writing does, and a rewrite keeps the script as it is.
+    draftScript: async (raw) => {
+      const input = validate(draftScriptInputSchema, raw);
+      return draftScriptResultSchema.parse({
+        mode: "basic",
+        title: workingTitle(input.brief),
+        beats: input.beats?.length ? input.beats : beatsFromText(input.brief),
+        reply: input.beats?.length
+          ? "Development workspace: no AI writing runs here, so nothing was rewritten. Edit any line directly."
+          : "Development workspace: no AI writing runs here, so your description was split into lines to edit.",
+      });
+    },
+    startTake: async (raw) => {
+      const input = validate(startTakeInputSchema, raw);
+      return mutate("start_take_upload", input, takeUploadSchema, (state) => {
+        const file = newFile(state, { campaignId: input.campaignId, itemId: input.itemId, kind: input.kind, name: input.name, mime: input.mime, bytes: 0, sha256: "0".repeat(64), durationSeconds: null, meta: { source: "recorded in the studio" } }, false);
+        return { fileId: file.id, partBytes: TAKE_PART_BYTES, maxParts: TAKE_MAX_PARTS };
+      });
+    },
+    takePartUrl: async (raw) => {
+      const input = validate(takePartInputSchema, raw);
+      const file = read().files.find((entry) => entry.id === input.fileId);
+      if (!file || file.state !== "pending") throw new ApiError("not_found", "This development recording was not found.");
+      return { url: `${FIXTURE_UPLOAD_PREFIX}part:${input.fileId}:${input.partNumber}`, headers: {} };
+    },
+    completeTake: async (raw) => {
+      const input = validate(completeTakeInputSchema, raw);
+      return mutate("complete_take_upload", input, draftFileSchema, (state) => {
+        const file = state.files.find((entry) => entry.id === input.fileId);
+        if (!file || file.state === "archived") throw new ApiError("not_found", "This development recording was not found.");
+        if (file.state === "ready") return withUrl(state, file);
+        const bytes = joinFixtureParts(file.id, input.parts.map((part) => part.partNumber), file.mime);
+        if (bytes === null || bytes !== input.bytes) throw new ApiError("validation_error", "The recording is missing a part. Record again.");
+        Object.assign(file, { state: "ready", bytes, sha256: input.sha256, durationSeconds: input.durationSeconds });
+        return withUrl(state, file);
+      });
+    },
+    abortTake: async ({ fileId }) => {
+      dropFixtureParts(fileId);
+      const state = read();
+      const file = state.files.find((entry) => entry.id === fileId);
+      if (file?.state === "pending") {
+        file.state = "archived";
+        write(state);
+      }
     },
     archiveFile: async ({ fileId, operationKey }) =>
       mutate("archive_file", { fileId, operationKey } as { fileId: string; operationKey: string }, draftFileSchema, (state) => {

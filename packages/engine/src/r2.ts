@@ -25,6 +25,13 @@ export interface FileStore {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   /** Deletes one object. Deleting an object that is already gone succeeds. */
   remove(key: string): Promise<void>;
+  /** Opens a multipart upload (a recording streamed while it is made) and returns its upload id. */
+  createMultipart(key: string, contentType: string): Promise<string>;
+  /** URL a client PUTs one part to. The part's size is signed, so a body of any other length is refused. */
+  partUrl(key: string, uploadId: string, options: { partNumber: number; bytes: number; expiresSeconds: number }): Promise<{ url: string; headers: Record<string, string> }>;
+  completeMultipart(key: string, uploadId: string, parts: Array<{ partNumber: number; etag: string }>): Promise<void>;
+  /** Drops an unfinished multipart upload and its parts. Aborting one that is already gone succeeds. */
+  abortMultipart(key: string, uploadId: string): Promise<void>;
 }
 
 const UNRESERVED = /[A-Za-z0-9\-_.~]/;
@@ -144,6 +151,33 @@ export class R2FileStore implements FileStore {
     const response = await this.fetcher(this.sign("DELETE", key, 60), { method: "DELETE" });
     if (!response.ok && response.status !== 404) throw new EngineError("provider_unavailable", "File storage could not delete the file. Try again.");
   }
+  async createMultipart(key: string, contentType: string) {
+    const response = await this.fetcher(this.sign("POST", key, 60, { "content-type": contentType }, { uploads: "" }), { method: "POST", headers: { "content-type": contentType } });
+    const uploadId = response.ok ? (await response.text()).match(/<UploadId>([^<]+)<\/UploadId>/)?.[1] : undefined;
+    if (!uploadId) throw new EngineError("provider_unavailable", "File storage could not start the upload. Nothing was saved; try again.");
+    return uploadId;
+  }
+  async partUrl(key: string, uploadId: string, options: { partNumber: number; bytes: number; expiresSeconds: number }) {
+    if (!Number.isSafeInteger(options.bytes) || options.bytes <= 0) throw new EngineError("validation_error", "That part size is not valid.");
+    // As with a single upload, the length is signed but not handed back: the browser sends the real one itself.
+    const url = this.sign("PUT", key, options.expiresSeconds, { "content-length": String(options.bytes) }, { partNumber: String(options.partNumber), uploadId });
+    return { url, headers: {} };
+  }
+  async completeMultipart(key: string, uploadId: string, parts: Array<{ partNumber: number; etag: string }>) {
+    const xml = (value: string) => value.replace(/[<>&'"]/g, (char) => `&#${char.charCodeAt(0)};`);
+    const body = `<CompleteMultipartUpload>${[...parts]
+      .sort((a, b) => a.partNumber - b.partNumber)
+      .map((part) => `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>${xml(part.etag)}</ETag></Part>`)
+      .join("")}</CompleteMultipartUpload>`;
+    const response = await this.fetcher(this.sign("POST", key, 60, { "content-type": "application/xml" }, { uploadId }), { method: "POST", headers: { "content-type": "application/xml" }, body });
+    // S3 can answer 200 with an <Error> body when the failure happens after the response has started.
+    const text = response.ok ? await response.text() : "";
+    if (!response.ok || text.includes("<Error>")) throw new EngineError("validation_error", "The recording’s parts could not be joined. Record again, or upload the file instead.");
+  }
+  async abortMultipart(key: string, uploadId: string) {
+    const response = await this.fetcher(this.sign("DELETE", key, 60, {}, { uploadId }), { method: "DELETE" });
+    if (!response.ok && response.status !== 404) throw new EngineError("provider_unavailable", "File storage could not cancel the upload. Try again.");
+  }
 }
 
 /** Placeholder when R2 is not configured: every call explains what is missing instead of failing silently. */
@@ -157,6 +191,10 @@ export class UnconfiguredFileStore implements FileStore {
   async head(): Promise<never> { return this.fail(); }
   async put(): Promise<never> { return this.fail(); }
   async remove(): Promise<never> { return this.fail(); }
+  async createMultipart(): Promise<never> { return this.fail(); }
+  async partUrl(): Promise<never> { return this.fail(); }
+  async completeMultipart(): Promise<never> { return this.fail(); }
+  async abortMultipart(): Promise<never> { return this.fail(); }
 }
 
 /** Test store: objects in memory, URLs that name the object and the declared checksum. */
@@ -182,5 +220,41 @@ export class MemoryFileStore implements FileStore {
   async remove(key: string) {
     assertKey(key);
     this.objects.delete(key);
+  }
+  /** Open multipart uploads: parts arrive through `putPart`, as a browser's PUTs would. */
+  readonly uploads = new Map<string, { key: string; contentType: string; parts: Map<number, Uint8Array> }>();
+  async createMultipart(key: string, contentType: string) {
+    assertKey(key);
+    const uploadId = `upload-${this.uploads.size + 1}-${crypto.randomUUID()}`;
+    this.uploads.set(uploadId, { key, contentType, parts: new Map() });
+    return uploadId;
+  }
+  async partUrl(key: string, uploadId: string, options: { partNumber: number; bytes: number }) {
+    assertKey(key);
+    return { url: `https://files.test/part/${key}?uploadId=${encodeURIComponent(uploadId)}&partNumber=${options.partNumber}&bytes=${options.bytes}`, headers: {} };
+  }
+  /** Test hook: stores one part and returns its ETag. */
+  putPart(uploadId: string, partNumber: number, bytes: Uint8Array) {
+    const upload = this.uploads.get(uploadId);
+    if (!upload) throw new Error("No such upload");
+    upload.parts.set(partNumber, bytes);
+    return `"etag-${partNumber}"`;
+  }
+  async completeMultipart(key: string, uploadId: string, parts: Array<{ partNumber: number; etag: string }>) {
+    const upload = this.uploads.get(uploadId);
+    if (!upload || upload.key !== key || parts.some((part) => !upload.parts.has(part.partNumber) || part.etag !== `"etag-${part.partNumber}"`))
+      throw new EngineError("validation_error", "The recording’s parts could not be joined. Record again, or upload the file instead.");
+    const chunks = [...parts].sort((a, b) => a.partNumber - b.partNumber).map((part) => upload.parts.get(part.partNumber)!);
+    const joined = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      joined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    this.objects.set(key, { bytes: joined, contentType: upload.contentType });
+    this.uploads.delete(uploadId);
+  }
+  async abortMultipart(_key: string, uploadId: string) {
+    this.uploads.delete(uploadId);
   }
 }

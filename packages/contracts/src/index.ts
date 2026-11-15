@@ -759,6 +759,7 @@ export type LibraryTemplate = z.infer<typeof libraryTemplateSchema>;
 export * from "./composition.js";
 export * from "./quality.js";
 export * from "./quality-rules.js";
+export * from "./new-project.js";
 // ── Clone a video: a short video posted on YouTube, TikTok or Instagram becomes the model for a new one. ──
 /** What a clone may borrow from the source video. Only what the person ticks is carried over. */
 export const CLONE_TRAITS = ["structure", "pacing", "transitions", "captions", "graphics", "sound", "music", "voice", "colours"] as const;

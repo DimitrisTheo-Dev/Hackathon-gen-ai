@@ -29,6 +29,7 @@ export const plannerOutputSchema = z.object({
           script: z.string().describe("Exactly what the presenter says. About 2.5 words per second of requested duration."),
           caption: z.string(),
           avatarId: z.string().nullable().describe("An id from the authorized presenters list, or null"),
+          language: z.string().nullable().describe("This draft's language code when the person asked for one version per language, e.g. el; null to use the project language"),
           schedule: z.array(slot),
         }),
       ),
@@ -53,19 +54,25 @@ export const plannerOutputSchema = z.object({
 });
 export type PlannerOutput = z.infer<typeof plannerOutputSchema>;
 
+type ModelInput = { system: string; user: string };
 export interface Planner {
-  plan(input: { system: string; user: string }): Promise<PlannerOutput>;
+  plan(input: ModelInput): Promise<PlannerOutput>;
+  /**
+   * Any other structured answer from the same model, constrained to `schema` and validated again here.
+   * Optional: a planner without it (tests, older stand-ins) makes callers fall back to their basic mode.
+   */
+  generate?<T>(schema: z.ZodType<T>, input: ModelInput): Promise<T>;
 }
 
-/** Parses the model's final text as a plan. Anything that is not exactly a valid plan changes nothing. */
-function readPlan(text: string): PlannerOutput {
+/** Parses the model's final text against the schema. Anything that is not exactly valid changes nothing. */
+function readOutput<T>(schema: z.ZodType<T>, text: string): T {
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
     throw new EngineError("provider_unavailable", "The creative model returned an unreadable plan. Nothing was changed; try again.");
   }
-  const parsed = plannerOutputSchema.safeParse(json);
+  const parsed = schema.safeParse(json);
   if (!parsed.success) throw new EngineError("provider_unavailable", "The creative model returned an invalid plan. Nothing was changed; try again.");
   return parsed.data;
 }
@@ -74,9 +81,9 @@ const declined = () => new EngineError("unsupported", "The creative model declin
 const tooLong = () => new EngineError("provider_unavailable", "The plan was too long to finish. Ask for fewer items at once.");
 
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta";
-/** The plan's JSON Schema in the subset Gemini accepts (`anyOf`, `["string","null"]`, `enum`, `description`). */
-function geminiResponseSchema() {
-  const { $schema: _dialect, ...schema } = z.toJSONSchema(plannerOutputSchema);
+/** A schema as JSON Schema in the subset Gemini accepts (`anyOf`, `["string","null"]`, `enum`, `description`). */
+function geminiResponseSchema(output: z.ZodType) {
+  const { $schema: _dialect, ...schema } = z.toJSONSchema(output);
   return schema;
 }
 /** Why Gemini stopped. Anything other than these two means the content was withheld. */
@@ -92,9 +99,10 @@ interface GeminiResponse {
  */
 function createGeminiPlanner(config: LlmConfig, fetchImpl: typeof fetch): Planner {
   const url = `${GEMINI_API_URL}/models/${encodeURIComponent(config.model)}:generateContent`;
-  const responseJsonSchema = geminiResponseSchema();
-  return {
-    async plan({ system, user }) {
+  const schemas = new Map<z.ZodType, ReturnType<typeof geminiResponseSchema>>();
+  const generate = async <T>(output: z.ZodType<T>, { system, user }: ModelInput): Promise<T> => {
+      let responseJsonSchema = schemas.get(output);
+      if (!responseJsonSchema) schemas.set(output, (responseJsonSchema = geminiResponseSchema(output)));
       const body = JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: user }] }],
@@ -133,9 +141,9 @@ function createGeminiPlanner(config: LlmConfig, fetchImpl: typeof fetch): Planne
       if (candidate?.finishReason && !GEMINI_FINISHED.has(candidate.finishReason)) throw declined();
       // Thought summaries, if any, are not part of the answer.
       const text = (candidate?.content?.parts ?? []).flatMap((part) => (typeof part.text === "string" && !part.thought ? [part.text] : [])).join("");
-      return readPlan(text);
-    },
+      return readOutput(output, text);
   };
+  return { plan: (input) => generate(plannerOutputSchema, input), generate };
 }
 
 export function createPlanner(config: LlmConfig, fetchImpl: typeof fetch = globalThis.fetch): Planner {
@@ -148,15 +156,14 @@ export function createPlanner(config: LlmConfig, fetchImpl: typeof fetch = globa
     const token = config.apiKey ?? (await (await import("@vercel/functions/oidc")).getVercelOidcToken());
     return new Anthropic({ baseURL: "https://ai-gateway.vercel.sh", apiKey: null, authToken: token, timeout: 90_000, maxRetries: 1 });
   }
-  return {
-    async plan({ system, user }) {
+  const generate = async <T>(output: z.ZodType<T>, { system, user }: ModelInput): Promise<T> => {
       const request = {
         model: config.model,
         max_tokens: 16000,
         system,
         messages: [{ role: "user" as const, content: user }],
         // Interactive planning: keep latency down.
-        output_config: { effort: "low" as const, format: zodOutputFormat(plannerOutputSchema) },
+        output_config: { effort: "low" as const, format: zodOutputFormat(output as z.ZodType<T> & z.ZodObject) },
       };
       let response;
       try {
@@ -182,7 +189,7 @@ export function createPlanner(config: LlmConfig, fetchImpl: typeof fetch = globa
       }
       if (response.stop_reason === "refusal") throw declined();
       if (response.stop_reason === "max_tokens") throw tooLong();
-      return readPlan(response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""));
-    },
+      return readOutput(output, response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""));
   };
+  return { plan: (input) => generate(plannerOutputSchema, input), generate };
 }

@@ -20,6 +20,9 @@ const ClaudeVpsPage = lazy(() => import("./claude/ClaudeVpsPage"));
 // A presentation surface for the one-minute pitch: noindex, not linked from the product.
 const PitchPage = lazy(() => import("./pitch/PitchPage"));
 const pitchRoute = /^\/pitch(\/|$)/.test(location.pathname);
+// The same motion with a doctor's sample content, for the pitch video. Local only: no production route points here.
+const PitchDoctorPage = lazy(() => import("./pitch-doctor/PitchDoctorPage"));
+const pitchDoctorRoute = /^\/pitch-doctor(\/|$)/.test(location.pathname);
 const LogosPage = lazy(() => import("./logos/LogosPage"));
 // `/logos` holds logo redesign proposals; it is a design review page, not part of the product.
 const logosRoute = /^\/logos(\/|$)/.test(location.pathname);
@@ -39,7 +42,7 @@ if (privateRoute) {
     if (__FIXTURE_ENABLED__ && location.pathname.startsWith("/dev/studio")) void import("./data/fixture");
   }
 }
-createRoot(document.getElementById("root")!).render(pitchRoute ? <Suspense fallback={null}><PitchPage /></Suspense> : logosRoute ? <Suspense fallback={<div className="loading-page"><p>Opening the logo review…</p></div>}><LogosPage /></Suspense> : claudeRoute ? <Suspense fallback={<div className="loading-page"><p>Opening Claude Code…</p></div>}><ClaudeVpsPage /></Suspense> : privateRoute ? <><Suspense fallback={null}><AuthApp /></Suspense><BootLayer /></> : <LandingPage />);
+createRoot(document.getElementById("root")!).render(pitchRoute ? <Suspense fallback={null}><PitchPage /></Suspense> : pitchDoctorRoute ? <Suspense fallback={null}><PitchDoctorPage /></Suspense> : logosRoute ? <Suspense fallback={<div className="loading-page"><p>Opening the logo review…</p></div>}><LogosPage /></Suspense> : claudeRoute ? <Suspense fallback={<div className="loading-page"><p>Opening Claude Code…</p></div>}><ClaudeVpsPage /></Suspense> : privateRoute ? <><Suspense fallback={null}><AuthApp /></Suspense><BootLayer /></> : <LandingPage />);
 
 // Installable app: the worker caches only immutable static assets and an offline page (see public/sw.js).
 // Skipped under automation so browser tests always exercise the network path.
