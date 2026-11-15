@@ -98,6 +98,11 @@ export interface SocialProvider<Credentials = any> {
     /** Trades the one-time code the platform sent back for credentials, and names the account they belong to. */
     complete(deps: EngineDeps, input: { code: string; redirectUri: string }): Promise<{ credentials: Credentials; account: ProviderAccount; subscribed?: boolean }>;
   };
+  /**
+   * Asks the platform to send the account's activity (comments, messages) to this deployment. True once it will.
+   * Asked when the account is connected, and again by the scheduler until it takes (subscribeProviderAccounts).
+   */
+  subscribe?(deps: EngineDeps, credentials: Credentials): Promise<boolean>;
   /** Keeps credentials that run out alive: the credentials to store from now on, or null when there is nothing to do yet. */
   refresh?(deps: EngineDeps, credentials: Credentials): Promise<Credentials | null>;
   /** Submits one approved post. Must not post twice for the same `attemptKey`. */
@@ -201,6 +206,8 @@ export async function listSocials(deps: EngineDeps, ctx: Ctx) {
       available: usable(deps, provider),
       connected: accounts.some((row) => row.provider === provider.id),
     })),
+    /** Whether THIS caller may connect or remove accounts (a signed-in owner or admin). */
+    canManage: ctx.principal.kind === "human" && ctx.scopes.has("connections:manage"),
   };
 }
 
@@ -403,6 +410,34 @@ export async function refreshSocialCredentials(deps: EngineDeps) {
   return outcome;
 }
 
+/** How long an account whose activity was refused waits before it is asked again. */
+const SUBSCRIBE_RETRY_HOURS = 6;
+
+/**
+ * Activity is connected without anyone setting it up: an account whose provider asks the platform for it (Instagram
+ * directly) is subscribed when it connects, and one where that did not take is asked again here, on the scheduler
+ * tick, at most every few hours, until it does. That subscription does not lapse, so a subscribed account is left
+ * alone. (Subscriptions that lapse, like YouTube's, are renewed in socials-events.ts.)
+ */
+export async function subscribeProviderAccounts(deps: EngineDeps, orgId?: string) {
+  const outcome = { subscribed: 0, failed: 0 };
+  const key = deps.config.socials.credentialKey;
+  if (!key) return outcome;
+  const due = deps.now().getTime() - SUBSCRIBE_RETRY_HOURS * 3600_000;
+  for (const provider of Object.values(socialProviders)) {
+    if (!provider.subscribe) continue;
+    for (const account of await deps.store.select("provider_connections", { provider: provider.id, state: "connected", ...(orgId ? { org_id: orgId } : {}) })) {
+      // `updated_at` doubles as the time of the last ask, so an account the platform refuses is not asked on every tick.
+      if (account.webhook_renewed_at || new Date(account.updated_at).getTime() > due) continue;
+      const now = deps.now().toISOString();
+      const subscribed = await provider.subscribe(deps, parse(provider.credentialsSchema, open(key, account))).catch(() => false);
+      await deps.store.update("provider_connections", { id: account.id }, subscribed ? { webhook_renewed_at: now, updated_at: now } : { updated_at: now });
+      outcome[subscribed ? "subscribed" : "failed"]++;
+    }
+  }
+  return outcome;
+}
+
 /** POST /v1/socials/providers/:provider/sync. Re-reads the provider's accounts with the credentials saved at connect time. */
 export async function syncSocialProvider(deps: EngineDeps, ctx: Ctx, providerId: string) {
   requireManager(ctx, "Refreshing social accounts");
@@ -414,22 +449,38 @@ export async function syncSocialProvider(deps: EngineDeps, ctx: Ctx, providerId:
   return saveAccounts(deps, ctx, provider, credentials, await accountsFrom(deps, provider, credentials));
 }
 
+/** Posts waiting for an account that is being removed can no longer be sent, so they are cancelled now, visibly, instead of failing later. */
+async function cancelUnsentPosts(deps: EngineDeps, orgId: string, accounts: Row[]) {
+  let cancelled = 0;
+  for (const account of accounts)
+    cancelled += (await deps.store.update("publish_jobs", { org_id: orgId, account_id: account.id, state: "scheduled" }, { state: "cancelled", error: "The account was disconnected before this post was sent.", updated_at: deps.now().toISOString() })).length;
+  return cancelled;
+}
+
 /** DELETE /v1/socials/providers/:provider. Removes its accounts and the saved credentials from this workspace. */
 export async function disconnectSocialProvider(deps: EngineDeps, ctx: Ctx, providerId: string) {
   requireManager(ctx, "Disconnecting social accounts");
   const provider = requireProvider(providerId);
+  const accounts = await deps.store.select("provider_connections", { org_id: ctx.org.id, provider: provider.id });
+  const cancelledPosts = await cancelUnsentPosts(deps, ctx.org.id, accounts);
   const removed = await deps.store.remove("provider_connections", { org_id: ctx.org.id, provider: provider.id });
-  if (removed) await audit(deps, ctx, { action: `Disconnected ${provider.label}`, objectId: provider.id, outcome: `${removed} account(s) removed. Posts already scheduled to them will not be sent` });
-  return { removed };
+  if (removed) await audit(deps, ctx, { action: `Disconnected ${provider.label}`, objectId: provider.id, outcome: `${removed} account(s) removed · ${cancelledPosts} unsent post(s) cancelled` });
+  return { removed, cancelledPosts };
 }
 
-/** DELETE /v1/socials/accounts/:id. */
+/**
+ * DELETE /v1/socials/accounts/:id. Only for accounts connected through a provider here. A channel connected with
+ * its platform elsewhere (YouTube with Google, channels.ts) is disconnected there, where the platform's access is
+ * withdrawn as well; here it is simply not found.
+ */
 export async function removeSocialAccount(deps: EngineDeps, ctx: Ctx, accountId: string) {
   requireManager(ctx, "Removing a social account");
-  const removed = await deps.store.remove("provider_connections", { id: accountId, org_id: ctx.org.id });
-  if (!removed) throw new EngineError("not_found", "This account was not found in your workspace.");
-  await audit(deps, ctx, { action: "Removed a social account", objectId: accountId, outcome: "Posts already scheduled to it will not be sent" });
-  return { removed: true as const };
+  const [account] = await deps.store.select("provider_connections", { id: accountId, org_id: ctx.org.id }, { limit: 1 });
+  if (!connectedThroughProvider(account)) throw new EngineError("not_found", "This account was not found in your workspace.");
+  const cancelledPosts = await cancelUnsentPosts(deps, ctx.org.id, [account]);
+  await deps.store.remove("provider_connections", { id: account.id, org_id: ctx.org.id });
+  await audit(deps, ctx, { action: "Removed a social account", objectId: account.id, outcome: `${String(account.display_name).slice(0, 80)} · ${cancelledPosts} unsent post(s) cancelled` });
+  return { removed: true as const, cancelledPosts };
 }
 
 /* ───────────────────────── publishing ───────────────────────── */

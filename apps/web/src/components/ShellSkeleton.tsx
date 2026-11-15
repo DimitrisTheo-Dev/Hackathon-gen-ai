@@ -43,9 +43,11 @@ export function bootProbe(): void {
     }
     if (state === "shell") {
       var named = query.get("view") || "";
-      var view = /^(home|canvas|schedule|connect|brand|billing|templates|personas|clone)$/.test(named) ? named : query.has("campaign") || query.has("item") ? "canvas" : "home";
-      // Card libraries (Templates, Personas) and Clone a video have their own skeletons, matching their layouts.
-      root.setAttribute("data-boot-view", view === "home" || view === "canvas" ? view : view === "templates" || view === "personas" ? "grid" : view === "clone" ? "clone" : "page");
+      var view = /^(home|canvas|schedule|connect|brand|billing|templates|personas|clone|settings)$/.test(named) ? named : query.has("campaign") || query.has("item") ? "canvas" : "home";
+      // Templates has two tabs, each with its own skeleton (the format grid, or the clone form); `?view=clone` is the
+      // older address of the second. Personas is a card grid without tabs.
+      if (view === "clone" || (view === "templates" && query.get("tab") === "clone")) view = "clone";
+      root.setAttribute("data-boot-view", view === "home" || view === "canvas" ? view : view === "templates" ? "formats" : view === "personas" ? "grid" : view === "clone" ? "clone" : "page");
       if (localStorage.getItem("faceful:sidebar") === "collapsed") root.setAttribute("data-boot-sidebar", "collapsed");
       if (localStorage.getItem("faceful:panel") === "closed") root.setAttribute("data-boot-panel", "closed");
     }
@@ -100,8 +102,8 @@ export function ShellSkeleton({ leaving = false, entering = false, age }: { leav
           <div className="boot-view boot-home"><i className="boot-title" /><i className="boot-line" /><i className="boot-composer" /><span className="boot-chips"><i /><i /><i /><i /></span></div>
           <div className="boot-view boot-canvas"><span className="boot-head"><i className="boot-title" /><i className="boot-line" /><i className="boot-rail" /></span><span className="boot-cards"><i /><i /><i /></span></div>
           <div className="boot-view boot-page"><i className="boot-title" /><i className="boot-line" /><i className="boot-block" /><i className="boot-block" /></div>
-          <div className="boot-view boot-grid"><i className="boot-title" /><i className="boot-line" /><span className="boot-posters"><i /><i /><i /><i /><i /></span></div>
-          <div className="boot-view boot-clone"><i className="boot-title" /><i className="boot-line" /><span className="boot-clone-body"><span className="boot-clone-form"><i /><i className="is-area" /><i className="is-chips" /></span><i className="boot-clone-frame" /><i className="boot-clone-frame" /></span></div>
+          <div className="boot-view boot-grid"><i className="boot-title" /><i className="boot-line" /><span className="boot-tabs"><i /><i /></span><span className="boot-posters"><i /><i /><i /><i /><i /></span></div>
+          <div className="boot-view boot-clone"><i className="boot-title" /><i className="boot-line" /><span className="boot-tabs"><i /><i /></span><span className="boot-clone-body"><span className="boot-clone-form"><i /><i className="is-area" /><i className="is-chips" /></span><i className="boot-clone-frame" /><i className="boot-clone-frame" /></span></div>
           <div className="boot-dock"><i /><i /><i /><i /></div>
         </div>
         <div className="boot-panel"><span className="boot-panel-head"><i /><i /></span><i className="boot-composer" /></div>

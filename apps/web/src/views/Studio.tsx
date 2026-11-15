@@ -6,10 +6,10 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
-  CopyPlus,
   CreditCard,
   Clock3,
   FileText,
+  Palette,
   Film,
   Folder,
   Grid2X2,
@@ -24,6 +24,7 @@ import {
   Plug,
   RefreshCw,
   Search,
+  Settings as SettingsIcon,
   SlidersHorizontal,
   ShieldCheck,
   Sparkles,
@@ -63,7 +64,7 @@ import { useAutoGrow } from "../lib/use-auto-grow";
 import { rememberPanel } from "../components/ShellSkeleton";
 import "../studio.css";
 import "../channels.css";
-import { CloneSkeleton, TemplatesSkeleton } from "./page-skeletons";
+import { TemplatesSkeleton } from "./page-skeletons";
 import type { ProjectStart } from "../create/settings";
 
 // Views a person opens occasionally load on demand, then stay cached. They are warmed when the browser is idle.
@@ -90,8 +91,8 @@ const loadBrand = () => import("./Brand");
 const Brand = lazy(() => loadBrand().then((m) => ({ default: m.Brand })));
 // Remotion and the video editor load only when the Video view opens.
 const VideoStudio = lazy(() => import("./VideoStudio"));
-const loadClone = () => import("./CloneVideo");
-const CloneVideo = lazy(() => loadClone().then((m) => ({ default: m.CloneVideo })));
+const loadSettings = () => import("./Settings");
+const Settings = lazy(() => loadSettings().then((m) => ({ default: m.Settings })));
 const SIDEBAR_KEY = "faceful:sidebar";
 function ViewSkeleton() {
   return <div className="view-skeleton" role="status" aria-label="Loading"><span className="skeleton skeleton-title" /><span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" /><span className="skeleton skeleton-block" /></div>;
@@ -99,7 +100,7 @@ function ViewSkeleton() {
 
 import { useDirectorHistory } from '../director/use-history';
 import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
-type View = "home" | "clone" | "canvas" | "schedule" | "video" | "templates" | "personas" | "connect" | "brand" | "billing";
+type View = "home" | "canvas" | "schedule" | "video" | "templates" | "personas" | "connect" | "brand" | "billing" | "settings";
 /** Search, filter and sort only earn their place once a project is too long to take in at a glance. */
 const TOOLS_FROM = 7;
 type Target = ContentItem["targets"][number];
@@ -142,7 +143,7 @@ function shownTitle(campaign: Pick<Campaign, "title" | "origin">) {
 function listNames(names: string[]) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
-const VIEWS = ["home", "clone", "canvas", "schedule", "video", "templates", "personas", "connect", "brand", "billing"];
+const VIEWS = ["home", "canvas", "schedule", "video", "templates", "personas", "connect", "brand", "billing", "settings"];
 export function Studio({
   client,
   onSignOut,
@@ -161,6 +162,8 @@ export function Studio({
       new URLSearchParams(location.search).get("view") ?? "",
     )
       ? (new URLSearchParams(location.search).get("view") as View)
+      // "Clone a video" is now a tab of Templates; old links open that tab.
+      : new URLSearchParams(location.search).get("view") === "clone" ? "templates"
       : new URLSearchParams(location.search).has("campaign") || new URLSearchParams(location.search).has("item") ? "canvas" : "home",
   );
   const [mobileChatOpen,setMobileChatOpen]=useState(false);
@@ -305,13 +308,13 @@ export function Studio({
     let live = true;
     // The skeleton lifts only when nothing is left to pop in: this view's own code and the typeface are in.
     const mode = context?.capabilities.mode;
-    const code = view === "connect" ? loadConnect() : view === "billing" ? loadBilling() : view === "templates" ? loadLibrary() : view === "personas" ? loadPersonas() : view === "clone" && mode === "live" ? loadClone() : view === "schedule" && mode === "live" ? loadChannels() : null;
+    const code = view === "connect" ? loadConnect() : view === "billing" ? loadBilling() : view === "templates" ? loadLibrary() : view === "personas" ? loadPersonas() : view === "settings" && mode === "live" ? loadSettings() : view === "schedule" && mode === "live" ? loadChannels() : null;
     const type = document.fonts?.load ? Promise.race([document.fonts.load("500 14px InterVariable"), new Promise((resolve) => window.setTimeout(resolve, 1500))]) : null;
     void Promise.allSettled([code, type]).then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!live) return;
       ready.current?.();
       // Everything else a person can open from here is fetched now, while the browser is idle.
-      const warm = () => { void loadCreate(); void loadReview(); void loadConnect(); void loadTemplates(); void loadLibrary(); if (mode === "live") { void loadBilling(); void loadChannels(); void loadPersonas(); void loadClone(); } };
+      const warm = () => { void loadCreate(); void loadReview(); void loadConnect(); void loadTemplates(); void loadLibrary(); if (mode === "live") { void loadBilling(); void loadChannels(); void loadPersonas(); void loadSettings(); } };
       if (window.requestIdleCallback) window.requestIdleCallback(warm, { timeout: 1500 }); else window.setTimeout(warm, 300);
     })));
     return () => { live = false; };
@@ -408,7 +411,10 @@ export function Studio({
   useEffect(() => {
     if (loading) return;
     const url = new URL(location.href);
+    // An old Clone a video link becomes the Templates page's Clone tab; another view keeps no tab.
+    if (url.searchParams.get("view") === "clone") url.searchParams.set("tab", "clone");
     url.searchParams.set("view", view);
+    if (view !== "templates") url.searchParams.delete("tab");
     if (campaign) url.searchParams.set("campaign", campaign.id);
     else url.searchParams.delete("campaign");
     if (selected) url.searchParams.set("item", selected);
@@ -417,7 +423,7 @@ export function Studio({
     if (!url.hash) url.hash = "";
     // Nothing is written when the address already says this: a refresh causes no history change at all.
     if (url.href !== location.href) history.replaceState(history.state, "", url);
-    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "video" ? `Video · ${campaign?.title ?? "Studio"}` : view === "templates" ? "Templates" : view === "personas" ? "Personas" : view === "billing" ? "Billing" : view === "clone" ? "Clone a video" : (campaign?.title ?? "Studio")} · Faceful`;
+    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "video" ? `Video · ${campaign?.title ?? "Studio"}` : view === "templates" ? "Templates" : view === "personas" ? "Personas" : view === "billing" ? "Billing" : view === "settings" ? "Settings" : (campaign?.title ?? "Studio")} · Faceful`;
   }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
@@ -825,10 +831,8 @@ export function Studio({
           <nav aria-label="Studio" className="sidebar-nav">
             <button className={view==="home"?"active":""} aria-current={view==="home"?"page":undefined} title="Create" onClick={()=>go("home")}><Sparkles size={16}/><span>Create</span></button>
             {!fixture && <button className={view === "templates" ? "active" : ""} aria-current={view==="templates"?"page":undefined} title="Templates" onClick={() => go("templates")}><LayoutTemplate size={16} /><span>Templates</span></button>}
-            {!fixture && <button className={view === "clone" ? "active" : ""} aria-current={view==="clone"?"page":undefined} title="Clone a video" onClick={() => go("clone")}><CopyPlus size={16} /><span>Clone a video</span></button>}
             <button className={view === "schedule" ? "active" : ""} aria-current={view==="schedule"?"page":undefined} title="Schedule" onClick={() => go("schedule")}><CalendarDays size={16} /><span>Schedule</span></button>
             {!fixture && <button className={view === "personas" ? "active" : ""} aria-current={view==="personas"?"page":undefined} title="Personas" onClick={() => go("personas")}><UserRound size={16} /><span>Personas</span></button>}
-            <button className={view === "brand" ? "active" : ""} aria-current={view==="brand"?"page":undefined} title="Brand kit" onClick={() => go("brand")}><FileText size={16} /><span>Brand kit</span></button>
             {!fixture && <button className={view === "billing" ? "active" : ""} aria-current={view==="billing"?"page":undefined} title="Billing" onClick={() => go("billing")}><CreditCard size={16} /><span>Billing</span></button>}
           </nav>
           <div className="projects-heading">
@@ -852,6 +856,18 @@ export function Studio({
             })}
           </nav>
           <div className="sidebar-bottom">
+            {/* Workspace settings live here, beside agents and credits: set once, opened rarely. */}
+            <button className={`sidebar-row ${view === "brand" ? "selected" : ""}`} aria-current={view === "brand" ? "page" : undefined} title="Brand kit" onClick={() => go("brand")}>
+              <Palette size={16} />
+              <span>Brand kit</span>
+            </button>
+            {/* Social accounts come from the engine, which the local fixture does not have. */}
+            {!fixture && (
+              <button className={`sidebar-row ${view === "settings" ? "selected" : ""}`} aria-current={view === "settings" ? "page" : undefined} title="Settings" onClick={() => go("settings")}>
+                <SettingsIcon size={16} />
+                <span>Settings</span>
+              </button>
+            )}
             <button className={`sidebar-row agent-status ${view === "connect" ? "selected" : ""}`} title="Agents" onClick={() => go("connect")}>
               <Plug size={16} />
               <span>Agents</span>
@@ -880,7 +896,7 @@ export function Studio({
               <button className="icon-button mobile-menu" aria-label="Toggle navigation" aria-expanded={sidebar} onClick={() => setSidebar(!sidebar)}><Menu size={18} /></button>
               <button className="mobile-project-switch" onClick={() => setSidebar(true)} aria-haspopup="dialog"><span>{campaign ? shownTitle(campaign) : "Your projects"}</span><span className="sr-only">, switch project</span><ChevronDown size={15} aria-hidden="true"/></button>
               {/* A project's title lives once, in its own header below; other pages are named here. */}
-              {!inProject && <strong>{view === "connect" ? "Agents" : view === "templates" ? "Templates" : view === "personas" ? "Personas" : view === "clone" ? "Clone a video" : view === "brand" ? "Brand kit" : view === "billing" ? "Billing" : view === "schedule" ? "Schedule" : view === "home" ? "Create" : "Projects"}</strong>}
+              {!inProject && <strong>{view === "connect" ? "Agents" : view === "templates" ? "Templates" : view === "personas" ? "Personas" : view === "brand" ? "Brand kit" : view === "billing" ? "Billing" : view === "settings" ? "Settings" : view === "schedule" ? "Schedule" : view === "home" ? "Create" : "Projects"}</strong>}
             </div>
             {inProject && (
               <div className="segmented topbar-views" role="group" aria-label="Project view">
@@ -947,13 +963,12 @@ export function Studio({
               <div className="home-actions" aria-label="Other ways to start">
                 <button className="text-button" onClick={()=>setCreating(true)}><PenLine size={13} aria-hidden="true"/>Create with my own script</button>
                 <button className="text-button" onClick={()=>go("connect")}><Plug size={13} aria-hidden="true"/>Connect your agent</button>
+                <button className="text-button" onClick={()=>go("brand")}><Palette size={13} aria-hidden="true"/>{context.brand.name ? `${context.brand.name} brand kit` : "Brand kit"}</button>
               </div>
             </div>) : view === "home" ? null : view === "templates" ? (
-              <Suspense fallback={<TemplatesSkeleton />}><TemplateLibrary client={client} /></Suspense>
+              <Suspense fallback={<TemplatesSkeleton />}><TemplateLibrary client={client} context={context} /></Suspense>
             ) : view === "personas" ? (
               <Suspense fallback={<ViewSkeleton />}><Personas client={client} role={context.workspace.role} /></Suspense>
-            ) : view === "clone" ? (
-              fixture ? null : <Suspense fallback={<CloneSkeleton />}><CloneVideo client={client} context={context} /></Suspense>
             ) : view === "billing" ? (
               <Suspense fallback={<ViewSkeleton />}><Billing
                 client={client}
@@ -967,6 +982,9 @@ export function Studio({
                   void refreshContext().catch(() => undefined);
                 }}
               /></Suspense>
+            ) : view === "settings" ? (
+              // Social accounts and webhook addresses come from the engine, which the local fixture does not have.
+              fixture ? null : <Suspense fallback={<ViewSkeleton />}><Settings onOpenSchedule={() => go("schedule")} /></Suspense>
             ) : view === "connect" ? (
               <Suspense fallback={<ViewSkeleton />}><Connect
                 context={context}
@@ -996,6 +1014,7 @@ export function Studio({
                   void fetchCampaign(id).catch(() => undefined);
                 }}
                 onStartProject={() => go("home")}
+                draftFromWebsite={!fixture}
               /></Suspense>
             ) : !campaign && view === "schedule" && !fixture ? (
               // No project yet: channels can still be connected here, and Google returns to this view to finish connecting.
@@ -1325,9 +1344,9 @@ export function Studio({
         <nav className="project-quick-links" aria-label="Workspace">
           {!fixture && <button onClick={() => go("templates")}><LayoutTemplate size={18}/>Templates<ChevronRight size={16}/></button>}
           {!fixture && <button onClick={() => go("personas")}><UserRound size={18}/>Personas<ChevronRight size={16}/></button>}
-          {!fixture && <button onClick={() => go("clone")}><CopyPlus size={18}/>Clone a video<ChevronRight size={16}/></button>}
           <button onClick={() => go("brand")}><FileText size={18}/>Brand kit<ChevronRight size={16}/></button>
           {!fixture && <button onClick={() => go("billing")}><CreditCard size={18}/>Billing<ChevronRight size={16}/></button>}
+          {!fixture && <button onClick={() => go("settings")}><SettingsIcon size={18}/>Settings<ChevronRight size={16}/></button>}
           <button onClick={() => go("connect")}><Plug size={18}/>{activeConnections.length ? "Agent connections" : "Connect your agent"}<ChevronRight size={16}/></button>
           <button onClick={() => { setSidebar(false); setCommandOpen(true); }}><Search size={18}/>Search studio<ChevronRight size={16}/></button>
           <a href="/docs/">Help & documentation<ArrowUpRight size={16}/></a>
@@ -1444,7 +1463,7 @@ export function Studio({
           )}
         </Modal>
       )}
-      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => { setCommandOpen(false); startNewProject(); }} onConnect={() => go("connect")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
+      {commandOpen && <CommandPalette campaigns={campaigns} onClose={() => setCommandOpen(false)} onCampaign={id => openCampaign(id)} onItem={(campaignId, itemId) => openCampaign(campaignId, itemId)} onCreate={() => { setCommandOpen(false); startNewProject(); }} onConnect={() => go("connect")} onBrand={() => go("brand")} onSettings={fixture ? undefined : () => go("settings")} onReview={campaign && !unsaved ? () => void prepare() : undefined} />}
     </div>
   );
 }

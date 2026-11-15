@@ -21,6 +21,8 @@ import {
   type TemplateInput,
   type AddSourceInput,
   type Brand,
+  type BrandDraft,
+  type DraftBrandInput,
   type CloneJob,
   type CloneJobInput,
   type CloneSource,
@@ -233,6 +235,8 @@ export interface StudioClient {
   disconnectChannel(input: DisconnectChannelInput): Promise<DisconnectChannelResult>;
   /** The workspace brand kit every draft starts from. Only the fields sent change. */
   updateBrand(input: UpdateBrandInput): Promise<Brand>;
+  /** Reads one public website and proposes brand kit fields. Nothing is saved; accepted fields go through updateBrand. */
+  draftBrandFromWebsite(input: DraftBrandInput): Promise<BrandDraft>;
   /** Adds a source to one project. The link is a reference only; nothing fetches it. */
   addSource(input: AddSourceInput): Promise<Campaign>;
   /** Removes a source from a project and from every draft that cited it. */

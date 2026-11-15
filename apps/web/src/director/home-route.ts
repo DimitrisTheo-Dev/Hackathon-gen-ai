@@ -22,7 +22,7 @@ const SEVERAL = /\b(?:campaign|series|calendar|content plan|posting plan)\b|\b(?
 
 export function routeHomeRequest(text: string): HomeRoute {
   const ask = text.trim().replace(/\s+/g, ' ');
-  if (!ask || isExactInstruction(ask) || /\?$/.test(ask) || QUESTION.test(ask)) return 'director';
+  if (!ask || isExactInstruction(ask) || ask.endsWith('?') || QUESTION.test(ask)) return 'director';
   if (/^plan\b/i.test(ask) || SEVERAL.test(ask)) return 'director';
   // "Make the hook shorter" changes a draft; "Make a video about…" starts one.
   if (MAKE.test(ask)) return /^(?:please\s+)?make\s+(?:the|this|that|it|my|our)\b/i.test(ask) && !VIDEO.test(ask) ? 'director' : 'new-project';

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { countBlinks, createPhraseTracker, evaluateLiveness, largestJump, lipSyncScore, pearson, phraseCoverage, voicedMs, type FaceFrame } from "../apps/web/src/likeness/checks";
+import { countBlinks, createPhraseTracker, evaluateLiveness, largestJump, lipSyncScore, meanLuma, pearson, phraseCoverage, voicedMs, type FaceFrame } from "../apps/web/src/likeness/checks";
 import { boxOnScreen, faceFit } from "../apps/web/src/likeness/fit";
 import { consentStatement, pickPhrases } from "../apps/web/src/likeness/phrases";
 import { createHoldTimer, matchesPose, poseFromMatrix, poseSequence, type PoseId } from "../apps/web/src/likeness/pose";
@@ -145,4 +145,13 @@ test("a good capture passes; a missing angle or an unspoken consent blocks; advi
   const still = evaluateLiveness({ ...good, speechFrames: speechFrames.map((frame) => ({ ...frame, jaw: 0.1 })) });
   assert.equal(still.checks.find((check) => check.id === "lip_sync")?.passed, false);
   assert.equal(still.passed, true);
+});
+
+test("the picture's brightness is its mean luma, so a dark room can be told from a missing face", () => {
+  const fill = (r: number, g: number, b: number) => Uint8ClampedArray.from({ length: 16 * 4 }, (_, i) => [r, g, b, 255][i % 4]);
+  assert.ok(Math.abs(meanLuma(fill(255, 255, 255)) - 1) < 1e-9, "white is fully bright");
+  assert.equal(meanLuma(fill(0, 0, 0)), 0);
+  assert.ok(meanLuma(fill(30, 28, 25)) < 0.2, "a dim room reads as dark");
+  assert.ok(meanLuma(fill(180, 160, 140)) > 0.5, "a lit face does not");
+  assert.equal(meanLuma([]), 0);
 });

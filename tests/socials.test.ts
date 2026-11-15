@@ -9,6 +9,9 @@ import { humanlikePostId } from "../packages/engine/src/socials-humanlike";
 import { instagramTiming } from "../packages/engine/src/socials-instagram";
 import { tiktokChunks, tiktokTiming } from "../packages/engine/src/socials-tiktok";
 import { MemoryStore } from "../packages/engine/src/store-memory";
+import { ApiError } from "../apps/web/src/data/client";
+import { createSocialsApi } from "../apps/web/src/socials/api";
+import { accountSource, activity, cancelledNote, managedHere } from "../apps/web/src/socials/model";
 
 /** /v1/socials on the real engine, with an in-memory store and a stand-in for Buffer's GraphQL API. "user:<id>" stands in for a verified session. */
 const BASE = "https://faceful.test";
@@ -74,6 +77,8 @@ function instagram() {
     /** "lost": the publish goes through but its answer never arrives. */
     publishAnswer: "normal" as "normal" | "lost",
     revoked: false,
+    /** True: Instagram refuses to send the account's activity (an app not yet approved for it, say). */
+    refuseSubscription: false,
     subscribed: [] as string[],
     requests: [] as Array<{ method: string; path: string; token: string | null; body: any }>,
   };
@@ -98,6 +103,7 @@ function instagram() {
     if (path === "/refresh_access_token") return Response.json({ access_token: `long-token-${Number(token.split("-")[2]) + 1}`, token_type: "bearer", expires_in: 5183944 });
     if (path === "/me") return Response.json({ data: [{ user_id: INSTAGRAM_ID, username: "faceful" }] });
     if (path === "/me/subscribed_apps") {
+      if (state.refuseSubscription) return oauth(10, "Application does not have permission for this action");
       state.subscribed.push(target.searchParams.get("subscribed_fields") ?? "");
       return Response.json({ success: true });
     }
@@ -397,7 +403,7 @@ test("the catalog lists every platform and provider, and nothing connects until 
 });
 
 test("connecting Buffer is an owner's act; it keeps the accounts this studio uses and never the key in the clear", async () => {
-  const { call, connect, store, remote } = engine();
+  const { call, connect, store, remote, due, own } = engine();
   const input = { apiKey: BUFFER_KEY };
   // An agent acting for the same person cannot connect accounts, and a bad key or an unknown field is refused.
   const agent = await call("/v1/socials/providers/buffer/connect", { as: "user:u1:claude-code", method: "POST", body: input });
@@ -440,12 +446,18 @@ test("connecting Buffer is an owner's act; it keeps the accounts this studio use
   ]);
   assert.equal((await call("/v1/socials/providers/buffer/sync", { as: "user:u2", method: "POST" })).status, 404);
 
-  // Removing: one account, then the provider. Someone else's account ID is simply not found.
+  // Removing: one account, then the provider. A post still waiting for a removed account is cancelled, not left to
+  // fail. Someone else's account is not found here, and neither is a channel connected with Google: that one is
+  // disconnected where it was connected, where Google's access is withdrawn too.
   const [first] = await connect();
+  const waiting = await due(first.id);
+  const channel = await own("youtube", "UCconnectedWithGoogle");
   assert.equal((await call(`/v1/socials/accounts/${first.id}`, { as: "user:u2", method: "DELETE" })).status, 404);
-  assert.deepEqual((await call(`/v1/socials/accounts/${first.id}`, { as: "user:u1", method: "DELETE" })).body, { removed: true });
-  assert.deepEqual((await call("/v1/socials/providers/buffer", { as: "user:u1", method: "DELETE" })).body, { removed: 2 });
-  assert.equal((await store.select("provider_connections", {})).length, 0);
+  assert.equal((await call(`/v1/socials/accounts/${channel.id}`, { as: "user:u1", method: "DELETE" })).status, 404);
+  assert.deepEqual((await call(`/v1/socials/accounts/${first.id}`, { as: "user:u1", method: "DELETE" })).body, { removed: true, cancelledPosts: 1 });
+  assert.deepEqual([(await waiting()).state, (await waiting()).error], ["cancelled", "The account was disconnected before this post was sent."]);
+  assert.deepEqual((await call("/v1/socials/providers/buffer", { as: "user:u1", method: "DELETE" })).body, { removed: 2, cancelledPosts: 0 });
+  assert.deepEqual((await store.select("provider_connections", {})).map((row) => row.provider), ["direct"]);
 });
 
 test("an approved post goes out through the account's provider, and counts as published only when Buffer says so", async () => {
@@ -1233,4 +1245,91 @@ test("a TikTok video posted directly: asked about first, uploaded from the serve
 
   // TikTok's chunk rules: small files go whole, big ones in 10 MB pieces with the remainder in the last.
   assert.deepEqual([tiktokChunks(3), tiktokChunks(64 * 1024 * 1024), tiktokChunks(105 * 1024 * 1024)], [{ chunkSize: 3, count: 1 }, { chunkSize: 64 * 1024 * 1024, count: 1 }, { chunkSize: 10 * 1024 * 1024, count: 10 }]);
+});
+
+test("an Instagram account whose activity Instagram did not take at sign-in is asked again by the scheduler, then left alone", async () => {
+  const { call, signIn, store, meta, advance } = engine({ ...LOGIN, CRON_SECRET: "cron-secret" });
+  meta.state.refuseSubscription = true;
+  const connected = await (await signIn("code-1")).finish();
+  assert.deepEqual([connected.status, connected.body.accounts[0].webhookSubscribedAt], [200, null]);
+  const tick = async () => (await call("/v1/cron/tick", { headers: { authorization: "Bearer cron-secret" } })).body.webhooks;
+  const asks = () => meta.state.requests.filter((request) => request.path.endsWith("/me/subscribed_apps")).length;
+
+  // Not on every tick: a refused account waits six hours. Then it is asked, and refused again, and waits again.
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 0 }, 1]);
+  advance(6 * 60 + 1);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 1 }, 2]);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 0 }, 2]);
+
+  // Once Instagram takes it, the account says so, and a subscription that does not lapse is not asked for again.
+  meta.state.refuseSubscription = false;
+  advance(6 * 60 + 1);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 1, failed: 0 }, 3]);
+  assert.equal(typeof (await call("/v1/socials", { as: "user:u1" })).body.platforms.find((platform: any) => platform.id === "instagram").accounts[0].webhookSubscribedAt, "string");
+  advance(7 * 24 * 60);
+  assert.deepEqual([await tick(), asks()], [{ renewed: 0, failed: 0 }, 3]);
+  assert.ok((await store.select("provider_connections", {}))[0].webhook_renewed_at);
+});
+
+test("Settings in the studio: the browser's own client reads and changes accounts through the real routes", async () => {
+  const { deps, signIn, own } = engine({ ...NATIVE, ...LOGIN });
+  // The browser's fetch, answered by the engine. Whatever the studio's client cannot read fails here.
+  const browserFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    const url = new URL(String(input));
+    return (await handleEngineRequest(deps, new Request(url, init), url.pathname))!;
+  }) as typeof globalThis.fetch;
+  try {
+    const api = createSocialsApi(BASE, async () => "user:u1");
+    const empty = await api.catalog();
+    assert.deepEqual([empty.canManage, empty.platforms.flatMap((platform) => platform.accounts)], [true, []]);
+    assert.deepEqual(empty.platforms.map((platform) => [platform.label, platform.kind]), [["TikTok", "social"], ["Instagram", "social"], ["LinkedIn", "social"], ["YouTube", "social"], ["WhatsApp", "messaging"]]);
+    assert.deepEqual(empty.providers.map((provider) => [provider.label, provider.connect, provider.available, provider.connected]), [["Buffer", "credentials", true, false], ["Humanlike", "credentials", true, false], ["Instagram", "sign_in", true, false], ["TikTok", "sign_in", false, false]]);
+    // An agent acting for the same person sees the accounts but is not offered the buttons.
+    assert.equal((await createSocialsApi(BASE, async () => "user:u1:claude-code").catalog()).canManage, false);
+
+    // Buffer with its key, then a refresh; Instagram by signing in; a YouTube channel connected with Google elsewhere.
+    const buffer = await api.connectWithCredentials("buffer", { apiKey: BUFFER_KEY });
+    assert.deepEqual(buffer.accounts.map((account) => [account.platform, account.state]), [["instagram", "connected"], ["linkedin", "connected"], ["youtube", "unavailable"]]);
+    assert.equal((await api.sync("buffer")).accounts.length, 3);
+    assert.match((await api.start("instagram")).authorizeUrl, /^https:\/\/www\.instagram\.com\/oauth\/authorize\?/);
+    const { state } = await signIn("code-1");
+    assert.deepEqual((await api.complete("instagram", "code-1", state)).accounts.map((account) => account.displayName), ["@faceful"]);
+    const channel = await own("youtube", "UCconnectedWithGoogle");
+
+    const catalog = await api.catalog();
+    const rows = catalog.platforms.flatMap((platform) => platform.accounts.map((account) => `${platform.label} ${account.displayName}: ${accountSource(account, catalog.providers)}${managedHere(account, catalog.providers) ? "" : " (managed in Schedule)"}`));
+    assert.deepEqual(rows, [
+      "Instagram Faceful on instagram: through Buffer",
+      "Instagram @faceful: connected directly",
+      "LinkedIn linkedin-handle: through Buffer",
+      "YouTube Faceful on youtube: through Buffer",
+      "YouTube youtube account: connected with Google (managed in Schedule)",
+    ]);
+    assert.deepEqual(catalog.providers.map((provider) => [provider.label, provider.connected]), [["Buffer", true], ["Humanlike", false], ["Instagram", true], ["TikTok", false]]);
+
+    // Activity is connected without a setting: each row only says where it stands. Instagram directly was subscribed
+    // with its sign-in; Buffer carries no activity; a YouTube channel waits for the hub, which this deployment holds
+    // (the one Buffer reports as unavailable says so in its own chip instead).
+    const incoming = catalog.platforms.flatMap((platform) => platform.accounts.map((account) => `${account.displayName}: ${activity(account, platform)?.label ?? "-"}`));
+    assert.deepEqual(incoming, [
+      "Faceful on instagram: -",
+      "@faceful: Comments and messages come in automatically",
+      "linkedin-handle: -",
+      "Faceful on youtube: -",
+      "youtube account: New uploads are connecting",
+    ]);
+
+    // Removing. The engine's refusal reaches the page as its own sentence; a channel connected with Google is not removable here.
+    const direct = catalog.platforms.find((platform) => platform.id === "instagram")!.accounts.find((account) => account.provider === "instagram")!;
+    assert.deepEqual(await api.removeAccount(direct.id), { cancelledPosts: 0 });
+    await assert.rejects(api.removeAccount(channel.id), (failure) => failure instanceof ApiError && failure.code === "not_found" && failure.message === "This account was not found in your workspace.");
+    assert.deepEqual(await api.disconnect("buffer"), { cancelledPosts: 0 });
+    assert.deepEqual((await api.catalog()).platforms.flatMap((platform) => platform.accounts.map((account) => account.provider)), ["direct"]);
+    await assert.rejects(createSocialsApi(BASE, async () => null).catalog(), (failure) => failure instanceof ApiError && failure.code === "unauthenticated");
+  } finally {
+    globalThis.fetch = browserFetch;
+  }
+
+  assert.deepEqual([cancelledNote(0), cancelledNote(1), cancelledNote(3)], ["", " 1 unsent post was cancelled.", " 3 unsent posts were cancelled."]);
 });

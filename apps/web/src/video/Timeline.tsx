@@ -1,10 +1,11 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import type { PlayerRef } from "@remotion/player";
+import { AudioLines, Captions, Clapperboard, Layers, Mic, Music, UserRound, type LucideIcon } from "lucide-react";
 import type { Composition } from "@castroom/contracts";
 import { durationInFrames, timeLabel, type Clip, type Track } from "./model";
 
 export type Selection = { track: Track; id: string } | null;
-type Row = { key: string; label: string; track: Track | null; clips: Clip[]; className: string };
+type Row = { key: string; label: string; icon: LucideIcon; empty: string; track: Track; clips: Clip[]; className: string };
 
 /** Clip lanes with a playhead and the transcript's words. Subscribes to the player itself, so playback never re-renders the inspector. */
 export function Timeline({ composition, playerRef, selection, labelFor, onSelect }: { composition: Composition; playerRef: RefObject<PlayerRef | null>; selection: Selection; labelFor: (track: Track, clip: Clip) => string; onSelect: (track: Track, clip: Clip) => void }) {
@@ -30,13 +31,13 @@ export function Timeline({ composition, playerRef, selection, labelFor, onSelect
   const step = composition.durationSeconds > 90 ? 15 : composition.durationSeconds > 40 ? 10 : 5;
   const ticks = Array.from({ length: Math.floor(composition.durationSeconds / step) + 1 }, (_, index) => index * step);
   const rows: Row[] = [
-    { key: "main", label: "Main picture", track: "video", clips: composition.video.filter((clip) => clip.layer === 0), className: "video main" },
-    { key: "overlay", label: "Overlays", track: "video", clips: composition.video.filter((clip) => clip.layer === 1), className: "video overlay" },
-    { key: "voice", label: "Voice", track: "audio", clips: composition.audio.filter((clip) => clip.role === "voice"), className: "audio voice" },
-    { key: "music", label: "Music", track: "audio", clips: composition.audio.filter((clip) => clip.role === "music"), className: "audio music" },
-    { key: "sfx", label: "SFX", track: "audio", clips: composition.audio.filter((clip) => clip.role === "sfx"), className: "audio sfx" },
-    { key: "cards", label: "Cards", track: "cards", clips: composition.cards, className: "cards" },
-    { key: "captions", label: "Captions", track: "captions", clips: composition.captions, className: "captions" },
+    { key: "main", label: "Main picture", icon: UserRound, empty: "No main picture", track: "video", clips: composition.video.filter((clip) => clip.layer === 0), className: "video main" },
+    { key: "overlay", label: "Overlays", icon: Layers, empty: "No overlays · add from Files", track: "video", clips: composition.video.filter((clip) => clip.layer === 1), className: "video overlay" },
+    { key: "voice", label: "Voice", icon: Mic, empty: "The main picture’s own sound", track: "audio", clips: composition.audio.filter((clip) => clip.role === "voice"), className: "audio voice" },
+    { key: "music", label: "Music", icon: Music, empty: "No music", track: "audio", clips: composition.audio.filter((clip) => clip.role === "music"), className: "audio music" },
+    { key: "sfx", label: "Sound effects", icon: AudioLines, empty: "No sound effects", track: "audio", clips: composition.audio.filter((clip) => clip.role === "sfx"), className: "audio sfx" },
+    { key: "cards", label: "Cards", icon: Clapperboard, empty: "No cards", track: "cards", clips: composition.cards, className: "cards" },
+    { key: "captions", label: "Captions", icon: Captions, empty: "No captions", track: "captions", clips: composition.captions, className: "captions" },
   ];
   const words = composition.transcript?.words ?? [];
   return (
@@ -47,25 +48,36 @@ export function Timeline({ composition, playerRef, selection, labelFor, onSelect
           {ticks.map((second) => <span key={second} className="timeline-tick" style={{ left: pct(second) }}>{second}s</span>)}
         </div>
       </div>
-      {rows.map((row) => (
-        <div className="timeline-row" key={row.key}>
-          <span className="timeline-label">{row.label}</span>
-          <div className="timeline-lane" onPointerDown={seek}>
-            {row.clips.filter((clip) => clip.end > clip.start).map((clip) => (
-              <button
-                key={clip.id}
-                type="button"
-                className={`timeline-clip ${row.className} ${selection?.id === clip.id ? "selected" : ""}`}
-                style={{ left: pct(clip.start), width: `calc(${pct(clip.end - clip.start)} - 2px)` }}
-                aria-label={`${row.label}: ${labelFor(row.track!, clip)}, ${timeLabel(clip.start)} to ${timeLabel(clip.end)}`}
-                title={labelFor(row.track!, clip)}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={() => onSelect(row.track!, clip)}
-              />
-            ))}
+      {rows.map((row) => {
+        const Icon = row.icon;
+        const clips = row.clips.filter((clip) => clip.end > clip.start);
+        return (
+          <div className={`timeline-row ${clips.some((clip) => clip.id === selection?.id) ? "has-selection" : ""}`} key={row.key}>
+            <span className="timeline-label" title={row.label}><Icon size={13} aria-hidden="true" /><span>{row.label}</span></span>
+            <div className="timeline-lane" onPointerDown={seek}>
+              {!clips.length && <span className="lane-empty">{row.empty}</span>}
+              {clips.map((clip) => {
+                const name = labelFor(row.track, clip);
+                return (
+                  <button
+                    key={clip.id}
+                    type="button"
+                    className={`timeline-clip ${row.className} ${selection?.id === clip.id ? "selected" : ""}`}
+                    style={{ left: pct(clip.start), width: `calc(${pct(clip.end - clip.start)} - 2px)` }}
+                    aria-label={`${row.label}: ${name}, ${timeLabel(clip.start)} to ${timeLabel(clip.end)}`}
+                    aria-pressed={selection?.id === clip.id}
+                    title={name}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => onSelect(row.track, clip)}
+                  >
+                    <span aria-hidden="true">{name}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       {words.length > 0 && (
         <div className="timeline-row">
           <span className="timeline-label">Words</span>

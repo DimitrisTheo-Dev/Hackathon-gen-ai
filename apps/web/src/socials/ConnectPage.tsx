@@ -129,7 +129,8 @@ export default function ConnectPage({ provider }: { provider: string }) {
             </>
           )}
           {error && <p className="ob-error" role="alert">{error}</p>}
-          <a className="ob-link connect-back" href="/studio/"><ArrowLeft size={14} aria-hidden="true" /> Back to the studio</a>
+          {/* Settings → Social accounts is where connected accounts are listed and removed. */}
+          <a className="ob-link connect-back" href="/studio/?view=settings"><ArrowLeft size={14} aria-hidden="true" /> Back to settings</a>
         </div>
       </main>
     </div>

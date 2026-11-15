@@ -27,6 +27,7 @@ import { addDraft, addSource, agentScopesFrom, createConnectionInputSchema, getC
 import { createFromTemplate, createSampleProject, listTemplates } from "./templates.js";
 import { listLibraryTemplates } from "./template-library.js";
 import { createCloneJob, listCloneJobs, lookupCloneSource } from "./clone.js";
+import { draftBrandFromWebsite } from "./brand-draft.js";
 
 export interface HttpDeps extends EngineDeps {
   planner: Planner | null;
@@ -97,6 +98,8 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   restore_version: restoreVersion,
   add_draft: addDraft,
   update_brand: updateBrand,
+  // Reads one public https page and proposes brand kit fields (brand-draft.ts). It saves nothing.
+  draft_brand_from_website: draftBrandFromWebsite,
   // Brand kit products (products.ts): the same permission as the rest of the brand kit.
   create_product: createProduct,
   update_product: updateProduct,
@@ -148,7 +151,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   },
 } satisfies Record<string, OperationHandler>));
 /** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
-export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content", "request_file_upload", "start_take_upload", "persona_image_upload_url", "product_image_upload_url"]);
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content", "request_file_upload", "start_take_upload", "persona_image_upload_url", "product_image_upload_url", "draft_brand_from_website"]);
 
 async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
   const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ImagePlus, LoaderCircle, PenLine, Plus, ScanFace, Trash2, UserRound } from "lucide-react";
+import { Check, CircleAlert, ImagePlus, LoaderCircle, PenLine, Plus, RotateCcw, ScanFace, Shirt, ShieldCheck, Trash2 } from "lucide-react";
 import { PERSONA_LOOK_LIMIT, type Persona, type PersonaLook, type PersonaStatus } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
 import { CopyButton, Modal, Notice } from "../components/ui";
@@ -23,6 +23,29 @@ const initialOf = (name: string) => (Array.from(name.trim())[0] ?? "?").toLocale
 /** The face a persona card shows: the straight-on still from the scan, else the first look with a photo. */
 const portraitOf = (persona: Persona) => persona.consent?.photoUrl ?? persona.looks.find((look) => look.imageUrl)?.imageUrl ?? null;
 const scanLink = (personaId: string) => `/face-scan?persona=${encodeURIComponent(personaId)}`;
+/** The three steps from a name to a usable presenter, with honest time estimates (the scan's own plan). */
+const JOURNEY = [
+  { title: "Consent", time: "30 sec", body: "The person confirms their name and agrees." },
+  { title: "Face scan", time: "about 1 min", body: "They turn their head and read three short lines aloud." },
+  { title: "Your looks", time: "anytime", body: "Outfits and settings for the videos." },
+] as const;
+
+/** The journey as a quiet numbered row; `done` steps get a tick, the `current` one is in ink. */
+function Journey({ done, current }: { done: number; current: number }) {
+  return (
+    <ol className="pa-journey">
+      {JOURNEY.map((step, index) => (
+        <li key={step.title} className={index < done ? "done" : index === current ? "on" : undefined} aria-current={index === current ? "step" : undefined}>
+          <span className="pa-journey-dot" aria-hidden="true">{index < done ? <Check size={11} strokeWidth={3} /> : index + 1}</span>
+          <span className="pa-journey-text">
+            <strong>{step.title}<small>{step.time}</small></strong>
+            <span>{step.body}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 /**
  * Personas: presenters for the workspace's videos (packages/engine/src/personas.ts). Each one is made from a face
@@ -42,13 +65,17 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
   // Coming back from a face scan lands on the persona it was for.
   const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(location.search).get("persona"));
   const [scanFor, setScanFor] = useState<Persona | null>(null);
+  /** Set when the scan finished and the person chose to add a look next. */
+  const [lookFirst, setLookFirst] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const reloads = useRef(0);
   const load = useCallback(() => {
     let active = true;
     client
       .listPersonas()
       .then((list) => { if (active) { setPersonas(list); setError(""); } })
-      .catch((reason) => { if (active) setError(messageOf(reason, "The personas could not be loaded.")); });
+      .catch((reason) => { if (active) setError(messageOf(reason, "The personas could not be loaded.")); })
+      .finally(() => { if (active) setRetrying(false); });
     return () => { active = false; };
   }, [client]);
   useEffect(() => load(), [load]);
@@ -64,35 +91,57 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
   };
   const open = personas?.find((persona) => persona.id === openId) ?? null;
 
-  if (scanFor)
-    return (
-      <PersonaScan
-        persona={scanFor}
-        onExit={() => {
-          // Back to the persona, with its consent fresh from the engine.
-          setOpenId(scanFor.id);
-          setScanFor(null);
-          load();
-        }}
-      />
-    );
+  if (scanFor) {
+    // Back to the persona, with its consent fresh from the engine; after a saved scan, straight to its first look.
+    const exit = (toLooks: boolean) => {
+      setLookFirst(toLooks);
+      setOpenId(scanFor.id);
+      setScanFor(null);
+      load();
+    };
+    return <PersonaScan persona={scanFor} onExit={() => exit(false)} onLooks={() => exit(true)} />;
+  }
 
   return (
     <div className="pa">
       <header className="pa-intro">
         <div>
           <h1>Personas</h1>
-          <p>A persona is a presenter for your videos. Each one is made from a face scan with spoken consent from the person it is based on, and can appear in several looks.</p>
+          <p>Real people as the presenters of your videos, each made from their own face scan and spoken consent.</p>
         </div>
-        {canEdit && <button className="button primary" onClick={() => setCreating(true)}><Plus size={16} aria-hidden="true" />New persona</button>}
+        {canEdit && !!personas?.length && <button className="button primary" onClick={() => setCreating(true)}><Plus size={16} aria-hidden="true" />New persona</button>}
       </header>
-      {error && <Notice error>{error}</Notice>}
-      {personas === null && !error && <p className="pa-loading" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading personas…</p>}
-      {personas?.length === 0 && (
-        <div className="pa-empty">
-          <span aria-hidden="true"><UserRound size={22} /></span>
-          <p>No personas yet.{canEdit ? " Create one, then the person it is based on scans their face and reads a short consent aloud." : " An owner, admin or editor can create one."}</p>
+      {error && personas === null && (
+        <div className="pa-failed" role="alert">
+          <span className="pa-failed-icon" aria-hidden="true"><CircleAlert size={16} /></span>
+          <p><strong>Couldn’t load the personas</strong><span>{error}</span></p>
+          <button className="button secondary" disabled={retrying} onClick={() => { setRetrying(true); load(); }}>
+            {retrying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RotateCcw size={14} aria-hidden="true" />}
+            {retrying ? "Retrying…" : "Retry"}
+          </button>
         </div>
+      )}
+      {error && personas !== null && <Notice error>{error}</Notice>}
+      {personas === null && !error && <><p className="sr-only" role="status">Loading personas…</p><PersonaGridSkeleton /></>}
+      {personas?.length === 0 && (
+        <section className="pa-empty" aria-labelledby="pa-empty-title">
+          <div className="pa-empty-art" aria-hidden="true">
+            <span className="pa-empty-oval"><ScanFace size={30} strokeWidth={1.75} /></span>
+          </div>
+          <div className="pa-empty-body">
+            <h2 id="pa-empty-title">Put a real face on your videos</h2>
+            <p>No personas yet. One short face scan with spoken consent turns you, or a teammate, into a presenter you can use in any video.</p>
+            <Journey done={0} current={-1} />
+            {canEdit ? (
+              <div className="pa-empty-actions">
+                <button className="button primary" onClick={() => setCreating(true)}><Plus size={16} aria-hidden="true" />Create a persona</button>
+                <span className="pa-empty-note"><ShieldCheck size={14} aria-hidden="true" />Private to this workspace. Consent can be withdrawn anytime.</span>
+              </div>
+            ) : (
+              <p className="pa-note">An owner, admin or editor can create one.</p>
+            )}
+          </div>
+        </section>
       )}
       {!!personas?.length && (
         <ul className="pa-grid">
@@ -100,14 +149,14 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
             const portrait = portraitOf(persona);
             return (
               <li key={persona.id}>
-                <button className="pa-card" onClick={() => setOpenId(persona.id)}>
-                  <span className="pa-portrait">
+                <button className="pa-card" onClick={() => { setLookFirst(false); setOpenId(persona.id); }}>
+                  <span className={portrait ? "pa-portrait" : "pa-portrait art"}>
                     {portrait ? <img src={portrait} alt="" loading="lazy" decoding="async" onError={refresh} /> : <span className="pa-initial" aria-hidden="true">{initialOf(persona.name)}</span>}
                   </span>
                   <span className="pa-card-text">
                     <strong>{persona.name}</strong>
                     <span className={`pa-status ${persona.status}`}>{STATUS[persona.status]}</span>
-                    <small>{looksLabel(persona.looks.length)}</small>
+                    <small>{persona.status === "ready" ? looksLabel(persona.looks.length) : persona.status === "needs_consent" ? "Next: face scan, about 2 min" : "Needs a new consent"}</small>
                   </span>
                 </button>
               </li>
@@ -125,6 +174,7 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
           onChange={replace}
           onReload={load}
           onRecord={() => setScanFor(open)}
+          lookFirst={lookFirst}
           onDeleted={() => { setPersonas((list) => list?.filter((p) => p.id !== open.id) ?? null); close(); }}
           onClose={close}
           onExpired={refresh}
@@ -135,7 +185,7 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
 }
 
 /** The face scan for one persona, in place of the persona list. Leaving it, or finishing, returns to the persona. */
-function PersonaScan({ persona, onExit }: { persona: Persona; onExit: () => void }) {
+function PersonaScan({ persona, onExit, onLooks }: { persona: Persona; onExit: () => void; onLooks: () => void }) {
   const api = useMemo(() => sessionLikenessApi(), []);
   const [name, setName] = useState("");
   useEffect(() => {
@@ -154,7 +204,7 @@ function PersonaScan({ persona, onExit }: { persona: Persona; onExit: () => void
           personaId={persona.id}
           context={`Persona · ${persona.name}`}
           onClose={onExit}
-          doneAction={{ label: `Back to ${persona.name}`, onClick: onExit }}
+          doneAction={{ label: "Add a look", onClick: onLooks }}
         />
       </Suspense>
     </div>
@@ -183,6 +233,7 @@ function NewPersona({ client, onClose, onCreated }: { client: StudioClient; onCl
   return (
     <Modal title="New persona" onClose={onClose}>
       {error && <Notice error>{error}</Notice>}
+      <p className="pa-modal-lede">Name the presenter first. The face scan and consent come right after, about two minutes in all.</p>
       <form onSubmit={submit} aria-busy={busy}>
         <div className="field">
           <label htmlFor="persona-name">Name</label>
@@ -198,7 +249,7 @@ function NewPersona({ client, onClose, onCreated }: { client: StudioClient; onCl
             {LANGUAGES.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}
           </select>
         </div>
-        <p className="pa-note">Next, the person this persona is based on records their face scan and consent.</p>
+        <p className="pa-note pa-next"><ScanFace size={14} aria-hidden="true" />Next: the person this persona is based on agrees and scans their face, here or on their own phone.</p>
         <div className="modal-actions">
           <button className="button secondary" type="button" disabled={busy} onClick={onClose}>Cancel</button>
           <button className="button primary" disabled={busy || !name.trim()}>{busy ? "Creating…" : "Create persona"}</button>
@@ -215,6 +266,7 @@ function PersonaDetail({
   onChange,
   onReload,
   onRecord,
+  lookFirst,
   onDeleted,
   onClose,
   onExpired,
@@ -226,6 +278,8 @@ function PersonaDetail({
   onReload: () => void;
   /** Opens the face scan for this persona inside the tab. */
   onRecord: () => void;
+  /** Open with the new-look form showing: the scan just finished and the person chose to add a look. */
+  lookFirst: boolean;
   onDeleted: () => void;
   onClose: () => void;
   onExpired: () => void;
@@ -234,7 +288,7 @@ function PersonaDetail({
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState<"withdraw" | "delete" | null>(null);
   const [editing, setEditing] = useState(false);
-  const [addingLook, setAddingLook] = useState(false);
+  const [addingLook, setAddingLook] = useState(() => lookFirst && canEdit && persona.looks.length < PERSONA_LOOK_LIMIT);
   const run = async (label: string, action: () => Promise<void>, fallback: string) => {
     if (busy) return;
     setBusy(label); setError("");
@@ -280,13 +334,14 @@ function PersonaDetail({
               <p>
                 {persona.status === "consent_withdrawn" && consent
                   ? `${consent.subjectName} withdrew their consent on ${dateOf(consent.revokedAt ?? consent.createdAt)} and the recordings were deleted. Record a new consent to use this persona again.`
-                  : "Before this persona can be used, the person it is based on scans their face and reads a consent statement aloud. It takes about two minutes, on a phone or a laptop with a camera."}
+                  : "Before this persona can be used, the person it is based on agrees and scans their face. About two minutes, on a phone or a laptop with a camera."}
               </p>
+              <Journey done={0} current={0} />
               <div className="pa-consent-actions">
-                <button className="button primary" onClick={onRecord}><ScanFace size={16} aria-hidden="true" />Record consent now</button>
+                <button className="button primary" onClick={onRecord}><ScanFace size={16} aria-hidden="true" />Start the face scan</button>
                 <CopyButton value={absoluteScanLink} label="Copy link for them" />
               </div>
-              <p className="pa-note">Record now if you are the person, on this device. Otherwise send them the link: it works for members of this workspace, and the consent is saved under their own name.</p>
+              <p className="pa-note">Start now if you are the person, on this device. Otherwise send them the link: it works for members of this workspace, and the consent is saved under their own name.</p>
             </div>
           )}
         </section>
@@ -318,7 +373,12 @@ function PersonaDetail({
             {canEdit && !addingLook && persona.looks.length < PERSONA_LOOK_LIMIT && <button className="text-button" onClick={() => setAddingLook(true)}><Plus size={13} aria-hidden="true" />Add a look</button>}
           </div>
           <p className="pa-note">A look is how the persona appears on screen: what they wear, their hair, the setting. Add a reference photo if you have one.</p>
-          {!persona.looks.length && !addingLook && <p className="pa-muted pa-looks-empty">No looks yet.</p>}
+          {!persona.looks.length && !addingLook && (
+            <div className="pa-looks-empty">
+              <span aria-hidden="true"><Shirt size={18} /></span>
+              <p>No looks yet. {canEdit ? "Add one for each outfit or setting you want on camera." : ""}</p>
+            </div>
+          )}
           {!!persona.looks.length && (
             <ul className="pa-looks">
               {persona.looks.map((look) => <LookRow key={look.id} client={client} look={look} canEdit={canEdit} onChange={onChange} onExpired={onExpired} />)}
@@ -489,5 +549,21 @@ function LookForm({ client, personaId, look, onCancel, onSaved }: { client: Stud
         <button className="button primary" disabled={busy !== null || !name.trim()}>{busy ?? (look ? "Save look" : "Add look")}</button>
       </div>
     </form>
+  );
+}
+
+/** The grid's own geometry while the personas load: portrait frames and the two text lines under them. */
+function PersonaGridSkeleton() {
+  return (
+    <ul className="pa-grid pa-skeleton" aria-hidden="true">
+      {[0, 1, 2, 3].map((n) => (
+        <li key={n}>
+          <span className="pa-card">
+            <span className="pa-portrait" />
+            <span className="pa-card-text"><i className="pa-sk-name" /><i className="pa-sk-line" /></span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

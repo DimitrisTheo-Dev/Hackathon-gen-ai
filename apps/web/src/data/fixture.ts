@@ -821,6 +821,8 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     createPersonaLook: unavailable,
     updatePersonaLook: unavailable,
     deletePersonaLook: unavailable,
+    // Reading a website needs the engine; the local studio hides the assist.
+    draftBrandFromWebsite: unavailable,
     updateBrand: async (raw) => {
       const input = validate(updateBrandInputSchema, raw);
       return mutate("update_brand", input, brandSchema, (state) => {
