@@ -476,22 +476,26 @@ export function createFixtureClient(storage?: Storage): StudioClient {
         (out[file.meta.productId] ??= []).push(file.id);
     return out;
   }
-  /** What the review gate holds back: regulated scripts without a named approval, and any current review with items to fix. */
+  /**
+   * What the review gate holds back, once a draft has been checked: a review with items to fix, a regulated script
+   * without a named approval, and a regulated script that changed after its review. A draft that was never checked is
+   * not held here, so the fresh sample schedules exactly as it always has; the engine also gates unchecked regulated drafts.
+   */
   function claimsBlockers(state: State, item: ContentItem) {
     const review = latestReview(state, item.id);
-    const current = review && review.itemRevision === item.revision ? review : null;
-    const domain = current?.domain ?? detectDomain(item.script, productsOf(state));
-    const blocking = current ? blockingCount(current) : 0;
+    if (!review) return [];
+    const domain = detectDomain(item.script, productsOf(state));
+    const blocking = blockingCount(review);
     const message =
-      current?.status === "approved" || (!current && !isRegulated(domain))
-        ? null
-        : !current
-          ? `A ${domain} script needs a check and a named approval.`
+      review.itemRevision !== item.revision
+        ? isRegulated(domain)
+          ? `The ${domain} script changed after its review. Check it again and get a named approval.`
+          : null
+        : review.status === "approved" || review.status === "passed"
+          ? null
           : blocking > 0
-            ? `${blocking} ${blocking === 1 ? "item" : "items"} to fix${isRegulated(domain) ? ", or an approver’s written reason" : ""}.`
-            : current.status === "needs_approval"
-              ? `A ${domain} script needs a named approval.`
-              : null;
+            ? `${blocking} ${blocking === 1 ? "item" : "items"} to fix${isRegulated(review.domain) ? ", or an approver’s written reason" : ""}.`
+            : `A ${review.domain} script needs a named approval.`;
     return message ? [{ itemId: item.id, message: `${REVIEW_BLOCKER_PREFIX} ${message}` }] : [];
   }
   /** Fits a photo inside 640 px as a JPEG data URL, so a saved product stays well inside browser storage. */

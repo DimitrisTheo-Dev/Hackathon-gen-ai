@@ -1346,6 +1346,12 @@ export function Studio({
           onRefresh={async () => {
             await fetchCampaign(campaign.id);
           }}
+          onOpenReview={(itemId) => {
+            const target = campaign.items.find((entry) => entry.id === itemId);
+            if (!target) return;
+            setManifest(null);
+            openPanel(target, "review");
+          }}
         />
       )}
       {grant && campaign && (
