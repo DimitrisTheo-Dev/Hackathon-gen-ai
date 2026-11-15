@@ -172,7 +172,7 @@ test("the Stripe webhook, an authorized scheduler tick and the render worker are
   assert.equal((await call("/v1/cron/tick", { headers: { ...ip, Authorization: "Bearer wrong" } })).status, 429);
 });
 
-test("social deliveries: a signed one is never limited, a refused signature counts as a failed credential; member routes count like the studio's", async () => {
+test("social deliveries: a signed one is never limited, a refused signature counts as a failed credential; sign-in returns are anonymous; member routes count like the studio's", async () => {
   const secret = "s".repeat(40);
   const { call, deps } = engine({ TRUST_PROXY_HEADERS: "true", SOCIALS_CREDENTIAL_KEY: "ab".repeat(32), SOCIALS_WEBHOOK_SECRET: secret, RATE_LIMIT_FAILED_AUTH_PER_MINUTE: "1", RATE_LIMIT_ANONYMOUS_PER_MINUTE: "1", RATE_LIMIT_COSTLY_PER_MINUTE: "1" });
   const ip = { "x-forwarded-for": "203.0.113.60" };
@@ -191,12 +191,17 @@ test("social deliveries: a signed one is never limited, a refused signature coun
   const other = { headers: { "x-forwarded-for": "203.0.113.61" } };
   assert.equal((await call("/v1/socials/instagram/webhook", other)).status, 404);
   assert.equal((await call("/v1/socials/instagram/webhook", other)).status, 429);
+  // Neither does a browser sent back by a platform after signing in there.
+  const returning = { headers: { "x-forwarded-for": "203.0.113.62" } };
+  assert.equal((await call("/v1/socials/providers/instagram/callback", returning)).status, 404, "not switched on here");
+  assert.equal((await call("/v1/socials/providers/instagram/callback", returning)).status, 429);
   // Members count per principal, and connecting a provider (which calls it) also against the costly bucket.
   const connect = () => call("/v1/socials/providers/buffer/connect", post("user:u1", { apiKey: "a-buffer-key-for-tests" }));
   const first = await connect();
   assert.equal(first.status, 503, "the stand-in provider is unreachable");
   assert.match(first.headers.get("ratelimit-policy") ?? "", /"principal";q=240;w=60, "costly";q=1;w=60/);
   assert.equal((await connect()).status, 429);
+  assert.equal((await call("/v1/socials/providers/instagram/complete", post("user:u1", { code: "a-code", state: "a-state" }))).status, 429, "finishing a sign-in shares the bucket");
   assert.equal((await call("/v1/socials", bearer("user:u1"))).status, 200, "reading is not a costly request");
 });
 

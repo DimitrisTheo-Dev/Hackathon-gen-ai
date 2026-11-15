@@ -16,7 +16,8 @@ import { parse, PLATFORMS } from "./studio.js";
  * deployment's OAuth client with upload permission, and it never leaves the server again.
  *
  * Its `provider` is `direct`: the same channel may also be reached through a social provider such as Buffer
- * (socials.ts, its own row). This module only ever reads and writes its own rows.
+ * (socials.ts, its own row). This module only ever reads and writes its own rows. Instagram and TikTok accounts
+ * connected under /v1/socials (through Buffer, or Instagram directly) are managed and posted to there, not here.
  */
 /** `provider_connections.provider` of the channels connected here (migration 20261115070000_socials). */
 const DIRECT = "direct";

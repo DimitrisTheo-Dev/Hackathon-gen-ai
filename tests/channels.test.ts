@@ -6,7 +6,7 @@ import { loadConfig } from "../packages/engine/src/config";
 import { EngineError } from "../packages/engine/src/errors";
 import { handleEngineRequest, type HttpDeps } from "../packages/engine/src/http";
 import { renderContent, workerClaim, workerComplete, workerUploadUrl } from "../packages/engine/src/render";
-import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, sweepPublishJobs, verifySubmittedPublishJobs } from "../packages/engine/src/schedule";
+import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, publisherFor, sweepPublishJobs, verifySubmittedPublishJobs } from "../packages/engine/src/schedule";
 import { isGoogleUploadUrl } from "../packages/engine/src/providers/youtube";
 import { MemoryStore } from "../packages/engine/src/store-memory";
 import { getCampaign, getContext, reviseContent, startCampaign } from "../packages/engine/src/studio";
@@ -497,6 +497,8 @@ test("an account connected through Buffer is its own row: the YouTube connection
   const sameChannel = await viaBuffer("youtube", "UC_channel_1");
   const instagram = await viaBuffer("instagram", "17841400000000000");
   await viaBuffer("linkedin", "urn:li:organization:1");
+  // The same Instagram account connected directly as well (socials-instagram.ts): its own row, under its own provider.
+  const direct = await deps.store.insert("provider_connections", { ...instagram, id: crypto.randomUUID(), provider: "instagram", provider_account_id: "17841400000000000", display_name: "@faceful" });
 
   // Reconnecting the channel in the studio updates its own row only.
   await connectChannel(deps, ctx, tokens());
@@ -504,7 +506,11 @@ test("an account connected through Buffer is its own row: the YouTube connection
   assert.deepEqual([buffered.credentials_ciphertext, buffered.display_name], ["v1.sealed-for-buffer", "youtube via Buffer"]);
   // The channel panel lists the channels it manages; the studio lists every account it can schedule to.
   assert.deepEqual((await getChannelStatus(deps, ctx)).connections.map((connection) => connection.id), [kit.connection.id]);
-  assert.deepEqual((await getContext(deps, ctx)).channels.map((channel) => channel.id).sort(), [kit.connection.id, sameChannel.id, instagram.id, "unavailable-tiktok"].sort());
+  assert.deepEqual((await getContext(deps, ctx)).channels.map((channel) => channel.id).sort(), [kit.connection.id, sameChannel.id, instagram.id, direct.id, "unavailable-tiktok"].sort());
+  // Each account posts the way it was connected: the studio's YouTube channel directly, the others through their provider.
+  const [youtubeRow] = await deps.store.select("provider_connections", { id: kit.connection.id });
+  assert.equal(publisherFor(deps, "youtube", youtubeRow)?.schedulesNatively, true, "the studio's YouTube adapter");
+  for (const row of [sameChannel, instagram, direct]) assert.equal(publisherFor(deps, row.platform, row)?.schedulesNatively, false, `${row.provider} posts through its provider`);
 
   // Instagram on the Buffer account can be approved; TikTok without an account asks for one.
   const targets = (platforms: string[]) => platforms.map((platform) => ({ platform: platform as "instagram", accountId: platform === "instagram" ? instagram.id : null, scheduledAt: "2026-11-16T07:00:00.000Z", timezone: "Europe/Athens" }));

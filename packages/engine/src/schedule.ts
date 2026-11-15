@@ -26,9 +26,10 @@ export interface Publisher {
   publish(input: { attemptKey: string; credentials: string | null; mediaUrl: string; mediaMime: string; itemTitle: string; payload: Row; scheduledAt: string }): Promise<{ providerPostId: string; state: "submitted" | "verified_published"; url: string | null }>;
   /**
    * Ask the provider what became of a submitted post. Only provider evidence may return `verified_published`.
-   * `url`, when given, is where the post can be seen.
+   * `url`, when given, is where the post can be seen; `providerPostId`, the post's final ID when it differs from the
+   * one `publish` returned (Instagram: a video that was still being prepared). Asking may itself finish the post.
    */
-  verify?(input: { credentials: string | null; providerPostId: string; scheduledAt: string; visibility: string }): Promise<{ state: "submitted" | "verified_published" | "failed"; publishedAt: string | null; note: string | null; url?: string | null }>;
+  verify?(input: { credentials: string | null; providerPostId: string; scheduledAt: string; visibility: string }): Promise<{ state: "submitted" | "verified_published" | "failed"; publishedAt: string | null; note: string | null; url?: string | null; providerPostId?: string }>;
 }
 /**
  * The publisher for one destination. An account connected through a social provider (Buffer, socials.ts) posts
@@ -246,6 +247,8 @@ export async function commitSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown): 
 const BACKOFF_MINUTES = [1, 5, 15, 60];
 const MAX_NATIVE_SUBMISSIONS_PER_COMMIT = 3;
 const PROCESSING_TIMEOUT_MINUTES = 15;
+/** How long one check of a submitted post holds it (see verifySubmittedPublishJobs). */
+const VERIFY_HOLD_SECONDS = 120;
 
 async function publishEvent(deps: EngineDeps, job: Row, type: string, detail: Row = {}) {
   await deps.store.insert("job_events", { id: crypto.randomUUID(), org_id: job.org_id, job_id: job.id, job_kind: "publish", type, detail: { attempt: job.attempt, ...detail }, at: deps.now().toISOString() });
@@ -335,43 +338,51 @@ export async function verifySubmittedPublishJobs(deps: EngineDeps, scope: { orgI
       await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { error: `Reconnect ${PLATFORM_NAME[job.platform as Platform]} to confirm whether this post is public.`, updated_at: now });
       continue;
     }
+    // One check at a time per post, held only while asking: for a post the provider was still preparing (Instagram),
+    // asking is what publishes it, so the scheduler and an open project must not both do that. A hold left behind by
+    // a crash lapses by itself. Every outcome below releases it.
+    if (job.next_attempt_at && new Date(job.next_attempt_at) > deps.now()) continue;
+    const held = await deps.store.update("publish_jobs", { id: job.id, state: "submitted", next_attempt_at: job.next_attempt_at ?? null }, { next_attempt_at: new Date(deps.now().getTime() + VERIFY_HOLD_SECONDS * 1000).toISOString() });
+    if (!held.length) continue;
     outcome.checked++;
     try {
       const result = await publisher.verify({ credentials: account.credentials_ciphertext ?? null, providerPostId: job.provider_post_id, scheduledAt: new Date(job.scheduled_at).toISOString(), visibility: String(job.payload?.visibility ?? "private") });
+      const postId = result.providerPostId ?? job.provider_post_id;
       if (result.state === "verified_published") {
         // The only path to "published": the provider itself reported the post as public.
         const publishedAt = result.publishedAt ?? now;
-        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "verified_published", published_at: publishedAt, ...(result.url ? { published_url: result.url } : {}), error: null, updated_at: now })).length) {
+        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "verified_published", provider_post_id: postId, published_at: publishedAt, ...(result.url ? { published_url: result.url } : {}), error: null, next_attempt_at: null, updated_at: now })).length) {
           outcome.verified++;
           await publishEvent(deps, job, "verified_published");
-          await recordSettledPost(deps, job, account, { published: true, occurredAt: publishedAt, url: result.url ?? null });
+          await recordSettledPost(deps, job, account, { published: true, postId, occurredAt: publishedAt, url: result.url ?? null });
         }
       } else if (result.state === "failed") {
-        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "failed", error: result.note ?? "The provider reports this post as failed.", updated_at: now })).length) {
+        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "failed", error: result.note ?? "The provider reports this post as failed.", next_attempt_at: null, updated_at: now })).length) {
           outcome.failed++;
           await publishEvent(deps, job, "failed", { reason: result.note });
-          await recordSettledPost(deps, job, account, { published: false, occurredAt: now, url: null });
+          await recordSettledPost(deps, job, account, { published: false, postId, occurredAt: now, url: null });
         }
       } else {
-        await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { error: result.note, updated_at: now });
+        await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { error: result.note, next_attempt_at: null, updated_at: now });
       }
     } catch (error) {
       if (error instanceof ChannelGrantExpired) await deps.store.update("provider_connections", { id: account.id, org_id: job.org_id }, { state: "expired", updated_at: now });
       // A failed check changes nothing about the post; touch the marker so it is not retried in a tight loop.
-      await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { updated_at: now });
+      await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { next_attempt_at: null, updated_at: now });
     }
   }
   return outcome;
 }
 
 /**
- * A provider such as Buffer sends no webhooks, so when it settles a post the outcome joins the account's activity
- * (socials-events.ts) here, next to what arrives by webhook. Direct channels report their own uploads.
+ * When a social provider (Buffer, Instagram directly) settles a post, the outcome joins the account's activity
+ * (socials-events.ts) here, next to what arrives by webhook; Buffer sends no webhooks at all. YouTube channels
+ * connected in the studio report their own uploads through Google's hub.
  */
-async function recordSettledPost(deps: EngineDeps, job: Row, account: Row, outcome: { published: boolean; occurredAt: string; url: string | null }) {
+async function recordSettledPost(deps: EngineDeps, job: Row, account: Row, outcome: { published: boolean; postId: string; occurredAt: string; url: string | null }) {
   if (!connectedThroughProvider(account) || !isSocialPlatform(job.platform)) return;
   await recordSocialEvents(deps, job.platform, account.provider, [
-    { id: job.provider_post_id, type: outcome.published ? "post.created" : "post.failed", accountId: account.id, occurredAt: outcome.occurredAt, subject: { id: job.provider_post_id, url: outcome.url, parentId: null }, text: job.payload?.caption ?? undefined },
+    { id: outcome.postId, type: outcome.published ? "post.created" : "post.failed", accountId: account.id, occurredAt: outcome.occurredAt, subject: { id: outcome.postId, url: outcome.url, parentId: null }, text: job.payload?.caption ?? undefined },
   ]);
 }
 

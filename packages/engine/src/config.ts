@@ -81,6 +81,11 @@ export interface EngineConfig {
     /** Signs deliveries in the generic format to /v1/socials/:platform/webhook. Null: those are refused. */
     webhookSecret: string | null;
     /**
+     * The app people sign in to Instagram with (socials-instagram.ts): the Instagram app ID and secret from the Meta
+     * app's "Business login settings". Null: Instagram accounts cannot be connected directly.
+     */
+    instagramLogin: { appId: string; appSecret: string; scopes: string[] } | null;
+    /**
      * Each platform's own webhook credentials, from the app registered with that platform (socials-webhooks.ts).
      * Null: that platform's address takes the generic format only.
      */
@@ -213,9 +218,14 @@ function socialsFrom(env: Record<string, string | undefined>): EngineConfig["soc
   const tiktok = value("TIKTOK_CLIENT_SECRET");
   const linkedin = value("LINKEDIN_CLIENT_SECRET");
   const youtube = value("YOUTUBE_WEBHOOK_SECRET", 32);
+  const loginId = value("INSTAGRAM_LOGIN_APP_ID", 1);
+  const loginSecret = value("INSTAGRAM_LOGIN_APP_SECRET");
+  // What the person is asked to allow. Posting needs the first two; comments and messages are for the account's activity.
+  const scopes = (env.INSTAGRAM_LOGIN_SCOPES ?? "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_messages").split(",").map((scope) => scope.trim()).filter((scope) => /^[a-z_]{3,80}$/.test(scope));
   return {
     credentialKey: key?.length === 32 ? key : null,
     webhookSecret: secret && secret.length >= 32 ? secret : null,
+    instagramLogin: loginId && /^\d{1,32}$/.test(loginId) && loginSecret ? { appId: loginId, appSecret: loginSecret, scopes } : null,
     native: {
       instagram: meta("INSTAGRAM"),
       whatsapp: meta("WHATSAPP"),

@@ -17,7 +17,7 @@ import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "r
  * blocking script of the static studio page, so it may not reference anything outside its own body.
  *   data-boot="shell"  a studio is about to open (a stored session, a sign-in return, or the local fixture)
  *   data-boot="auth"   nobody is signed in: the sign-in card comes next, never the skeleton
- *   data-boot="none"   another surface that shares this page (agent consent, the Claude Code runner)
+ *   data-boot="none"   another surface that shares this page (agent consent, connecting a social account, the Claude Code runner)
  */
 export function bootProbe(): void {
   var root = document.documentElement;
@@ -29,6 +29,8 @@ export function bootProbe(): void {
   try {
     var query = new URLSearchParams(location.search);
     if (/^\/dev\/studio(\/|$)/.test(path) && root.hasAttribute("data-fixtures")) state = "shell";
+    // Connecting a social account (/studio/connect/<provider>) is its own page; the studio does not open under it.
+    else if (/^\/studio\/connect\/[a-z0-9_]+\/?$/.test(path)) state = "none";
     else if (/^\/studio(\/|$)/.test(path)) {
       state = "auth";
       if (!query.has("error") && (/(^#|&)access_token=/.test(location.hash) || query.has("code"))) state = "shell";

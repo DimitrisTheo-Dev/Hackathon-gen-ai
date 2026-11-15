@@ -5,6 +5,7 @@ import { loadConfig } from "../packages/engine/src/config";
 import { handleEngineRequest, type HttpDeps } from "../packages/engine/src/http";
 import { processDuePublishJobs, verifySubmittedPublishJobs } from "../packages/engine/src/schedule";
 import { signSocialWebhook, webhookAdapters } from "../packages/engine/src/socials-events";
+import { instagramTiming } from "../packages/engine/src/socials-instagram";
 import { MemoryStore } from "../packages/engine/src/store-memory";
 
 /** /v1/socials on the real engine, with an in-memory store and a stand-in for Buffer's GraphQL API. "user:<id>" stands in for a verified session. */
@@ -57,13 +58,78 @@ function buffer() {
   return { state, fetch };
 }
 
+/** This deployment's own Instagram app, as "Business login settings" in the Meta app shows it. */
+const LOGIN = { ...switchedOn, INSTAGRAM_LOGIN_APP_ID: "990602627938098", INSTAGRAM_LOGIN_APP_SECRET: "ig-login-secret" };
+
+/** A stand-in for Instagram's sign-in and Graph API, answering in the shapes Meta's documentation shows. */
+function instagram() {
+  const state = {
+    /** One-time codes waiting to be exchanged, as if a person had just allowed access. */
+    codes: new Set(["code-1", "code-2"]),
+    containers: new Map<string, { status_code: string; input: any; checks: number; media?: string }>(),
+    /** How many status checks a new video stays IN_PROGRESS for. */
+    processing: 0,
+    /** "lost": the publish goes through but its answer never arrives. */
+    publishAnswer: "normal" as "normal" | "lost",
+    revoked: false,
+    subscribed: [] as string[],
+    requests: [] as Array<{ method: string; path: string; token: string | null; body: any }>,
+  };
+  const oauth = (code: number, message: string, extra: Record<string, unknown> = {}) => Response.json({ error: { message, type: "OAuthException", code, ...extra } }, { status: 400 });
+  const fetch = (async (url: unknown, init?: RequestInit) => {
+    const target = new URL(String(url));
+    const method = init?.method ?? "GET";
+    const raw = typeof init?.body === "string" ? init.body : "";
+    const body = raw.startsWith("{") ? JSON.parse(raw) : Object.fromEntries(new URLSearchParams(raw));
+    const token = new Headers(init?.headers).get("authorization")?.replace(/^Bearer /, "") ?? target.searchParams.get("access_token");
+    const path = target.pathname.replace(/^\/v27\.0/, "");
+    state.requests.push({ method, path: `${target.host}${path}`, token, body });
+    if (target.host === "api.instagram.com") {
+      if (body.client_id !== LOGIN.INSTAGRAM_LOGIN_APP_ID || body.client_secret !== LOGIN.INSTAGRAM_LOGIN_APP_SECRET || body.grant_type !== "authorization_code" || body.redirect_uri !== `${BASE}/v1/socials/providers/instagram/callback`)
+        return Response.json({ error_type: "OAuthException", code: 400, error_message: "Invalid request" }, { status: 400 });
+      if (!state.codes.delete(body.code)) return Response.json({ error_type: "OAuthException", code: 400, error_message: "Matching code was not found or was already used" }, { status: 400 });
+      return Response.json({ data: [{ access_token: "short-token", user_id: "1020", permissions: "instagram_business_basic,instagram_business_content_publish" }] });
+    }
+    assert.equal(target.host, "graph.instagram.com");
+    if (path === "/access_token") return target.searchParams.get("client_secret") === LOGIN.INSTAGRAM_LOGIN_APP_SECRET && token === "short-token" ? Response.json({ access_token: "long-token-1", token_type: "bearer", expires_in: 5183944 }) : oauth(190, "Invalid token");
+    if (state.revoked || !token?.startsWith("long-token-")) return oauth(190, "Error validating access token: the user has not authorized application");
+    if (path === "/refresh_access_token") return Response.json({ access_token: `long-token-${Number(token.split("-")[2]) + 1}`, token_type: "bearer", expires_in: 5183944 });
+    if (path === "/me") return Response.json({ data: [{ user_id: INSTAGRAM_ID, username: "faceful" }] });
+    if (path === "/me/subscribed_apps") {
+      state.subscribed.push(target.searchParams.get("subscribed_fields") ?? "");
+      return Response.json({ success: true });
+    }
+    if (path === "/me/media" && method === "POST") {
+      const id = `1788961569192${state.containers.size}`;
+      state.containers.set(id, { status_code: "FINISHED", input: body, checks: 0 });
+      return Response.json({ id });
+    }
+    if (path === "/me/media_publish" && method === "POST") {
+      const container = state.containers.get(body.creation_id);
+      if (!container || container.status_code !== "FINISHED" || container.checks < state.processing) return oauth(9007, "The media is not ready for publishing, please wait for a moment", { error_subcode: 2207027 });
+      Object.assign(container, { status_code: "PUBLISHED", media: `1792023842203${state.containers.size}` });
+      if (state.publishAnswer === "lost") throw new Error("socket hang up");
+      return Response.json({ id: container.media });
+    }
+    const container = state.containers.get(path.slice(1));
+    if (container) return Response.json({ id: path.slice(1), status_code: container.status_code === "FINISHED" && container.checks++ < state.processing ? "IN_PROGRESS" : container.status_code });
+    if (target.searchParams.get("fields") === "permalink") return Response.json({ id: path.slice(1), permalink: `https://www.instagram.com/reel/${path.slice(1)}/` });
+    throw new Error(`unexpected Instagram request: ${method} ${target.pathname}`);
+  }) as typeof globalThis.fetch;
+  return { state, fetch };
+}
+
 function engine(env: Record<string, string> = switchedOn) {
   let clock = Date.parse("2026-11-15T10:00:00.000Z");
   const remote = buffer();
+  const meta = instagram();
   const store = new MemoryStore();
-  /** What the engine asked Google's hub for (YouTube). Everything else goes to the Buffer stand-in. */
+  // Rate-limit windows follow the test's clock, as the database's would follow real time.
+  store.clock = () => new Date(clock);
+  /** What the engine asked Google's hub for (YouTube). Instagram and Buffer each have their stand-in. */
   const hub: URLSearchParams[] = [];
   const fetch = (async (url: unknown, init?: RequestInit) => {
+    if (/^https:\/\/(api|graph)\.instagram\.com\//.test(String(url))) return meta.fetch(url as string, init);
     if (String(url) !== "https://pubsubhubbub.appspot.com/subscribe") return remote.fetch(url as string, init);
     hub.push(new URLSearchParams(String(init?.body)));
     return new Response(null, { status: 202 });
@@ -87,7 +153,27 @@ function engine(env: Record<string, string> = switchedOn) {
     const body = init.raw ?? (method === "POST" ? JSON.stringify(init.body ?? {}) : undefined);
     const response = await handleEngineRequest(deps, new Request(`${BASE}${path}`, { method, headers, body }), path.split("?")[0]);
     const text = await response!.text();
-    return { status: response!.status, text, body: (text.startsWith("{") ? JSON.parse(text) : null) as any };
+    return { status: response!.status, text, body: (text.startsWith("{") ? JSON.parse(text) : null) as any, location: response!.headers.get("location") };
+  };
+  /** Signs in to Instagram the way a person does: start in the studio, allow access at Instagram, come back with its one-time code. */
+  const signIn = async (code: string, as = "user:u1") => {
+    const started = await call("/v1/socials/providers/instagram/connect", { as, method: "POST" });
+    assert.equal(started.status, 200, started.text);
+    const state = new URL(started.body.authorizeUrl).searchParams.get("state")!;
+    return { state, authorizeUrl: started.body.authorizeUrl as string, finish: () => call("/v1/socials/providers/instagram/complete", { as, method: "POST", body: { code, state } }) };
+  };
+  /** An approved, rendered post waiting for its time, for `accountId`. Returns a reader for the job as it changes. */
+  let minute = 0;
+  const due = async (accountId: string, payload: Record<string, unknown> = {}) => {
+    const [org] = await store.select("organizations", { personal_owner_id: "u1" });
+    const item = { id: crypto.randomUUID(), org_id: org.id, approved_revision: 3 };
+    const asset = { id: crypto.randomUUID(), org_id: org.id, sha256: "f".repeat(64), storage_path: `orgs/${org.id}/${crypto.randomUUID()}.mp4` };
+    await store.insert("content_items", item);
+    await store.insert("media_assets", asset);
+    await store.media.put(asset.storage_path, new Uint8Array([1, 2, 3]), "video/mp4");
+    const job = { id: crypto.randomUUID(), org_id: org.id, item_id: item.id, revision: 3, media_asset_id: asset.id, platform: "instagram", account_id: accountId, scheduled_at: new Date(Date.parse("2026-11-15T09:00:00.000Z") + minute++ * 60_000).toISOString(), payload: { caption: "Hello from Faceful", title: "", visibility: "public", aiDisclosure: true, assetHash: asset.sha256, ...payload }, state: "scheduled", attempt: 0, next_attempt_at: null, provider_post_id: null, published_url: null, published_at: null, error: null, updated_at: new Date(clock).toISOString() };
+    await store.insert("publish_jobs", job);
+    return async () => (await store.select("publish_jobs", { id: job.id }))[0];
   };
   const connect = async (as = "user:u1") => {
     const connected = await call("/v1/socials/providers/buffer/connect", { as, method: "POST", body: { apiKey: BUFFER_KEY } });
@@ -110,7 +196,7 @@ function engine(env: Record<string, string> = switchedOn) {
   /** A delivery in a platform's own format: its exact bytes and its own signature header. */
   const send = (platform: string, raw: string, headers: Record<string, string>) => call(`/v1/socials/${platform}/webhook`, { method: "POST", raw, headers });
   const activity = async (query = "") => (await call(`/v1/socials/events${query}`, { as: "user:u1" })).body.events as any[];
-  return { deps, store, remote, hub, call, connect, deliver, own, send, activity, advance: (minutes: number) => (clock += minutes * 60_000) };
+  return { deps, store, remote, meta, hub, call, connect, signIn, due, deliver, own, send, activity, advance: (minutes: number) => (clock += minutes * 60_000) };
 }
 
 test("the catalog lists every platform and provider, and nothing connects until the deployment switches it on", async () => {
@@ -122,8 +208,12 @@ test("the catalog lists every platform and provider, and nothing connects until 
   const whatsapp = catalog.body.platforms.find((platform: any) => platform.id === "whatsapp");
   assert.deepEqual([whatsapp.kind, whatsapp.providers, whatsapp.accounts], ["messaging", [], []]);
   const instagram = catalog.body.platforms.find((platform: any) => platform.id === "instagram");
-  assert.deepEqual([instagram.kind, instagram.providers, instagram.webhookUrl], ["social", ["buffer"], `${BASE}/v1/socials/instagram/webhook`]);
-  assert.deepEqual(catalog.body.providers, [{ id: "buffer", label: "Buffer", platforms: ["tiktok", "instagram", "linkedin", "youtube"], available: false, connected: false }]);
+  // Instagram can be reached two ways: through Buffer, or directly by signing in to Instagram.
+  assert.deepEqual([instagram.kind, instagram.providers, instagram.webhookUrl], ["social", ["buffer", "instagram"], `${BASE}/v1/socials/instagram/webhook`]);
+  assert.deepEqual(catalog.body.providers, [
+    { id: "buffer", label: "Buffer", platforms: ["tiktok", "instagram", "linkedin", "youtube"], connect: "credentials", available: false, connected: false },
+    { id: "instagram", label: "Instagram", platforms: ["instagram"], connect: "sign_in", available: false, connected: false },
+  ]);
 
   assert.equal((await call("/v1/socials/linkedin", { as: "user:u1" })).body.label, "LinkedIn");
   assert.equal((await call("/v1/socials/myspace", { as: "user:u1" })).status, 404);
@@ -135,6 +225,8 @@ test("the catalog lists every platform and provider, and nothing connects until 
   assert.deepEqual([off.publishing.adapters, off.socials], [[], { connections: false, webhooks: false, nativeWebhooks: [] }]);
   const on = (await engine().call("/v1/health")).body;
   assert.deepEqual([on.publishing.adapters, on.socials], [["buffer"], { connections: true, webhooks: true, nativeWebhooks: [] }]);
+  // The direct Instagram connection counts as a way to post only once this deployment has its own Instagram app.
+  assert.deepEqual((await engine(LOGIN).call("/v1/health")).body.publishing.adapters, ["buffer", "instagram"]);
   // Each platform's own format is switched on by that platform's credentials, and shows on its entry.
   const native = engine(NATIVE);
   assert.deepEqual((await native.call("/v1/health")).body.socials.nativeWebhooks, ["instagram", "whatsapp", "tiktok", "linkedin", "youtube"]);
@@ -565,4 +657,141 @@ test("LinkedIn's own format: the challenge is answered only for LinkedIn's kind 
   assert.deepEqual(events.map((event) => event.type).sort(), ["comment.created", "like.created", "share.created"]);
   const stored = events.find((event) => event.type === "comment.created");
   assert.deepEqual([stored.actor.id, stored.text, stored.subject, stored.occurredAt], ["urn:li:person:523424", "Great launch!", { id: "urn:li:comment:(activity:63434434348, 12345)", url: null, parentId: "urn:li:activity:29292929292992929293" }, new Date(1535741251282).toISOString()]);
+});
+
+test("connecting Instagram directly: the person is sent to Instagram, and only they can complete the sign-in they started", async () => {
+  // Without this deployment's own Instagram app, the direct connection is simply not offered.
+  assert.equal((await engine().call("/v1/socials/providers/instagram/connect", { as: "user:u1", method: "POST" })).status, 503);
+  const { call, signIn, store, meta, advance } = engine(LOGIN);
+  const agent = await call("/v1/socials/providers/instagram/connect", { as: "user:u1:claude-code", method: "POST" });
+  assert.deepEqual([agent.status, agent.body.error.code], [403, "approval_required"]);
+
+  const started = await signIn("code-1");
+  const authorize = new URL(started.authorizeUrl);
+  assert.equal(`${authorize.origin}${authorize.pathname}`, "https://www.instagram.com/oauth/authorize");
+  assert.deepEqual(
+    [authorize.searchParams.get("client_id"), authorize.searchParams.get("redirect_uri"), authorize.searchParams.get("response_type"), authorize.searchParams.get("scope")],
+    ["990602627938098", `${BASE}/v1/socials/providers/instagram/callback`, "code", "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_messages"],
+  );
+
+  // Instagram sends the browser back to the engine, which has no session to trust there: it only passes the person
+  // on to the studio's connect page, with the code in the part of the address that servers never see.
+  const back = await call(`/v1/socials/providers/instagram/callback?code=code-1&state=${encodeURIComponent(started.state)}`);
+  assert.deepEqual([back.status, back.location], [302, `${BASE}/studio/connect/instagram#${new URLSearchParams({ grant: "code-1", ticket: started.state })}`]);
+  assert.equal((await call("/v1/socials/providers/instagram/callback?error=access_denied&error_reason=user_denied")).location, `${BASE}/studio/connect/instagram#problem=declined`);
+  assert.equal((await call("/v1/socials/providers/buffer/callback?code=x&state=y")).status, 404);
+  assert.equal(meta.state.requests.length, 0, "nothing is exchanged until the signed-in person completes it");
+
+  // A link to someone else's sign-in does nothing: another person, a tampered ticket and a stale one are all refused,
+  // and the one-time code is not spent on them.
+  const complete = (as: string, state: string) => call("/v1/socials/providers/instagram/complete", { as, method: "POST", body: { code: "code-1", state } });
+  for (const refused of [await complete("user:u2", started.state), await complete("user:u1", `${started.state}x`), await complete("user:u1", started.state.replace(/^./, "A"))]) assert.deepEqual([refused.status, refused.body.error.code], [403, "forbidden"]);
+  const stale = await signIn("code-1");
+  advance(16);
+  assert.equal((await stale.finish()).status, 403);
+  assert.deepEqual([meta.state.requests.length, (await store.select("provider_connections", {})).length], [0, 0]);
+
+  const fresh = await signIn("code-1");
+  const connected = await fresh.finish();
+  assert.equal(connected.status, 200, connected.text);
+  const [account] = connected.body.accounts;
+  assert.deepEqual([account.platform, account.provider, account.displayName, account.profileUrl, account.state, typeof account.webhookSubscribedAt], ["instagram", "instagram", "@faceful", "https://www.instagram.com/faceful/", "connected", "string"]);
+  // The 1-hour token was traded for the 60-day one, the account was read, and its activity was asked for.
+  assert.deepEqual(meta.state.requests.map((request) => `${request.method} ${request.path}`), ["POST api.instagram.com/oauth/access_token", "GET graph.instagram.com/access_token", "GET graph.instagram.com/me", "POST graph.instagram.com/me/subscribed_apps"]);
+  assert.deepEqual(meta.state.subscribed, ["comments,live_comments,messages,message_reactions,messaging_seen"]);
+  const [row] = await store.select("provider_connections", {});
+  // The account is stored under the ID Instagram's webhooks name, so its comments and messages find it.
+  assert.equal(row.external_account_id, INSTAGRAM_ID);
+  assert.ok(!connected.text.includes("long-token") && !JSON.stringify(row).includes("long-token"), "the token is never returned or stored in the clear");
+  assert.ok((await store.select("audit_events", {})).some((event) => event.action === "Connected Instagram account @faceful"));
+
+  // A code works once. Signing in again with the same account renews it in place.
+  const replay = await fresh.finish();
+  assert.deepEqual([replay.status, /already used/.test(replay.body.error.message)], [400, true]);
+  assert.equal((await (await signIn("code-2")).finish()).status, 200);
+  assert.equal((await store.select("provider_connections", {})).length, 1);
+
+  const catalog = (await call("/v1/socials", { as: "user:u1" })).body;
+  assert.deepEqual(catalog.providers.find((provider: any) => provider.id === "instagram"), { id: "instagram", label: "Instagram", platforms: ["instagram"], connect: "sign_in", available: true, connected: true });
+  assert.equal((await call("/v1/socials/providers/instagram/sync", { as: "user:u1", method: "POST" })).status, 422);
+});
+
+test("a Reel posted directly: Instagram prepares the video first, and it is published exactly once", async () => {
+  const { deps, call, signIn, due, meta, activity } = engine(LOGIN);
+  const account = (await (await signIn("code-1")).finish()).body.accounts[0];
+  Object.assign(instagramTiming, { pollMs: 0, polls: 3 });
+  const publishes = () => meta.state.requests.filter((request) => request.path.endsWith("/me/media_publish")).length;
+
+  // Ready within the wait: prepared, published and confirmed in one run.
+  meta.state.processing = 1;
+  const quick = await due(account.id);
+  assert.deepEqual(await processDuePublishJobs(deps), { processed: 1, submitted: 1, failed: 0, retried: 0, unknown: 0, verified: 0, swept: 0 });
+  const [container] = [...meta.state.containers.values()];
+  const { video_url: videoUrl, ...settings } = container.input;
+  assert.deepEqual(settings, { media_type: "REELS", caption: "Hello from Faceful", share_to_feed: true, is_ai_generated: true });
+  assert.match(videoUrl, /^https:\/\/media\.test\//);
+  const posted = await quick();
+  assert.deepEqual([posted.state, posted.provider_post_id, posted.published_url], ["verified_published", container.media, `https://www.instagram.com/reel/${container.media}/`]);
+
+  // Still being prepared when the wait runs out: nothing is claimed, and a later check publishes it. (The run that sent
+  // it already checks once more, so the video here stays in preparation for five checks.)
+  meta.state.processing = 5;
+  const slow = await due(account.id);
+  assert.deepEqual(await processDuePublishJobs(deps), { processed: 1, submitted: 1, failed: 0, retried: 0, unknown: 0, verified: 0, swept: 0 });
+  assert.deepEqual([(await slow()).state, /^container:\d+$/.test((await slow()).provider_post_id)], ["submitted", true]);
+  assert.deepEqual(await verifySubmittedPublishJobs(deps), { checked: 1, verified: 0, failed: 0 });
+  // Asking now publishes it. Two checks at once (the scheduler and an open project) do not both ask: one holds the post.
+  const published = publishes();
+  const together = await Promise.all([verifySubmittedPublishJobs(deps), verifySubmittedPublishJobs(deps)]);
+  assert.deepEqual(together.map((outcome) => [outcome.checked, outcome.verified]).sort(), [[0, 0], [1, 1]]);
+  assert.equal(publishes() - published, 1);
+  const later = await slow();
+  assert.deepEqual([later.state, /^\d+$/.test(later.provider_post_id), later.published_url], ["verified_published", true, `https://www.instagram.com/reel/${later.provider_post_id}/`]);
+  assert.deepEqual((await activity("?type=post.created")).map((event) => [event.source, event.externalId]), [["instagram", later.provider_post_id]]);
+
+  // The publish goes through but its answer is lost. It is not sent again: the prepared video itself says it was
+  // published, and that settles it (here in the same run, whose check follows the send).
+  meta.state.processing = 0;
+  meta.state.publishAnswer = "lost";
+  const before = publishes();
+  const unclear = await due(account.id);
+  assert.deepEqual(await processDuePublishJobs(deps), { processed: 1, submitted: 1, failed: 0, retried: 0, unknown: 0, verified: 1, swept: 0 });
+  assert.deepEqual([(await unclear()).state, /^container:\d+$/.test((await unclear()).provider_post_id), publishes() - before], ["verified_published", true, 1]);
+  meta.state.publishAnswer = "normal";
+
+  // Instagram has no private posts, so one approved as private is refused before any video is sent.
+  const containers = meta.state.containers.size;
+  const hidden = await due(account.id, { visibility: "private" });
+  await processDuePublishJobs(deps);
+  assert.deepEqual([(await hidden()).state, /only post publicly/.test((await hidden()).error), meta.state.containers.size], ["failed", true, containers]);
+
+  // The person removed the app in Instagram: the post fails with what to do about it.
+  meta.state.revoked = true;
+  const refused = await due(account.id);
+  await processDuePublishJobs(deps);
+  assert.deepEqual([(await refused()).state, /Connect the account again/.test((await refused()).error)], ["failed", true]);
+  assert.equal((await call("/v1/socials/instagram", { as: "user:u1" })).body.accounts[0].state, "connected", "only the scheduler's own check marks an account expired");
+});
+
+test("the scheduler keeps the 60-day sign-in alive, and marks the account expired once Instagram refuses it", async () => {
+  const { call, signIn, store, meta, advance } = engine({ ...LOGIN, CRON_SECRET: "cron-secret" });
+  await (await signIn("code-1")).finish();
+  const tick = async () => (await call("/v1/cron/tick", { headers: { authorization: "Bearer cron-secret" } })).body.credentials;
+  const refreshes = () => meta.state.requests.filter((request) => request.path.endsWith("/refresh_access_token")).length;
+  const saved = async () => (await store.select("provider_connections", {}))[0];
+  const first = (await saved()).credentials_ciphertext;
+
+  // Plenty of time left: nothing is asked. With under 30 days left, the token is renewed and stored again.
+  assert.deepEqual([await tick(), refreshes()], [{ refreshed: 0, expired: 0, failed: 0 }, 0]);
+  advance(31 * 24 * 60);
+  assert.deepEqual([await tick(), refreshes()], [{ refreshed: 1, expired: 0, failed: 0 }, 1]);
+  assert.notEqual((await saved()).credentials_ciphertext, first);
+  assert.deepEqual([await tick(), refreshes()], [{ refreshed: 0, expired: 0, failed: 0 }, 1]);
+
+  // Access withdrawn at Instagram: the account is marked expired, and the studio asks for it to be connected again.
+  meta.state.revoked = true;
+  advance(31 * 24 * 60);
+  assert.deepEqual(await tick(), { refreshed: 0, expired: 1, failed: 0 });
+  assert.equal((await saved()).state, "expired");
+  assert.deepEqual(await tick(), { refreshed: 0, expired: 0, failed: 0 });
 });
