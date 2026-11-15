@@ -381,3 +381,6 @@ html:has(.np) { overflow: hidden; }
 .np-menu { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
 .np-menu > * { flex: none; }
 .np-menu > .np-menu-list { flex: 0 1 auto; min-height: 0; }
+
+/* The composer is transformed, so its menus stack inside it: lift the whole composer above the template posters while one is open. */
+.director-composer:has(.np-menu) { position: relative; z-index: 40; }
