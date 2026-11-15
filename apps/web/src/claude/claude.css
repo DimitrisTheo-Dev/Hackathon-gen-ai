@@ -231,6 +231,45 @@
   .cc-steps .cc-form .button { justify-self: stretch; }
   .cc-steps .cc-form label { margin-block-start: 0; }
 
+  /* The one-button card: Connect Claude, then a paste. The machine it runs on is one quiet line below. */
+  .cc-connect-button { align-self: stretch; gap: 8px; min-block-size: 48px; font-size: 15px; font-weight: 550; }
+  .cc-connect .cc-steps .text-button { justify-self: start; display: inline-flex; align-items: center; gap: 5px; }
+  .cc-connect .cc-hint { margin-block-start: -2px; }
+  .cc-connect .cc-row .text-button { display: inline-flex; align-items: center; gap: 5px; }
+  .cc-machine { display: grid; gap: 2px; padding-block-start: 12px; border-block-start: 1px solid var(--border); }
+  .cc-card .cc-machine-line { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-secondary); }
+  .cc-machine-line svg { flex: 0 0 auto; margin-block-start: 2px; color: var(--text-secondary); }
+  .cc-machine-version { color: var(--text-secondary); }
+
+  /* Your own server: a closed card that opens into the address and key form. */
+  .cc-own { gap: 12px; padding-block: 14px; }
+  .cc-own summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-block-size: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 14px;
+    font-weight: 550;
+    color: var(--ink-secondary);
+  }
+  .cc-own summary::-webkit-details-marker { display: none; }
+  .cc-own summary::before {
+    content: "";
+    flex: 0 0 auto;
+    inline-size: 14px;
+    block-size: 14px;
+    background: var(--text-secondary);
+    -webkit-mask: var(--cc-chevron) center / contain no-repeat;
+    mask: var(--cc-chevron) center / contain no-repeat;
+    transition: transform var(--cc-fast) var(--ease-out);
+  }
+  .cc-own[open] summary::before { transform: rotate(90deg); }
+  .cc-own:not([open]) { background: transparent; box-shadow: none; }
+  .cc-own-steps { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; font-size: 13px; line-height: 1.55; color: var(--text-secondary); }
+
   /* Project card: the project picker, autosave line and saved versions. */
   .cc-inline { display: flex; gap: 8px; }
   .cc-inline input, .cc-inline select { flex: 1; min-inline-size: 0; }

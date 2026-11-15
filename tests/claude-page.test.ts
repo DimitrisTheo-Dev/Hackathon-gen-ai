@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createMachineTokenSource, createRunnerClient, normalizeRunnerUrl, readNdjson, RunnerError, type StreamEvent } from "../apps/web/src/claude/runner";
+import { codeFitsLogin, createMachineTokenSource, createRunnerClient, isCodeForLogin, normalizeRunnerUrl, readNdjson, RunnerError, type StreamEvent } from "../apps/web/src/claude/runner";
 import { addUserPrompt, applyEvent, emptyTranscript, summarizeToolInput } from "../apps/web/src/claude/transcript";
 
 test("runner address: https anywhere, http only for this computer", () => {
@@ -108,4 +108,17 @@ test("the gateway gets a machines token from the engine, never the Faceful sessi
   await assert.rejects(token(), (error: unknown) => error instanceof RunnerError && error.status === 401);
   const offline = createMachineTokenSource("https://faceful.test", async () => "session-a", (async () => { throw new TypeError("offline"); }) as typeof fetch);
   await assert.rejects(offline(), (error: unknown) => error instanceof RunnerError && error.code === "unreachable");
+});
+
+test("a code from Claude's page must belong to the sign-in in progress", () => {
+  const login = "https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=STATE_abc123";
+  assert.equal(codeFitsLogin("AbCdEf0123456789#STATE_abc123", login), true);
+  assert.equal(codeFitsLogin("AbCdEf0123456789#OLDSTATE", login), false, "a code from an earlier attempt");
+  assert.equal(codeFitsLogin("AbCdEf0123456789", login), true, "no state part: the machine decides");
+  // Read from the clipboard without a paste only when it is exactly this sign-in's code.
+  assert.equal(isCodeForLogin(" AbCdEf0123456789#STATE_abc123\n", login), true);
+  assert.equal(isCodeForLogin("AbCdEf0123456789", login), false);
+  assert.equal(isCodeForLogin("AbCdEf0123456789#OLDSTATE", login), false);
+  assert.equal(isCodeForLogin("some notes #STATE_abc123", login), false, "copied prose with spaces");
+  assert.equal(isCodeForLogin("x#STATE_abc123", login), false, "too short to be a code");
 });

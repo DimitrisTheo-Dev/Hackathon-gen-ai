@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, Check, ChevronRight, CircleCheck, CircleX, ExternalLink, LoaderCircle, Moon, Plus, RefreshCw, Server, Square, SquareTerminal, Wrench } from "lucide-react";
 import { AgentIcon } from "../components/AgentIcon";
 import { Mark, Notice } from "../components/ui";
 import { supabase } from "../lib/supabase";
-import { createMachineTokenSource, createRunnerClient, normalizeRunnerUrl, RunnerError, type Machine, type Model, type PermissionMode, type Project, type RunnerStatus } from "./runner";
+import { codeFitsLogin, createMachineTokenSource, createRunnerClient, isCodeForLogin, normalizeRunnerUrl, RunnerError, type Machine, type Model, type PermissionMode, type Project, type RunnerStatus } from "./runner";
 import { addNotice, addUserPrompt, applyEvent, emptyTranscript, type Transcript, type TranscriptItem } from "./transcript";
 import { WorkspaceCard } from "./WorkspaceCard";
 import "./claude.css";
@@ -56,10 +56,43 @@ const MODES: { value: PermissionMode; label: string; help: string }[] = [
 /** Keys, codes and addresses are typed exactly: no capitals, corrections or spell checks on phones. */
 const exact = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false } as const;
 
+/**
+ * Opens Claude's sign-in in a small window during the click itself, so no popup blocker stops it, before the machine
+ * has even woken. It shows a holding line until connectClaude points it at the sign-in link. The window never gets a
+ * reference back to this page. Null when the browser refused it; the page then offers the link as a button.
+ */
+function openClaudeWindow(): Window | null {
+  const width = 520, height = 760;
+  const left = Math.round(window.screenX + Math.max(0, (window.outerWidth - width) / 2));
+  const top = Math.round(window.screenY + Math.max(0, (window.outerHeight - height) / 3));
+  let popup: Window | null = null;
+  try { popup = window.open("", "faceful-claude-sign-in", `popup,width=${width},height=${height},left=${left},top=${top}`); } catch { popup = null; }
+  if (!popup) return null;
+  try {
+    popup.opener = null;
+    popup.document.title = "Opening Claude…";
+    const note = popup.document.createElement("p");
+    note.textContent = "Opening Claude sign-in…";
+    note.style.cssText = "font:15px system-ui,sans-serif;color:#6b6b66;text-align:center;margin-top:40vh";
+    popup.document.body.replaceChildren(note);
+  } catch { /* still on Claude's site from an earlier try: it gets the new link below */ }
+  return popup;
+}
+
 export default function ClaudeVpsPage() {
   const [connection, setConnection] = useState<Connection | null>(loadConnection);
   /** The gateway turned this Faceful session down, so the page stops offering it by itself. */
   const [sessionRefused, setSessionRefused] = useState(false);
+  /** A gateway is set up but nobody is signed in to Faceful here, so there is no cloud machine to open. */
+  const [signedOut, setSignedOut] = useState(false);
+  /**
+   * The sign-in window this page opened. Closing it once Claude is connected is best effort: Claude's sign-in pages send
+   * Cross-Origin-Opener-Policy, which cuts this page's hold on the window, so usually the person closes it.
+   */
+  const popupRef = useRef<Window | null>(null);
+  const [popupOpened, setPopupOpened] = useState(false);
+  /** A paste and a clipboard read can arrive together; only the first one is sent. */
+  const finishing = useRef(false);
   const client = useMemo(() => (connection ? createRunnerClient(connection.url, connection.session ? gatewayToken : connection.key) : null), [connection]);
   const [machine, setMachine] = useState<Machine | null>(null);
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -109,15 +142,38 @@ export default function ClaudeVpsPage() {
       }
     } finally { setBusy(null); }
   }
-  useEffect(() => { document.title = "Claude Code on your server · Faceful"; }, []);
+  useEffect(() => { document.title = "Claude Code · Faceful"; }, []);
   useEffect(() => { if (client) void refresh(client); }, [client]); // eslint-disable-line react-hooks/exhaustive-deps
   // Signed in to Faceful and a gateway is configured: your own machine connects by itself.
   useEffect(() => {
     if (connection || !GATEWAY || !supabase || sessionRefused) return;
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => { if (active && data.session) setConnection({ url: GATEWAY, key: "", session: true }); });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      if (data.session) setConnection({ url: GATEWAY, key: "", session: true });
+      else setSignedOut(true);
+    });
     return () => { active = false; };
   }, [connection, sessionRefused]);
+  // Back from the Claude window: the cursor waits in the code field, ready for a paste. Where this browser already
+  // lets the page read the clipboard, a code copied for exactly this sign-in connects without the paste.
+  useEffect(() => {
+    if (!loginUrl) return;
+    const onFocus = async () => {
+      if (code || finishing.current) return;
+      document.getElementById("cc-code")?.focus();
+      try {
+        const permission = await navigator.permissions?.query({ name: "clipboard-read" as PermissionName });
+        if (permission?.state !== "granted") return;
+        const copied = (await navigator.clipboard.readText()).trim();
+        if (isCodeForLogin(copied, loginUrl)) { setCode(copied); void finishLogin(copied); }
+      } catch { /* no clipboard access here: the paste does it */ }
+    };
+    const listener = () => void onFocus();
+    window.addEventListener("focus", listener);
+    return () => window.removeEventListener("focus", listener);
+  }, [loginUrl, code]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => popupRef.current?.close(), []);
 
   function chooseProject(id: string) {
     if (running || id === project) return;
@@ -149,7 +205,7 @@ export default function ClaudeVpsPage() {
   // Keyboard and screen-reader path: when a step finishes, its controls leave the page. If the page was
   // in use, focus continues at the next thing to do instead of dropping back to the top of the document.
   // It is only ever placed when nothing holds focus, and stops as soon as the person focuses something else.
-  const stage = !connection || !status ? "server" : signedIn ? "ready" : loginUrl ? "code" : "auth";
+  const stage = !connection ? "server" : signedIn ? "ready" : loginUrl ? "code" : "auth";
   const stageSeen = useRef(stage);
   const engaged = useRef(false);
   const carryFocus = useRef(false);
@@ -183,23 +239,51 @@ export default function ClaudeVpsPage() {
     saveConnection(null); setConnection(null); setStatus(null); setMachine(null); setProjects(null); setLoginUrl(null); setServerError(""); setAuthError("");
   }
 
-  async function startLogin() {
-    if (!client || busy) return;
-    setBusy("login"); setAuthError(""); setCode("");
-    try { setLoginUrl((await client.startLogin()).url); }
-    catch (error) { setAuthError(problem(error)); }
+  /**
+   * The one button: wakes the machine if it sleeps, starts Claude's sign-in on it and points the window opened during
+   * the click at Claude. All that is left is approving there and pasting the code Claude shows.
+   */
+  async function connectClaude() {
+    if (!client || busy || running) return;
+    const popup = openClaudeWindow();
+    popupRef.current = popup; setPopupOpened(popup !== null);
+    setBusy("login"); setAuthError(""); setServerError(""); setCode("");
+    try {
+      const current = status ?? await client.status(); // this call wakes a sleeping machine
+      if (!status) { setStatus(current); if (machine) void client.machine().then(setMachine).catch(() => undefined); }
+      if (current.auth.loggedIn) { popup?.close(); return; }
+      const { url } = await client.startLogin();
+      setLoginUrl(url);
+      if (popup && !popup.closed) popup.location.href = url;
+      else setPopupOpened(false);
+    } catch (error) { popup?.close(); setAuthError(problem(error)); }
     finally { setBusy(null); }
   }
-  async function finishLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!client || busy || !code.trim()) return;
+  async function finishLogin(value: string) {
+    const entered = value.trim();
+    if (!client || busy || finishing.current || !entered) return;
+    if (loginUrl && !codeFitsLogin(entered, loginUrl)) { setAuthError("That code is from an earlier sign-in. Copy the newest code from the Claude window."); setCode(""); return; }
+    finishing.current = true;
     setBusy("finish"); setAuthError("");
-    try { await client.finishLogin(code.trim()); setLoginUrl(null); setCode(""); setStatus(await client.status()); }
-    catch (error) { setAuthError(problem(error)); if (error instanceof RunnerError && error.code === "login_not_started") setLoginUrl(null); }
-    finally { setBusy(null); }
+    try {
+      await client.finishLogin(entered);
+      setLoginUrl(null); setCode("");
+      popupRef.current?.close(); popupRef.current = null;
+      setStatus(await client.status());
+    } catch (error) { setAuthError(problem(error)); setCode(""); if (error instanceof RunnerError && error.code === "login_not_started") setLoginUrl(null); }
+    finally { setBusy(null); finishing.current = false; }
+  }
+  /** Claude's page has a copy button, so a paste is the whole code: it connects without another click. */
+  function onCodePaste(event: ClipboardEvent<HTMLInputElement>) {
+    const pasted = event.clipboardData.getData("text").trim();
+    if (!pasted || busy) return;
+    event.preventDefault();
+    setCode(pasted);
+    void finishLogin(pasted);
   }
   async function cancelLogin() {
     setLoginUrl(null); setCode(""); setAuthError("");
+    popupRef.current?.close(); popupRef.current = null;
     try { await client?.cancelLogin(); } catch { /* the runner expires it anyway */ }
   }
   async function saveToken(event: FormEvent<HTMLFormElement>) {
@@ -256,99 +340,104 @@ export default function ClaudeVpsPage() {
     <div className="cc-page" ref={pageRef} data-stage={stage} onFocus={(event) => { engaged.current = true; if (!event.target.matches("[data-cc-focus]")) carryFocus.current = false; }}>
       <header className="cc-header">
         <a className="wordmark" href="/"><Mark />Faceful</a>
-        <h1 className="cc-header-title">Claude Code on your server</h1>
+        <h1 className="cc-header-title">Claude Code</h1>
         <span className="cc-chip cc-header-tag">Preview</span>
       </header>
       <main className="cc-layout">
         <div className="cc-setup">
-          <section className="cc-card" aria-labelledby="cc-server-title">
-            <div className="cc-card-head">
-              <span className="cc-step"><Server size={16} aria-hidden="true" /></span>
-              <h2 id="cc-server-title">{connection ? (machine ? "Your machine" : "Server") : "Connect your machine"}</h2>
-              {connection && status && <span className="cc-chip positive"><Check size={13} aria-hidden="true" />{machine ? "Awake" : "Connected"}</span>}
-              {connection && machine && !status && busy !== "refresh" && <span className="cc-chip"><Moon size={12} aria-hidden="true" />Asleep</span>}
-            </div>
-            {connection ? <>
-              <dl className="cc-facts">
-                <div><dt>Address</dt><dd>{connection.url}</dd></div>
-                {machine && <div><dt>Size</dt><dd>{machine.instanceType} · sleeps after {machine.sleepAfterMinutes} min idle</dd></div>}
-                <div><dt>Claude Code</dt><dd>{status ? status.claudeVersion ?? "Not found on the server" : busy === "refresh" ? (machine ? "Waking your machine…" : "Checking…") : machine ? "Asleep" : "Unknown"}</dd></div>
-                <div><dt>Workspace</dt><dd>{status ? `${status.workspace}/${project}` : "…"}</dd></div>
-              </dl>
-              {serverError && <Notice error>{serverError}</Notice>}
-              <div className="cc-row">
-                <button className="text-button" type="button" data-cc-focus={machine && !status ? "server" : undefined} onClick={() => void refresh()} disabled={busy !== null}><RefreshCw className={busy === "refresh" ? "spin" : undefined} size={13} aria-hidden="true" />{busy === "refresh" ? (machine ? "Waking…" : "Checking…") : machine && !status ? "Wake machine" : "Check again"}</button>
-                {machine && status && <button className="text-button" type="button" onClick={() => void sleepNow()} disabled={busy !== null || running}><Moon size={13} aria-hidden="true" />Save and sleep</button>}
-                {!connection.session && <button className="text-button" type="button" onClick={forget} disabled={running}>{machine ? "Disconnect" : "Forget server"}</button>}
-              </div>
-            </> : <>
-              <p>Your machine runs the official Claude Code CLI in the cloud and sleeps when idle. Paste its address and your access token. A runner on your own server works too.</p>
-              <form className="cc-form" onSubmit={connect} aria-busy={busy === "connect"}>
-                <label htmlFor="cc-url">Address</label>
-                <input id="cc-url" data-cc-focus="server" type="url" inputMode="url" autoComplete="url" {...exact} placeholder="https://claude.yourdomain.com" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
-                <label htmlFor="cc-key">Access token</label>
-                <input id="cc-key" type="password" autoComplete="off" {...exact} placeholder="fgw2.… or RUNNER_ACCESS_KEY" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
-                <label className="cc-check"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy !== null} />Remember the key on this device</label>
-                <button className="button primary" disabled={busy !== null}>{busy === "connect" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />{machine ? "Waking your machine…" : "Connecting…"}</> : "Connect"}</button>
-              </form>
-              {serverError && <div id="cc-server-error"><Notice error>{serverError}</Notice></div>}
-              <details className="cc-details">
-                <summary>Run it on your own server instead</summary>
-                <ol>
-                  <li>Copy <code>apps/claude-runner</code> to the server and create <code>.env</code> from <code>.env.example</code>.</li>
-                  <li>Point your domain at the server, then run <code>docker compose --profile https up -d --build</code>.</li>
-                  <li>Paste <code>https://</code> plus your domain and the access key here.</li>
-                </ol>
-              </details>
-            </>}
-          </section>
-
-          <section className={`cc-card ${connection && status ? "" : "is-waiting"}`} aria-labelledby="cc-auth-title">
+          <section className="cc-card cc-connect" aria-labelledby="cc-auth-title" aria-busy={busy === "login" || busy === "finish"}>
             <div className="cc-card-head">
               <span className="cc-step"><AgentIcon host="claude" size={16} /></span>
               <h2 id="cc-auth-title">{signedIn ? "Claude subscription" : "Connect your Claude subscription"}</h2>
-              {signedIn && <span className="cc-chip positive"><Check size={13} aria-hidden="true" />Signed in</span>}
+              {signedIn && <span className="cc-chip positive"><Check size={13} aria-hidden="true" />Connected</span>}
             </div>
-            {!connection || !status ? <p>{connection && machine ? "Your machine is asleep. Wake it to continue; your Claude sign-in comes back with it." : "Connect your machine first. Sign-in happens on the machine, so your Claude session stays there."}</p>
-              : signedIn ? <>
-                <p>Claude Code on your server uses your Claude subscription{status.auth.authMethod === "oauth_token" || status.tokenStored ? " through a long-lived token" : ""}.</p>
-                {(status.auth.email || status.auth.subscriptionType || status.auth.organization) && <dl className="cc-facts">
-                  {status.auth.email && <div><dt>Account</dt><dd>{status.auth.email}</dd></div>}
-                  {status.auth.subscriptionType && <div><dt>Plan</dt><dd className="cc-capitalize">{status.auth.subscriptionType}</dd></div>}
-                  {status.auth.organization && <div><dt>Organization</dt><dd>{status.auth.organization}</dd></div>}
-                </dl>}
-                <div className="cc-row"><button className="button secondary" type="button" onClick={() => void signOut()} disabled={busy !== null || running}>{busy === "signout" ? "Signing out…" : "Sign out on server"}</button></div>
-              </> : loginUrl ? <>
-                <ol className="cc-steps">
-                  <li>
-                    <span>Sign in on Claude and approve access. Claude then shows a code.</span>
-                    <a className="button primary" data-cc-focus="code" href={loginUrl} target="_blank" rel="noopener noreferrer">Open Claude sign-in<ExternalLink size={14} aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>
-                  </li>
-                  <li>
-                    <form className="cc-form" onSubmit={finishLogin} aria-busy={busy === "finish"}>
-                      <label htmlFor="cc-code">Paste the code from Claude</label>
-                      <input id="cc-code" className="cc-mono" autoComplete="off" {...exact} value={code} onChange={(event) => setCode(event.target.value)} required disabled={busy !== null} />
-                      <button className="button primary" disabled={busy !== null || !code.trim()}>{busy === "finish" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />Finishing…</> : "Finish sign-in"}</button>
-                    </form>
-                  </li>
-                </ol>
-                <button className="text-button" type="button" onClick={() => void cancelLogin()} disabled={busy === "finish"}>Cancel sign-in</button>
-              </> : <>
-                <p>Sign in once on the server with your Pro or Max plan. This page never sees your Claude password.</p>
-                <button className="button primary" data-cc-focus="auth" type="button" onClick={() => void startLogin()} disabled={busy !== null}>{busy === "login" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />Preparing sign-in…</> : "Sign in with Claude"}</button>
-                <details className="cc-details">
-                  <summary>Use a token instead</summary>
-                  <form className="cc-form" onSubmit={saveToken} aria-busy={busy === "token"}>
-                    <p>On a computer with Claude Code, run <code>claude setup-token</code> and paste the token it prints. It is stored only on your server.</p>
-                    <label htmlFor="cc-token">Claude Code token</label>
-                    <input id="cc-token" type="password" autoComplete="off" {...exact} placeholder="sk-ant-oat01-…" value={token} onChange={(event) => setToken(event.target.value)} required disabled={busy !== null} />
-                    <button className="button secondary" disabled={busy !== null || !token.trim()}>{busy === "token" ? "Saving…" : "Save token on server"}</button>
+            {signedIn && status ? <>
+              <p>Claude Code uses your Claude plan{status.auth.authMethod === "oauth_token" || status.tokenStored ? " through a long-lived token" : ""}, never API billing.</p>
+              {(status.auth.email || status.auth.subscriptionType || status.auth.organization) && <dl className="cc-facts">
+                {status.auth.email && <div><dt>Account</dt><dd>{status.auth.email}</dd></div>}
+                {status.auth.subscriptionType && <div><dt>Plan</dt><dd className="cc-capitalize">{status.auth.subscriptionType}</dd></div>}
+                {status.auth.organization && <div><dt>Organization</dt><dd>{status.auth.organization}</dd></div>}
+              </dl>}
+            </> : loginUrl ? <>
+              <ol className="cc-steps">
+                <li>
+                  <span>{popupOpened ? "Approve access in the Claude window." : "Open Claude and approve access."} Claude then shows a code.</span>
+                  {popupOpened
+                    ? <a className="text-button" href={loginUrl} target="_blank" rel="noopener noreferrer">Open the Claude window again<ExternalLink size={13} aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>
+                    : <a className="button primary" data-cc-focus="code" href={loginUrl} target="_blank" rel="noopener noreferrer">Open Claude<ExternalLink size={14} aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>}
+                </li>
+                <li>
+                  <form className="cc-form" onSubmit={(event) => { event.preventDefault(); void finishLogin(code); }} aria-busy={busy === "finish"}>
+                    <label htmlFor="cc-code">Copy the code and paste it here</label>
+                    <input id="cc-code" className="cc-mono" data-cc-focus={popupOpened ? "code" : undefined} autoComplete="off" {...exact} value={code} onChange={(event) => setCode(event.target.value)} onPaste={onCodePaste} required disabled={busy !== null} aria-describedby="cc-code-help" />
+                    <small id="cc-code-help" className="cc-hint">{busy === "finish" ? "Connecting Claude…" : "It connects as soon as you paste."}</small>
+                    {code.trim() && busy !== "finish" && <button className="button primary" disabled={busy !== null}>Connect</button>}
                   </form>
-                </details>
-              </>}
+                </li>
+              </ol>
+              <button className="text-button" type="button" onClick={() => void cancelLogin()} disabled={busy === "finish"}>Cancel</button>
+            </> : <>
+              <p>{client
+                ? `Use your Pro or Max plan. Claude signs in on ${machine ? "your own cloud machine" : "your server"}, so Faceful never sees your Claude password.`
+                : sessionRefused ? "Cloud machines are invite-only for now. You can still use your own server below."
+                : signedOut ? "Sign in to Faceful to get your own cloud machine, or use your own server below."
+                : GATEWAY && supabase ? "Opening your cloud machine…"
+                : "Add your server below first. Claude signs in there, so Faceful never sees your Claude password."}</p>
+              {signedOut && !client && <a className="text-button" href="/studio/">Sign in to Faceful</a>}
+              <button className="button primary cc-connect-button" data-cc-focus="auth" type="button" onClick={() => void connectClaude()} disabled={!client || busy !== null}>
+                {busy === "login" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />{status ? "Opening Claude…" : machine ? "Waking your machine…" : "Connecting…"}</> : <><AgentIcon host="claude" size={16} />Connect Claude</>}
+              </button>
+              {client && status && <details className="cc-details">
+                <summary>Use a token instead</summary>
+                <form className="cc-form" onSubmit={saveToken} aria-busy={busy === "token"}>
+                  <p>On a computer with Claude Code, run <code>claude setup-token</code> and paste the token it prints. It is stored only on {machine ? "your machine" : "your server"}.</p>
+                  <label htmlFor="cc-token">Claude Code token</label>
+                  <input id="cc-token" type="password" autoComplete="off" {...exact} placeholder="sk-ant-oat01-…" value={token} onChange={(event) => setToken(event.target.value)} required disabled={busy !== null} />
+                  <button className="button secondary" disabled={busy !== null || !token.trim()}>{busy === "token" ? "Saving…" : "Save token"}</button>
+                </form>
+              </details>}
+            </>}
             {authError && <Notice error>{authError}</Notice>}
+            {connection && serverError && <Notice error>{serverError}</Notice>}
+
+            {connection && <div className="cc-machine">
+              <p className="cc-machine-line">
+                <Server size={14} aria-hidden="true" />
+                <span>
+                  {machine ? "Your cloud machine" : "Your server"}
+                  {" · "}
+                  {busy === "refresh" ? (machine ? "waking…" : "checking…") : status ? (machine ? `awake, sleeps after ${machine.sleepAfterMinutes} min idle` : "connected") : machine ? "asleep" : "not reachable"}
+                  {status?.claudeVersion && <span className="cc-machine-version"> · Claude Code {status.claudeVersion}</span>}
+                </span>
+              </p>
+              <div className="cc-row">
+                {(!status || !machine) && <button className="text-button" type="button" data-cc-focus={machine && !status ? "server" : undefined} onClick={() => void refresh()} disabled={busy !== null}><RefreshCw className={busy === "refresh" ? "spin" : undefined} size={13} aria-hidden="true" />{machine && !status ? "Wake" : "Check again"}</button>}
+                {machine && status && <button className="text-button" type="button" onClick={() => void sleepNow()} disabled={busy !== null || running}><Moon size={13} aria-hidden="true" />Save and sleep</button>}
+                {signedIn && <button className="text-button" type="button" onClick={() => void signOut()} disabled={busy !== null || running}>{busy === "signout" ? "Signing out…" : "Sign out of Claude"}</button>}
+                {!connection.session && <button className="text-button" type="button" onClick={forget} disabled={running}>{machine ? "Disconnect" : "Forget server"}</button>}
+              </div>
+            </div>}
           </section>
           {client && status && <WorkspaceCard client={client} enabled={status.store === true} running={running} project={project} onProject={chooseProject} projects={projects} onCreateProject={machine ? createProject : undefined} refreshKey={refreshKey} />}
+
+          {!connection && <details className="cc-card cc-own" open={!GATEWAY || !supabase || sessionRefused || signedOut || undefined}>
+            <summary>Use your own server</summary>
+            <p>Run the official Claude Code CLI on a server you control. Paste its address and access key.</p>
+            <form className="cc-form" onSubmit={connect} aria-busy={busy === "connect"}>
+              <label htmlFor="cc-url">Address</label>
+              <input id="cc-url" data-cc-focus="server" type="url" inputMode="url" autoComplete="url" {...exact} placeholder="https://claude.yourdomain.com" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
+              <label htmlFor="cc-key">Access key</label>
+              <input id="cc-key" type="password" autoComplete="off" {...exact} placeholder="RUNNER_ACCESS_KEY or fgw2.…" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
+              <label className="cc-check"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy !== null} />Remember the key on this device</label>
+              <button className="button secondary" disabled={busy !== null}>{busy === "connect" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />Connecting…</> : "Connect server"}</button>
+            </form>
+            {serverError && <div id="cc-server-error"><Notice error>{serverError}</Notice></div>}
+            <ol className="cc-own-steps">
+              <li>Copy <code>apps/claude-runner</code> to the server and create <code>.env</code> from <code>.env.example</code>.</li>
+              <li>Point your domain at the server, then run <code>docker compose --profile https up -d --build</code>.</li>
+              <li>Paste <code>https://</code> plus your domain and the access key above.</li>
+            </ol>
+          </details>}
         </div>
 
         <section className="cc-console" aria-labelledby="cc-console-title">
@@ -377,8 +466,8 @@ export default function ClaudeVpsPage() {
           <ol className="cc-transcript" ref={listRef} tabIndex={0} aria-label="Session transcript" aria-live="polite" aria-relevant="additions">
             {!items.length && !transcript.live && <li className="cc-empty" data-ready={ready || undefined}>
               <span className="cc-empty-icon"><SquareTerminal size={20} aria-hidden="true" /></span>
-              <strong>{ready ? "Ready on your server" : "Not connected yet"}</strong>
-              <span>{ready ? (transcript.sessionId ? "Your next message continues the last conversation in this project. Use New session to start fresh." : `Ask Claude Code to build, fix or explain something. It works in ${status?.workspace}/${project}.`) : "Connect your machine and your Claude subscription to start a session."}</span>
+              <strong>{ready ? "Ready" : "Not connected yet"}</strong>
+              <span>{ready ? (transcript.sessionId ? "Your next message continues the last conversation in this project. Use New session to start fresh." : `Ask Claude Code to build, fix or explain something. It works in ${status?.workspace}/${project}.`) : "Connect your Claude subscription to start a session."}</span>
             </li>}
             {items.map((item, index) => <TranscriptRow key={item.id} item={item} running={running} lead={items[index - 1]?.kind === "user"} />)}
             {transcript.live && <li className="cc-msg assistant" aria-hidden="true">{opensTurn && <Who />}<div className="cc-text"><Rich text={transcript.live} /><span className="cc-caret" /></div></li>}
@@ -388,7 +477,7 @@ export default function ClaudeVpsPage() {
           <form className="cc-composer" onSubmit={send}>
             <div className="cc-composer-box" data-disabled={!ready || undefined}>
               <label className="sr-only" htmlFor="cc-prompt">Message Claude Code</label>
-              <textarea id="cc-prompt" data-cc-focus="ready" rows={2} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKey} placeholder={ready ? "Ask Claude Code…" : "Connect your machine and subscription first"} disabled={!ready} aria-keyshortcuts="Meta+Enter Control+Enter" />
+              <textarea id="cc-prompt" data-cc-focus="ready" rows={2} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKey} placeholder={ready ? "Ask Claude Code…" : "Connect Claude first"} disabled={!ready} aria-keyshortcuts="Meta+Enter Control+Enter" />
               <div className="cc-composer-bar">
                 <small>{ready ? "⌘ or Ctrl + Enter to send" : ""}</small>
                 {running
