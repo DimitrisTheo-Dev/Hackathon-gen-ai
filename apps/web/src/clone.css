@@ -164,7 +164,7 @@
   @media (max-width: 760px) {
     .cv-trait { min-block-size: 44px; }
     /* The Start row stays in reach at the bottom of the screen while the form is in view, on frosted glass. */
-    .cv-start { position: sticky; z-index: 2; inset-block-end: 0; margin-inline: -16px; padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); border-block-start: 1px solid var(--border); background: rgba(250,250,247,.94); -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%); }
+    .cv-start { position: sticky; z-index: 2; inset-block-end: 0; margin-inline: -16px; padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); border-block-start: 1px solid var(--border); background: rgba(250,250,247,.98); -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%); }
     .cv-start-row { gap: 8px; }
     .cv-start-row .cv-note { font-size: 12.5px; line-height: 1.4; text-align: center; inline-size: 100%; }
     .cv-job, .cv-jobs-skeleton > li { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
