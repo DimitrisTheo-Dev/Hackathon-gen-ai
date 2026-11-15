@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Transition } from "@castroom/contracts";
+import type { CSSProperties } from "react";
+import type { Transition, VideoClip } from "@castroom/contracts";
 import { round } from "./model";
 
 /** Seconds input that lets people type freely and only re-formats when they leave the field. */
@@ -79,6 +80,53 @@ export function TransitionField({ label, value, disabled, onChange }: { label: s
           <input aria-label={`${label} length in seconds`} type="number" min={0.05} max={2} step={0.05} value={value.duration} disabled={disabled} onChange={(event) => Number.isFinite(event.target.valueAsNumber) && onChange({ ...value, duration: Math.min(2, Math.max(0, round(event.target.valueAsNumber))) })} />
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Where a video clip sits in the frame: one visual choice for layer and layout ── */
+type Placement = "main" | VideoClip["layout"];
+/** Each placement's box as a share of the 1080 × 1920 frame, matching Reel.tsx (split: 860px tall; window: 90px in, 300px down, 900px tall). */
+const BOXES: Record<Placement, CSSProperties> = {
+  main: { inset: 0 },
+  full: { inset: 0 },
+  split: { left: 0, right: 0, top: 0, height: "44.79%" },
+  window: { left: "8.33%", right: "8.33%", top: "15.63%", height: "46.88%" },
+};
+const PLACEMENTS: Array<{ id: Placement; label: string; hint: string }> = [
+  { id: "main", label: "Main picture", hint: "Fills the frame, under everything" },
+  { id: "full", label: "Full frame", hint: "Covers the whole frame" },
+  { id: "split", label: "Split screen", hint: "Top half; the main picture moves below" },
+  { id: "window", label: "Window", hint: "A framed box over the main picture" },
+];
+const placementOf = (clip: Pick<VideoClip, "layer" | "layout">): Placement => (clip.layer === 0 ? "main" : clip.layout);
+/** Plain words for where a clip sits, e.g. "Overlay · Split screen". */
+const placementLabel = (clip: Pick<VideoClip, "layer" | "layout">) => (clip.layer === 0 ? "Main picture" : `Overlay · ${PLACEMENTS.find((entry) => entry.id === clip.layout)!.label}`);
+
+export function PlacementField({ name, clip, disabled, onChange }: { name: string; clip: Pick<VideoClip, "layer" | "layout">; disabled: boolean; onChange: (patch: Pick<VideoClip, "layer" | "layout">) => void }) {
+  const current = placementOf(clip);
+  return (
+    <fieldset className="placement-field" disabled={disabled}>
+      <legend>Where it sits</legend>
+      <div className="placement-options">
+        {PLACEMENTS.map((option) => (
+          <label key={option.id} className="placement-option" title={option.hint}>
+            <input type="radio" name={name} value={option.id} checked={current === option.id} onChange={() => onChange(option.id === "main" ? { layer: 0, layout: "full" } : { layer: 1, layout: option.id })} />
+            <span className={`placement-thumb ${option.id}`} aria-hidden="true"><span style={BOXES[option.id]} /></span>
+            <span className="placement-name">{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/** Outlines the selected clip's box on the preview and says what it is, so an overlay's place is visible at a glance. */
+export function PlacementOutline({ clip, label }: { clip: Pick<VideoClip, "layer" | "layout">; label: string }) {
+  const placement = placementOf(clip);
+  return (
+    <div className={`placement-outline ${placement}`} style={BOXES[placement]} aria-hidden="true">
+      <span>{placementLabel(clip)}{label ? ` · ${label}` : ""}</span>
     </div>
   );
 }

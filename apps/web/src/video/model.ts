@@ -223,3 +223,56 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 export const sameComposition = (a: Composition, b: Composition) => canonical(a) === canonical(b);
+
+/* ── Links people paste into "link a media file" ── */
+export type LinkKind = "video" | "image" | "voice" | "music" | "sfx";
+const PLATFORMS: Array<[RegExp, string]> = [
+  [/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/, "YouTube"],
+  [/(^|\.)tiktok\.com$/, "TikTok"],
+  [/(^|\.)instagram\.com$/, "Instagram"],
+  [/(^|\.)(facebook\.com|fb\.watch)$/, "Facebook"],
+  [/(^|\.)(x\.com|twitter\.com)$/, "X"],
+  [/(^|\.)vimeo\.com$/, "Vimeo"],
+  [/(^|\.)snapchat\.com$/, "Snapchat"],
+  [/(^|\.)linkedin\.com$/, "LinkedIn"],
+  [/(^|\.)pinterest\.[a-z.]+$/, "Pinterest"],
+];
+const EXTENSIONS: Record<"video" | "image" | "audio", string[]> = {
+  video: ["mp4", "mov", "webm", "m4v", "ogv"],
+  image: ["jpg", "jpeg", "png", "webp", "gif", "avif"],
+  audio: ["mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac"],
+};
+/** Hosts that serve the file itself, often without an extension in the path. */
+const DIRECT_HOSTS = [/\.supabase\.co$/, /\.public\.blob\.vercel-storage\.com$/, /\.r2\.dev$/, /^storage\.googleapis\.com$/, /(^|\.)s3[.-]([a-z0-9-]+\.)?amazonaws\.com$/, /^res\.cloudinary\.com$/, /^(images|videos)\.pexels\.com$/, /^images\.unsplash\.com$/, /^cdn\.pixabay\.com$/];
+const mediaOf = (kind: LinkKind) => (kind === "video" ? "video" : kind === "image" ? "image" : "audio");
+const NOUN = { video: "a video", image: "an image", audio: "a sound file" } as const;
+
+export type LinkCheck = { ok: true } | { ok: false; reason: "invalid" | "platform" | "page" | "mismatch"; platform?: string; message: string };
+/**
+ * Whether a pasted link can play in the preview and the render: https, a playable file type (or a known
+ * direct-file host), and the type chosen in "Use the link as". Platform pages are web pages, not files.
+ */
+export function checkMediaLink(raw: string, kind: LinkKind): LinkCheck {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return { ok: false, reason: "invalid", message: "That doesn’t look like a link. Paste one that starts with https://." };
+  }
+  if (url.protocol !== "https:" || url.username || url.password) return { ok: false, reason: "invalid", message: "Use an https link to a media file, without a password in it." };
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  const platform = PLATFORMS.find(([pattern]) => pattern.test(host))?.[1];
+  if (platform) return { ok: false, reason: "platform", platform, message: `That’s a ${platform} page, not a media file, so the preview can’t play it.` };
+  const extension = url.pathname.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] ?? "";
+  const media = mediaOf(kind);
+  const found = (Object.keys(EXTENSIONS) as Array<keyof typeof EXTENSIONS>).find((group) => EXTENSIONS[group].includes(extension));
+  if (found && found !== media) return { ok: false, reason: "mismatch", message: `That link is ${NOUN[found]}, but it’s set to be used as ${NOUN[media]}. Change “Use the link as”, or paste ${NOUN[media]} link.` };
+  if (found || DIRECT_HOSTS.some((pattern) => pattern.test(host))) return { ok: true };
+  return { ok: false, reason: "page", message: `This link opens a web page, not a media file. Use a direct link that ends in ${EXTENSIONS[media].slice(0, 2).map((ext) => `.${ext}`).join(", ")} or .${EXTENSIONS[media][2]}.` };
+}
+
+/** The platform a link belongs to (YouTube, TikTok…), or null for any other link. */
+export const platformOf = (raw: string) => {
+  const check = checkMediaLink(raw, "video");
+  return !check.ok && check.reason === "platform" ? (check.platform ?? null) : null;
+};

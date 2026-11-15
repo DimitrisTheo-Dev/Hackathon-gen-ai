@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
-import { CircleAlert, Captions, Check, Clapperboard, FileStack, Film, LoaderCircle, Package, Palette, Play, Plus, RotateCcw, Save, Trash2, Type, Video, X } from "lucide-react";
+import { ChevronDown, CircleAlert, Captions, Check, Clapperboard, FileStack, Film, LoaderCircle, Package, Palette, Play, Plus, RotateCcw, Save, Trash2, TriangleAlert, Type, Video, X } from "lucide-react";
 import {
   COMPOSITION_HEIGHT,
   COMPOSITION_WIDTH,
   MAX_COMPOSITION_SECONDS,
-  mediaUrlSchema,
   type AudioClip,
   type Campaign,
   type Composition,
@@ -22,7 +21,8 @@ import { operationKey } from "../lib/operation-key";
 import { Reel, sourceUrl, type ReelMedia, type ReelProps } from "../video/Reel";
 import { Timeline, type Selection } from "../video/Timeline";
 import { FilesPanel, type FileAction, type UploadRequest } from "../video/FilesPanel";
-import { CommitField, RangeField, TimeField, TransitionField } from "../video/fields";
+import { CommitField, PlacementField, PlacementOutline, RangeField, TimeField, TransitionField } from "../video/fields";
+import { RenderAction, RenderStage, type RenderGate } from "../video/Render";
 import { putToStorage } from "../video/upload";
 import { ShowProduct } from "../video/ShowProduct";
 import * as model from "../video/model";
@@ -43,7 +43,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Type }> = [
   { id: "transcript", label: "Transcript", icon: Type },
   { id: "files", label: "Files", icon: FileStack },
   { id: "look", label: "Look & labels", icon: Palette },
-  { id: "render", label: "Render", icon: Film },
+  { id: "render", label: "Renders", icon: Film },
 ];
 const CARD_KINDS: Array<{ kind: CompositionCard["kind"]; label: string }> = [
   { kind: "title", label: "Title card" },
@@ -81,8 +81,10 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
   const [renders, setRenders] = useState<ReelRender[]>([]);
   const [rendering, setRendering] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
-  const [linkKind, setLinkKind] = useState<"video" | "image" | "voice" | "music" | "sfx">("video");
-  const [linkError, setLinkError] = useState("");
+  const [linkKind, setLinkKind] = useState<model.LinkKind>("video");
+  const [linkProblem, setLinkProblem] = useState<Extract<model.LinkCheck, { ok: false }> | null>(null);
+  // Clip groups fold; selecting a clip opens its group again.
+  const [folded, setFolded] = useState<string[]>([]);
   const [wordIndex, setWordIndex] = useState<number | null>(null);
   const [shiftBy, setShiftBy] = useState(0);
   const [showingProduct, setShowingProduct] = useState(false);
@@ -208,6 +210,8 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
   };
   const select = (track: model.Track, clip: model.Clip) => {
     setSelection({ track, id: clip.id });
+    const group = "layer" in clip ? (clip.layer === 0 ? "main" : "overlays") : track === "audio" ? "audio" : null;
+    if (group) setFolded((current) => current.filter((entryGroup) => entryGroup !== group));
     setTab(track === "video" || track === "audio" ? "timeline" : track);
     // Land just inside the clip, after its fade-in, so what was clicked is what the preview shows.
     seek(clip.start + Math.min(0.4, (clip.end - clip.start) / 2));
@@ -292,11 +296,12 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
   }
   function addLink() {
     const url = linkUrl.trim();
-    if (!mediaUrlSchema.safeParse(url).success) {
-      setLinkError("Use an https link to a media file, without a password in it.");
+    const check = model.checkMediaLink(url, linkKind);
+    if (!check.ok) {
+      setLinkProblem(check);
       return;
     }
-    setLinkError("");
+    setLinkProblem(null);
     const source = { kind: "url" as const, url };
     if (linkKind === "video" || linkKind === "image") update((current) => model.addVideoClip(current, { source, media: linkKind, at: now(), length: 3, layer: 1 }));
     else update((current) => model.addAudioClip(current, { source, role: linkKind, at: linkKind === "music" ? 0 : now(), length: linkKind === "music" ? current.durationSeconds : 3 }));
@@ -308,9 +313,10 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
     setError("");
     try {
       const payload = { contentId: item.id, expectedRevision: entry.base.revision };
-      await client.queueRender({ ...payload, operationKey: await operationKey(context.workspace.id, "queue_reel_render", payload) });
-      await loadRenders();
-      setNotice("Render queued. A render worker will pick it up.");
+      const queued = await client.queueRender({ ...payload, operationKey: await operationKey(context.workspace.id, "queue_reel_render", payload) });
+      // Shown at once from the server's answer; polling takes over from here.
+      setRenders((list) => [queued, ...list.filter((entryRender) => entryRender.id !== queued.id)]);
+      void loadRenders();
     } catch (failure) {
       setError(message(failure));
     } finally {
@@ -359,6 +365,31 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
     </button>
   );
   const imageFiles = files.filter((file) => file.state === "ready" && file.mime.startsWith("image/"));
+  const latest = renders[0];
+  const savedRevision = entry?.base.revision ?? 0;
+  const gate: RenderGate = !canRender
+    ? { ok: false, short: "Your role can’t render", reason: "Your role can’t start renders in this workspace." }
+    : !entry
+      ? { ok: false, short: "Loading…", reason: "The video edit is still opening." }
+      : problems.length
+        ? { ok: false, short: "Fix the issues first", reason: "Fix the issues listed above, save, then render." }
+        : dirty || savedRevision === 0
+          ? { ok: false, short: "Save first", reason: "Renders draw the saved version. Save your edit first." }
+          : { ok: true };
+  // Clips whose media failed in the preview, named so each can be found or removed.
+  const brokenClips = composition ? [...composition.video.map((clip) => ({ track: "video" as const, clip })), ...composition.audio.map((clip) => ({ track: "audio" as const, clip }))].filter(({ clip }) => broken.includes(sourceUrl(clip.source, media) ?? "")) : [];
+  const clipTitle = (clip: VideoClip | AudioClip) => `${"layer" in clip ? `${clip.media === "image" ? "Image" : "Video"} ${clip.layer === 0 ? "main picture" : "overlay"}` : clip.role === "sfx" ? "Sound effect" : clip.role === "voice" ? "Voice" : "Music"} at ${model.timeLabel(clip.start)}`;
+  const selectedVideo = selection?.track === "video" ? composition?.video.find((clip) => clip.id === selection.id) : undefined;
+  const mains = composition?.video.filter((clip) => clip.layer === 0) ?? [];
+  const overlays = composition?.video.filter((clip) => clip.layer === 1) ?? [];
+  const roles = composition ? (["voice", "music", "sfx"] as const).filter((role) => composition.audio.some((clip) => clip.role === role)) : [];
+  const summary = [
+    `${mains.length} main ${mains.length === 1 ? "clip" : "clips"}`,
+    `${overlays.length} ${overlays.length === 1 ? "overlay" : "overlays"}`,
+    ...roles.map((role) => (role === "sfx" ? "sound effects" : role)),
+  ].join(" · ");
+  const groupOpen = (group: string) => !folded.includes(group);
+  const toggleGroup = (group: string, open: boolean) => setFolded((current) => (open ? current.filter((entryGroup) => entryGroup !== group) : [...new Set([...current, group])]));
 
   return (
     <div className="video-studio">
@@ -383,14 +414,16 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
             </button>
           )}
           {canEdit && (
-            <button className="button primary" disabled={!entry || saving || !!problems.length || (!dirty && entry.base.revision > 0)} onClick={() => void save()}>
+            <button className={`button ${dirty || savedRevision === 0 ? "primary" : "secondary"}`} disabled={!entry || saving || !!problems.length || (!dirty && entry.base.revision > 0)} onClick={() => void save()}>
               {saving ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}
               {saving ? "Saving…" : "Save video edit"}
             </button>
           )}
+          {/* Always shown, so a role that cannot render sees why rather than a missing button. */}
+          <RenderAction latest={latest} gate={gate} starting={rendering} savedRevision={savedRevision} onRender={() => void render()} />
         </div>
       </div>
-      {((error && !loadFailed) || notice || !canEdit || broken.length > 0 || problems.length > 0) && (
+      {((error && !loadFailed) || notice || !canEdit || brokenClips.length > 0 || problems.length > 0) && (
         <div className="video-feedback">
           {error && !loadFailed && (
             <Notice error>
@@ -406,7 +439,29 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
             </div>
           )}
           {!canEdit && <Notice>Your role can watch this video edit but not change it.</Notice>}
-          {broken.length > 0 && <Notice error>These links could not be played in the preview: {broken.join(", ")}</Notice>}
+          {brokenClips.length > 0 && (
+            <div className="media-issue" role="status">
+              <span className="media-issue-icon" aria-hidden="true"><TriangleAlert size={15} /></span>
+              <div className="media-issue-body">
+                <strong>{brokenClips.length === 1 ? "One clip can’t play in the preview" : `${brokenClips.length} clips can’t play in the preview`}</strong>
+                <ul>
+                  {brokenClips.map(({ track, clip }) => {
+                    const url = sourceUrl(clip.source, media) ?? "";
+                    const platform = model.platformOf(url);
+                    return (
+                      <li key={clip.id}>
+                        <span className="media-issue-name">
+                          <button type="button" className="text-button" onClick={() => select(track, clip)}>{clipTitle(clip)}</button>
+                          <small>{platform ? `A ${platform} page, not a media file. Clone it from Templates, or upload your own copy in Files.` : "The link didn’t load as media. Check that it opens the file itself, or upload the file in Files."}</small>
+                        </span>
+                        {canEdit && <button type="button" className="button secondary media-issue-remove" onClick={() => update((current) => model.removeClip(current, track, clip.id))}><Trash2 size={14} aria-hidden="true" />Remove clip</button>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          )}
           {problems.length > 0 && <Notice error>Fix these before saving: {problems.map((problem) => problem.message).join("; ")}.</Notice>}
         </div>
       )}
@@ -442,32 +497,37 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                 style={{ width: "100%", height: "100%" }}
                 errorFallback={() => <div className="video-player-error">The preview could not draw this frame. Check the last change.</div>}
               />
+              {selectedVideo && <PlacementOutline clip={selectedVideo} label={`${model.timeLabel(selectedVideo.start)}–${model.timeLabel(selectedVideo.end)}`} />}
+              <RenderStage latest={latest} savedRevision={savedRevision} canRender={canRender} canRetry={gate.ok} onCancel={(target) => void cancel(target)} onRetry={() => void render()} />
             </div>
           </section>
           {/* The timeline runs the full width under the preview and the inspector, the way an editor's does. */}
           <div className="video-timeline-area">
             <Timeline composition={composition} playerRef={playerRef} selection={selection} labelFor={labelFor} onSelect={select} />
-            <p className="video-note">1080 × 1920 · {composition.fps} fps · {model.timeLabel(composition.durationSeconds)}. The preview and the MP4 render draw the same frames.</p>
+            <p className="video-note">Click a clip to edit it and see where it sits. Lower rows draw on top: overlays cover the main picture, and cards and captions sit over both. 1080 × 1920 · {composition.fps} fps · {model.timeLabel(composition.durationSeconds)}; the preview and the MP4 draw the same frames.</p>
           </div>
           <section className="video-inspector" aria-label="Edit the video">
-            <div className="segmented video-tabs" role="toolbar" aria-label="Edit">
-              {TABS.map(({ id, label, icon: Icon }) => (
-                <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>
-                  <Icon size={14} />{label}
-                  {id === "timeline" ? <span className="tab-count">{composition.video.length + composition.audio.length}</span> : id === "cards" || id === "captions" ? <span className="tab-count">{composition[id].length}</span> : id === "files" ? <span className="tab-count">{files.length}</span> : null}
-                </button>
-              ))}
+            <div className="video-tabs-bar">
+              <div className="segmented video-tabs" role="toolbar" aria-label="Edit">
+                {TABS.map(({ id, label, icon: Icon }) => (
+                  <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>
+                    <Icon size={14} />{label}
+                    {id === "timeline" ? <span className="tab-count">{composition.video.length + composition.audio.length}</span> : id === "cards" || id === "captions" ? <span className="tab-count">{composition[id].length}</span> : id === "files" ? <span className="tab-count">{files.length}</span> : id === "render" && renders.length ? <span className="tab-count">{renders.length}</span> : null}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {tab === "timeline" && (
               <div className="video-panel">
+                <p className="clip-summary"><strong>{summary}</strong></p>
                 <div className="video-panel-head">
-                  <p>Clips play from their in-point. The main picture is usually the presenter; overlays sit on top, full frame, in a split screen or in a window. Add files from the Files tab, or link one here.</p>
+                  <p>The main picture is usually the presenter. Overlays sit on top of it: full frame, split screen or a window. Select a clip to see where it sits on the preview. Add files from the Files tab, or link one here.</p>
                 </div>
                 {canEdit && (
                   <form className="link-form" onSubmit={(event) => { event.preventDefault(); addLink(); }}>
-                    <input type="url" inputMode="url" aria-label="Media link" placeholder="https://… .mp4, .jpg or .mp3" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} />
-                    <select aria-label="Use the link as" value={linkKind} onChange={(event) => setLinkKind(event.target.value as typeof linkKind)}>
+                    <input type="url" inputMode="url" aria-label="Media link" aria-invalid={linkProblem ? true : undefined} aria-describedby={linkProblem ? "link-problem" : undefined} placeholder="https://… .mp4, .jpg or .mp3" value={linkUrl} onChange={(event) => { setLinkUrl(event.target.value); setLinkProblem(null); }} />
+                    <select aria-label="Use the link as" value={linkKind} onChange={(event) => { setLinkKind(event.target.value as model.LinkKind); setLinkProblem(null); }}>
                       <option value="video">Video overlay</option>
                       <option value="image">Image overlay</option>
                       <option value="voice">Voice</option>
@@ -477,52 +537,55 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                     <button className="button secondary" disabled={!linkUrl.trim()}><Plus size={14} />Add at playhead</button>
                   </form>
                 )}
-                {linkError && <p className="field-error" role="alert">{linkError}</p>}
-                <h3 className="track-heading">Video</h3>
-                <ol className="clip-list">
-                  {composition.video.map((clip) => {
-                    const index = indexIn("video", clip.id);
-                    const set = (patch: Partial<VideoClip>) => update((current) => model.updateClip(current, "video", clip.id, patch));
-                    return (
-                      <li key={clip.id} id={`clip-${clip.id}`} className={rowClass("video", clip.id, index)}>
-                        <div className="clip-source">{clip.layer === 0 ? "Main picture" : "Overlay"} · {clip.media === "image" ? "Image" : "Video"} · {sourceName(clip.source)}</div>
-                        <div className="clip-times">{times("video", clip, clip.media === "video")}{remove("video", clip.id, `video clip ${index + 1}`)}</div>
-                        <div className="clip-fields">
-                          <label className="select-field">
-                            <span>Layer</span>
-                            <select value={clip.layer} disabled={readOnly} onChange={(event) => set({ layer: Number(event.target.value) as 0 | 1, layout: Number(event.target.value) === 0 ? "full" : clip.layout })}>
-                              <option value={0}>Main picture</option>
-                              <option value={1}>Overlay</option>
-                            </select>
-                          </label>
-                          {clip.layer === 1 && (
-                            <label className="select-field">
-                              <span>Layout</span>
-                              <select value={clip.layout} disabled={readOnly} onChange={(event) => set({ layout: event.target.value as VideoClip["layout"] })}>
-                                <option value="split">Split screen</option>
-                                <option value="full">Full frame</option>
-                                <option value="window">Window</option>
-                              </select>
-                            </label>
-                          )}
-                          {clip.media === "video" && <RangeField label="Sound" value={clip.volume} disabled={readOnly} onChange={(volume) => set({ volume })} />}
-                        </div>
-                        <div className="clip-fields">
-                          <TransitionField label="In" value={clip.transitionIn} disabled={readOnly} onChange={(transitionIn) => set({ transitionIn })} />
-                          <TransitionField label="Out" value={clip.transitionOut} disabled={readOnly} onChange={(transitionOut) => set({ transitionOut })} />
-                          {clip.media === "video" && (
-                            <label className="time-field">
-                              <span>Lip-sync delay (frames)</span>
-                              <input type="number" min={-12} max={12} step={1} value={clip.syncOffsetFrames} disabled={readOnly} onChange={(event) => Number.isInteger(event.target.valueAsNumber) && set({ syncOffsetFrames: Math.max(-12, Math.min(12, event.target.valueAsNumber)) })} />
-                            </label>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
+                {linkProblem && (
+                  <div id="link-problem" className="link-problem" role="alert">
+                    <p>{linkProblem.message}</p>
+                    {linkProblem.reason === "platform" ? (
+                      <p>
+                        To make a video like it, use <a href={`?view=templates&tab=clone&campaign=${encodeURIComponent(campaign.id)}`}>Templates → Clone a video you like</a>. To use your own copy, <button type="button" className="text-button" onClick={() => setTab("files")}>upload the file in Files</button>.
+                      </p>
+                    ) : linkProblem.reason === "page" ? (
+                      <p>Or <button type="button" className="text-button" onClick={() => setTab("files")}>upload the file in Files</button>.</p>
+                    ) : null}
+                  </div>
+                )}
+                {([["main", "Main picture", mains], ["overlays", "Overlays", overlays]] as const).map(([group, heading, clips]) =>
+                  clips.length ? (
+                    <details key={group} className="clip-group" open={groupOpen(group)} onToggle={(event) => toggleGroup(group, event.currentTarget.open)}>
+                      <summary className="track-heading"><ChevronDown size={14} aria-hidden="true" />{heading}<span className="tab-count">{clips.length}</span></summary>
+                      <ol className="clip-list">
+                    {clips.map((clip) => {
+                      const index = indexIn("video", clip.id);
+                      const set = (patch: Partial<VideoClip>) => update((current) => model.updateClip(current, "video", clip.id, patch));
+                      return (
+                        <li key={clip.id} id={`clip-${clip.id}`} className={rowClass("video", clip.id, index)}>
+                          <div className="clip-source">{clip.layer === 0 ? "Main picture" : "Overlay"} · {clip.media === "image" ? "Image" : "Video"} · {sourceName(clip.source)}</div>
+                          <div className="clip-times">{times("video", clip, clip.media === "video")}{remove("video", clip.id, clipTitle(clip))}</div>
+                          <div className="clip-fields">
+                            <PlacementField name={`placement-${clip.id}`} clip={clip} disabled={readOnly} onChange={(patch) => set(patch)} />
+                            {clip.media === "video" && <RangeField label="Sound" value={clip.volume} disabled={readOnly} onChange={(volume) => set({ volume })} />}
+                          </div>
+                          <div className="clip-fields">
+                            <TransitionField label="In" value={clip.transitionIn} disabled={readOnly} onChange={(transitionIn) => set({ transitionIn })} />
+                            <TransitionField label="Out" value={clip.transitionOut} disabled={readOnly} onChange={(transitionOut) => set({ transitionOut })} />
+                            {clip.media === "video" && (
+                              <label className="time-field">
+                                <span>Lip-sync delay (frames)</span>
+                                <input type="number" min={-12} max={12} step={1} value={clip.syncOffsetFrames} disabled={readOnly} onChange={(event) => Number.isInteger(event.target.valueAsNumber) && set({ syncOffsetFrames: Math.max(-12, Math.min(12, event.target.valueAsNumber)) })} />
+                              </label>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                      </ol>
+                    </details>
+                  ) : null,
+                )}
                 {!composition.video.length && <p className="video-empty-line">No video clips. Add an avatar clip from the Files tab.</p>}
-                <h3 className="track-heading">Audio</h3>
+                {composition.audio.length > 0 && (
+                <details className="clip-group" open={groupOpen("audio")} onToggle={(event) => toggleGroup("audio", event.currentTarget.open)}>
+                <summary className="track-heading"><ChevronDown size={14} aria-hidden="true" />Audio<span className="tab-count">{composition.audio.length}</span></summary>
                 <ol className="clip-list">
                   {composition.audio.map((clip) => {
                     const index = indexIn("audio", clip.id);
@@ -530,7 +593,7 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                     return (
                       <li key={clip.id} id={`clip-${clip.id}`} className={rowClass("audio", clip.id, index)}>
                         <div className="clip-source">{clip.role === "sfx" ? "SFX" : clip.role === "voice" ? "Voice" : "Music"} · {sourceName(clip.source)}</div>
-                        <div className="clip-times">{times("audio", clip, true)}{remove("audio", clip.id, `audio clip ${index + 1}`)}</div>
+                        <div className="clip-times">{times("audio", clip, true)}{remove("audio", clip.id, clipTitle(clip))}</div>
                         <div className="clip-fields">
                           <label className="select-field">
                             <span>Role</span>
@@ -549,6 +612,8 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
                     );
                   })}
                 </ol>
+                </details>
+                )}
                 {!composition.audio.length && <p className="video-empty-line">No separate audio. The main picture plays its own sound.</p>}
               </div>
             )}
@@ -713,19 +778,10 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
             {tab === "render" && (
               <div className="video-panel">
                 <div className="video-panel-head">
-                  <p>A render worker draws the saved edit with the same Remotion composition as this preview and saves the MP4 as a render draft file.</p>
+                  <p>Start a render with Render MP4 at the top. A render worker draws the saved edit with the same composition as this preview and saves the MP4 as a render draft file.</p>
                   <button className="text-button" onClick={() => void loadRenders()}>Refresh</button>
                 </div>
-                {canRender ? (
-                  <div className="video-inline-fields">
-                    <button className="button primary" disabled={rendering || dirty || !entry || entry.base.revision === 0 || active} onClick={() => void render()}>
-                      {rendering ? <LoaderCircle size={14} className="spin" /> : <Film size={14} />}Render version {entry?.base.revision || ""}
-                    </button>
-                    <small className="video-hint">{dirty || entry?.base.revision === 0 ? "Save the edit first; renders use the saved version." : active ? "A render of this video is already waiting or running." : "Renders run on your render workers, not in this browser."}</small>
-                  </div>
-                ) : (
-                  <Notice>Your role cannot start renders in this workspace.</Notice>
-                )}
+                {!canRender && <Notice>Your role cannot start renders in this workspace.</Notice>}
                 <ol className="render-list">
                   {renders.map((entryRender) => (
                     <li key={entryRender.id} className={`render-row ${entryRender.state}`}>

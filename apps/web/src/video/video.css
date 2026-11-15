@@ -1,7 +1,7 @@
 /* Video studio: Remotion player, timeline and clip inspector. Loaded with the lazy VideoStudio chunk. */
 @layer views {
   .video-studio {
-    --timeline-label: 84px;
+    --timeline-label: 116px;
     --timeline-pad: 12px;
     display: flex;
     flex-direction: column;
@@ -36,7 +36,9 @@
   }
   .video-head-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
   .video-feedback {
     display: flex;
@@ -71,6 +73,8 @@
     min-inline-size: 0;
   }
   .video-player-frame {
+    position: relative;
+    isolation: isolate;
     /* Short enough that the player and timeline fit together once the stage sticks. */
     block-size: var(--stage-height);
     aspect-ratio: 9 / 16;
@@ -159,13 +163,23 @@
     align-items: center;
   }
   .timeline-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-inline-size: 0;
+    padding-inline-end: 8px;
+    overflow: hidden;
     font-size: 11px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
+  .timeline-label > svg { flex: none; }
+  .timeline-label > span { overflow: hidden; text-overflow: ellipsis; }
+  .timeline-row.has-selection .timeline-label { color: var(--ink); font-weight: 550; }
   .timeline-lane {
     position: relative;
-    block-size: 18px;
+    block-size: 22px;
     border-radius: 4px;
     background: var(--background);
     cursor: pointer;
@@ -184,23 +198,48 @@
     line-height: 16px;
     color: var(--muted);
   }
+  /* Each clip carries its name when it fits; the fills are light enough for ink text (cards are ink with white text). */
   .timeline-clip {
     position: absolute;
     top: 2px;
     bottom: 2px;
+    display: flex;
+    align-items: center;
     min-inline-size: 3px;
-    padding: 0;
+    padding: 0 6px;
+    overflow: hidden;
     border: 0;
-    border-radius: 3px;
-    background: #9aa49f;
+    border-radius: 4px;
+    background: #b4bcb8;
+    color: var(--ink);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1;
+    text-align: start;
+    transition: opacity var(--dur-fast) var(--ease-out);
   }
-  .timeline-clip.captions { background: #7d8a84; }
-  .timeline-clip.cards { background: var(--accent); }
-  .timeline-clip.video.main { background: #b9c2be; }
-  .timeline-clip.video.overlay { background: #b08d57; }
-  .timeline-clip.audio.voice { background: #6f8fb3; }
-  .timeline-clip.audio.music { background: #a9b4c8; }
-  .timeline-clip.audio.sfx { background: #c58b7a; }
+  .timeline-clip > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .timeline-clip.captions { background: #b3bcb7; }
+  .timeline-clip.cards { background: var(--ink); color: #fff; }
+  .timeline-clip.video.main { background: #cdd3d0; }
+  .timeline-clip.video.overlay { background: #dcc497; }
+  .timeline-clip.audio.voice { background: #a7bdd6; }
+  .timeline-clip.audio.music { background: #c8cfdd; }
+  .timeline-clip.audio.sfx { background: #e0b6a8; }
+  /* With a clip selected, the others step back so the selection reads at a glance. */
+  .video-timeline:has(.timeline-clip.selected) .timeline-clip:not(.selected) { opacity: 0.55; }
+  .lane-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding-inline: 8px;
+    overflow: hidden;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    pointer-events: none;
+  }
   .timeline-words {
     background: transparent;
   }
@@ -216,6 +255,7 @@
   .timeline-clip.selected {
     outline: 2px solid var(--ink);
     outline-offset: 1px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.85);
     z-index: 1;
   }
   .timeline-playhead {
@@ -243,17 +283,22 @@
     padding-inline-end: 4px;
     scroll-padding-block-start: 56px;
   }
-  /* One row of tabs that scrolls sideways when narrow, pinned while the inspector scrolls. */
-  .video-tabs {
+  /* One row of tabs pinned while the inspector scrolls. The bar is opaque in the page colour with a hairline
+     edge, so rows scrolling underneath never show through (the tab pill alone has rounded, see-through corners). */
+  .video-tabs-bar {
     position: sticky;
-    z-index: 2;
+    z-index: 3;
     inset-block-start: 0;
-    align-self: stretch;
     flex: none;
+    padding-block-end: 10px;
+    border-block-end: 1px solid var(--border);
+    background: var(--background);
+  }
+  .video-tabs {
+    display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
-    box-shadow: 0 8px 12px -10px rgba(42, 42, 39, 0.18);
   }
   .video-tabs::-webkit-scrollbar { display: none; }
   .video-tabs > button { flex: none; white-space: nowrap; }
@@ -582,6 +627,117 @@
     background: #111214;
   }
 
+  /* ── Render MP4 (video/Render.tsx): the action beside Save, its state, and the state drawn on the preview ── */
+  .render-action { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .render-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .render-state-dot { inline-size: 6px; block-size: 6px; border-radius: 50%; background: currentColor; }
+  .render-state.pending { color: var(--warning-ink); }
+  .render-state.running { color: var(--ink); }
+  .render-state.running .render-state-dot { animation: render-pulse 1.6s ease-in-out infinite; }
+  .render-state.done { color: var(--positive-ink); }
+  .render-state.done a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .render-state.failed { color: var(--danger); }
+  .render-state.blocked .render-state-dot { display: none; }
+
+  .render-stage { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .render-fx { position: absolute; inset: 0; overflow: hidden; }
+  /* The frame "draws in" from the top as the server reports progress: the veil over what is not drawn yet shrinks. */
+  .render-veil { position: absolute; inset: 0; background: rgba(14, 14, 16, 0.52); transform-origin: 50% 100%; transform: scaleY(calc(1 - var(--render-p, 0))); transition: transform 700ms var(--ease-out); }
+  .render-stage.queued .render-veil { background: rgba(14, 14, 16, 0.38); }
+  .render-scan { position: absolute; inset: 0; transform: translateY(calc(var(--render-p, 0) * 100%)); transition: transform 700ms var(--ease-out); }
+  .render-scan span { position: absolute; inset-inline: 0; inset-block-start: -1px; block-size: 2px; background: linear-gradient(90deg, transparent, rgba(255, 249, 235, 0.95) 20%, rgba(255, 249, 235, 0.95) 80%, transparent); box-shadow: 0 0 16px 2px rgba(255, 244, 220, 0.55); }
+  /* A soft light passes over the frame; quicker while drawing, slow and breathing while it waits. */
+  .render-sweep { position: absolute; inset-block: -10%; inset-inline-start: -60%; inline-size: 60%; background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%); animation: render-sweep 2.6s var(--ease-in-out) infinite; }
+  .render-stage.queued .render-sweep { animation-duration: 4.2s; opacity: 0.7; }
+  /* Film perforations run down both edges while frames are being drawn; they rest while the render waits. */
+  .render-strip { position: absolute; inset-block: -24px 0; inline-size: 6px; background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.34) 0 10px, transparent 10px 24px); opacity: 0.5; }
+  .render-strip.start { inset-inline-start: 7px; }
+  .render-strip.end { inset-inline-end: 7px; }
+  .render-stage.rendering .render-strip { opacity: 0.9; animation: render-strip 1.1s linear infinite; }
+  .render-done-glow { position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85), inset 0 0 40px rgba(255, 249, 235, 0.35); opacity: 0; animation: render-glow 1.4s var(--ease-out) 1; }
+
+  .render-card { position: absolute; inset-block-start: 12px; inset-inline: 12px; display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: rgba(22, 22, 24, 0.8); -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); color: #fff; font-size: 12.5px; line-height: 1.45; pointer-events: auto; animation: render-card-in var(--dur-base) var(--ease-out); }
+  .render-card p { margin: 0; color: rgba(255, 255, 255, 0.82); text-wrap: pretty; }
+  .render-card-head { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+  .render-card-head strong { min-inline-size: 0; font-size: 13px; font-weight: 600; line-height: 1.3; text-wrap: balance; }
+  .render-card-pct { margin-inline-start: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .render-card-icon { display: grid; place-items: center; flex: none; inline-size: 22px; block-size: 22px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); }
+  .render-card-icon.pending span { inline-size: 6px; block-size: 6px; border-radius: 50%; background: #f0c060; animation: render-pulse 1.8s ease-in-out infinite; }
+  .render-card-icon.done { background: #2f8a60; }
+  .render-card-icon.failed { background: #b14b44; }
+  .render-bar { block-size: 4px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, 0.2); }
+  .render-bar span { display: block; block-size: 100%; border-radius: inherit; background: #fff; transform-origin: 0 50%; transform: scaleX(var(--render-p, 0)); transition: transform 700ms var(--ease-out); }
+  .render-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .render-card-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 34px; padding: 0 12px; border: 0; border-radius: 10px; background: #fff; color: var(--ink); font-size: 12.5px; font-weight: 550; text-decoration: none; transition: transform var(--dur-press) var(--ease-out); }
+  .render-card-button.quiet { background: rgba(255, 255, 255, 0.16); color: #fff; }
+  .render-card-button:active { transform: scale(0.97); }
+  .render-card-link { justify-self: start; min-block-size: 28px; padding: 0; border: 0; background: none; color: rgba(255, 255, 255, 0.88); font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
+  .render-card-close { display: grid; place-items: center; flex: none; inline-size: 28px; block-size: 28px; margin-inline-start: auto; padding: 0; border: 0; border-radius: 8px; background: none; color: rgba(255, 255, 255, 0.8); }
+  @keyframes render-sweep { from { transform: translateX(0); } to { transform: translateX(280%); } }
+  @keyframes render-strip { from { transform: translateY(0); } to { transform: translateY(24px); } }
+  @keyframes render-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @keyframes render-glow { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes render-card-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    /* Movement stops; the state, the real progress and gentle fades stay. */
+    .render-sweep, .render-strip { animation: none !important; }
+    .render-sweep { display: none; }
+    .render-veil, .render-scan, .render-bar span { transition: none; }
+    .render-card { animation-name: render-fade; }
+  }
+  @keyframes render-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ── Where a clip sits: the picker's thumbnails and the outline drawn on the preview ── */
+  .clip-fields > .placement-field { flex: 1 1 100%; }
+  .placement-field { display: grid; gap: 4px; min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+  .placement-field legend { margin-block-end: 4px; padding: 0; font-size: 11.5px; font-weight: 500; color: var(--text-secondary); }
+  .placement-options { display: grid; grid-template-columns: repeat(4, minmax(0, 128px)); gap: 6px; }
+  .placement-option { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-block-size: 44px; padding: 8px 4px 7px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+  .placement-option input { position: absolute; inset: 0; z-index: 1; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .placement-option:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .placement-field:disabled .placement-option { cursor: default; opacity: 0.6; }
+  .placement-thumb { position: relative; inline-size: 20px; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 3px; background: #6e6c66; }
+  .placement-thumb > span { position: absolute; background: #f4efe2; box-shadow: inset 0 0 0 1px var(--ink); }
+  .placement-thumb.main > span { display: none; }
+  .placement-thumb.window > span { border-radius: 2px; }
+  .placement-name { font-size: 11.5px; line-height: 1.2; color: var(--ink-secondary); text-align: center; }
+  .placement-outline { position: absolute; z-index: 2; border: 2px dashed rgba(255, 255, 255, 0.92); border-radius: 12px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: none; animation: render-fade var(--dur-base) var(--ease-out); }
+  .placement-outline.window { border-radius: 10px; }
+  .placement-outline span { position: absolute; inset-block-start: 8px; inset-inline-start: 8px; max-inline-size: calc(100% - 16px); overflow: hidden; padding: 3px 8px; border-radius: 999px; background: rgba(22, 22, 24, 0.82); color: #fff; font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+  .placement-outline.split span { inset-block: auto 8px; }
+
+  /* ── Video & audio: the summary line and folding clip groups ── */
+  .clip-summary { margin: 0; font-size: 13px; color: var(--ink); }
+  .clip-summary strong { font-weight: 550; }
+  /* A flex column, not a grid: an auto grid track would grow to a long nowrap file name and push the page sideways. */
+  .clip-group { display: flex; flex-direction: column; gap: 8px; min-inline-size: 0; }
+  .clip-group > .clip-list { min-inline-size: 0; }
+  .clip-group > summary { display: flex; align-items: center; gap: 6px; min-block-size: 32px; margin: 0; list-style: none; cursor: pointer; }
+  .clip-group > summary::-webkit-details-marker { display: none; }
+  .clip-group > summary svg { flex: none; transition: transform var(--dur-fast) var(--ease-out); }
+  .clip-group:not([open]) > summary svg { transform: rotate(-90deg); }
+
+  /* ── Links that cannot play: refused at input, and a calm card for clips that fail in the preview ── */
+  .link-problem { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--warning-surface); color: var(--warning-ink); font-size: 12.5px; line-height: 1.5; }
+  .link-problem p { margin: 0; text-wrap: pretty; }
+  .link-problem :is(a, .text-button) { padding: 0; color: inherit; font: inherit; font-weight: 550; text-decoration: underline; text-underline-offset: 2px; }
+  .media-issue { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  .media-issue-icon { display: grid; place-items: center; flex: none; inline-size: 28px; block-size: 28px; border-radius: 50%; background: var(--warning-surface); color: var(--warning-ink); }
+  .media-issue-body { display: grid; gap: 6px; flex: 1; min-inline-size: 0; padding-block-start: 4px; }
+  .media-issue-body strong { font-size: 13px; font-weight: 600; }
+  .media-issue ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .media-issue li { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+  .media-issue-name { display: grid; gap: 2px; min-inline-size: 0; }
+  .media-issue-name .text-button { justify-self: start; padding: 0; font-size: 13px; font-weight: 550; color: var(--ink); text-align: start; }
+  .media-issue-name small { font-size: 12px; line-height: 1.45; color: var(--text-secondary); text-wrap: pretty; }
+  @media (pointer: coarse) {
+    .render-button, .media-issue-remove, .render-card-button, .render-card-close { min-block-size: 44px; }
+    .render-card-close { inline-size: 44px; margin-inline-end: -10px; }
+    .render-card-link, .clip-group > summary { min-block-size: 44px; }
+    .timeline-lane { block-size: 28px; }
+    .video-tabs > button, .clip-seek, .link-form :is(input, select, .button) { min-block-size: 44px; }
+  }
+
   /* ── Show a product (video/ShowProduct.tsx): which product, which layout, an end card, and where it lands ── */
   .sp { display: grid; gap: 18px; }
   .sp :is(p, fieldset) { margin: 0; }
@@ -614,6 +770,10 @@
 /* Unlayered, like the shared focus rules: the invisible radio draws no ring; its row does. */
 .sp-product input:is(:focus, :focus-visible) { outline: none; }
 .sp-product:has(input:focus-visible) .sp-product-face { outline: 2px solid var(--focus); outline-offset: 2px; }
+.placement-option input:is(:focus, :focus-visible) { outline: none; }
+.placement-option:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* On the dark preview glass, the ring is white so it still shows. */
+.render-card :is(a, button):focus-visible { outline-color: #fff; }
 @layer responsive {
   @media (max-width: 1000px) {
     .video-studio {
@@ -630,5 +790,26 @@
       overflow: visible;
       padding-inline-end: 0;
     }
+  }
+  @media (max-width: 760px) {
+    .video-studio { padding: 12px 16px 24px; }
+    .video-head { align-items: stretch; }
+    .video-head-title, .video-head-title select { inline-size: 100%; max-inline-size: none; }
+    .video-head-actions { inline-size: 100%; }
+    /* Save and Render MP4 share one row; the render state sits under its button. */
+    .video-head-actions > .button { flex: 1 1 0; }
+    .render-action { flex: 1 1 0; min-inline-size: 150px; gap: 6px; }
+    .render-action .render-button { flex: 1 1 100%; }
+    .placement-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* Phone-width targets even where the pointer is not reported as coarse. */
+    .video-tabs > button, .clip-seek, .clip-group > summary, .render-card-link { min-block-size: 44px; }
+  }
+  @media (max-width: 560px) {
+    /* Icons alone label the timeline rows on phones; the clips get the width. */
+    .video-studio { --timeline-label: 30px; --timeline-pad: 8px; }
+    .timeline-label { padding-inline-end: 4px; font-size: 10px; }
+    .timeline-label > span { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .timeline-ruler .timeline-label { font-size: 9.5px; letter-spacing: -0.02em; }
+    .lane-empty { font-size: 10px; }
   }
 }
