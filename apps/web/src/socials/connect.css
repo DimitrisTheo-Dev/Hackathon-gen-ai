@@ -1,0 +1,44 @@
+/* The connect page (/studio/connect/<provider>) reuses the sign-in card (onboarding.css); only the list of accounts is its own. */
+.connect-accounts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.connect-accounts li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.connect-accounts a,
+.connect-accounts strong {
+  color: var(--ink);
+  font-weight: 550;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.connect-accounts span {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: end;
+}
+.connect-accounts .attention {
+  color: var(--warning-ink);
+}
+.connect-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.connect-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

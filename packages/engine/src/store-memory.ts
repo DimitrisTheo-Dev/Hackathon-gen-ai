@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { StoreConflict } from "./errors.js";
 import type { Condition, Filter, MediaStorage, RateLimitHit, Row, SelectOptions, Store } from "./store.js";
 
-/** Mirrors the unique constraints in supabase/migrations/20261114190000_engine_core.sql. */
+/** Mirrors the unique constraints in supabase/migrations (engine_core, then socials for accounts and events). */
 const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => boolean }>> = {
   organizations: [{ columns: ["id"] }, { columns: ["personal_owner_id"], where: (r) => r.personal_owner_id != null }],
   memberships: [{ columns: ["org_id", "user_id"] }],
@@ -16,7 +16,8 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   ],
   operations: [{ columns: ["org_id", "key"] }],
   publish_jobs: [{ columns: ["item_id", "revision", "platform", "account_id", "scheduled_at"] }],
-  provider_connections: [{ columns: ["org_id", "platform", "external_account_id"] }],
+  provider_connections: [{ columns: ["org_id", "provider", "platform", "external_account_id"] }],
+  social_events: [{ columns: ["org_id", "platform", "type", "external_id"] }],
   agent_connections: [{ columns: ["token_sha256"] }],
   billing_customers: [{ columns: ["org_id"] }, { columns: ["stripe_customer_id"] }],
   billing_state: [{ columns: ["org_id"] }, { columns: ["stripe_subscription_id"], where: (r) => r.stripe_subscription_id != null }],

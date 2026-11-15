@@ -40,11 +40,11 @@ export interface RateLimitConfig {
    * shared by every caller.
    */
   trustProxyHeaders: boolean;
-  /** Every authenticated `/v1/studio/*` and `/mcp` request, per principal (user, OAuth agent or workspace token). */
+  /** Every authenticated `/v1/studio/*`, `/v1/socials/*` and `/mcp` request, per principal (user, OAuth agent or workspace token). */
   principal: RateLimitPolicy;
   /** `POST /v1/studio/director/turn`: each model-backed turn costs money. Per principal. */
   director: RateLimitPolicy;
-  /** Operations that spend money or call providers: render, checkout, channel connection. Per principal. */
+  /** Operations that spend money or call providers: render, checkout, channel connection, social provider connect/sync. Per principal. */
   costly: RateLimitPolicy;
   /** Requests that present no credential at all. Per client IP. */
   anonymous: RateLimitPolicy;
@@ -80,6 +80,29 @@ export interface EngineConfig {
   youtube: YoutubeConfig | null;
   /** Why channel connection is unavailable, in words safe to show an owner. Null when configured. */
   youtubeProblem: string | null;
+  /** Connected social accounts and their activity (socials.ts, socials-events.ts). */
+  socials: {
+    /** Encrypts the provider credentials stored with each account. Null: no account can be connected, so nothing can be posted. */
+    credentialKey: Buffer | null;
+    /** Signs deliveries in the generic format to /v1/socials/:platform/webhook. Null: those are refused. */
+    webhookSecret: string | null;
+    /**
+     * The app people sign in to Instagram with (socials-instagram.ts): the Instagram app ID and secret from the Meta
+     * app's "Business login settings". Null: Instagram accounts cannot be connected directly.
+     */
+    instagramLogin: { appId: string; appSecret: string; scopes: string[] } | null;
+    /**
+     * Each platform's own webhook credentials, from the app registered with that platform (socials-webhooks.ts).
+     * Null: that platform's address takes the generic format only.
+     */
+    native: {
+      instagram: { appSecret: string; verifyToken: string } | null;
+      whatsapp: { appSecret: string; verifyToken: string } | null;
+      tiktok: { clientSecret: string } | null;
+      linkedin: { clientSecret: string } | null;
+      youtube: { hubSecret: string } | null;
+    };
+  };
   /** Model-backed director turns allowed per organization per 24 hours. */
   directorDailyTurns: number;
   mediaUrlTtlSeconds: number;
@@ -196,6 +219,43 @@ function youtubeFrom(env: Record<string, string | undefined>): { youtube: Youtub
   return { youtube: { clientId, clientSecret, encryptionKey: new Uint8Array(key) }, problem: null };
 }
 
+function socialsFrom(env: Record<string, string | undefined>): EngineConfig["socials"] {
+  const raw = env.SOCIALS_CREDENTIAL_KEY?.trim();
+  // 32 random bytes, as 64 hex characters or as base64.
+  const key = raw ? Buffer.from(raw, /^[0-9a-f]{64}$/i.test(raw) ? "hex" : "base64") : null;
+  if (key && key.length !== 32) console.error(JSON.stringify({ level: "error", event: "config_invalid", key: "SOCIALS_CREDENTIAL_KEY" }));
+  const secret = env.SOCIALS_WEBHOOK_SECRET?.trim();
+  const value = (name: string, min = 8) => {
+    const found = env[name]?.trim();
+    return found && found.length >= min ? found : null;
+  };
+  // Meta apps (Instagram, WhatsApp) need the app secret and the verify token typed into the app's webhook settings.
+  const meta = (prefix: string) => {
+    const appSecret = value(`${prefix}_APP_SECRET`);
+    const verifyToken = value(`${prefix}_WEBHOOK_VERIFY_TOKEN`);
+    return appSecret && verifyToken ? { appSecret, verifyToken } : null;
+  };
+  const tiktok = value("TIKTOK_CLIENT_SECRET");
+  const linkedin = value("LINKEDIN_CLIENT_SECRET");
+  const youtube = value("YOUTUBE_WEBHOOK_SECRET", 32);
+  const loginId = value("INSTAGRAM_LOGIN_APP_ID", 1);
+  const loginSecret = value("INSTAGRAM_LOGIN_APP_SECRET");
+  // What the person is asked to allow. Posting needs the first two; comments and messages are for the account's activity.
+  const scopes = (env.INSTAGRAM_LOGIN_SCOPES ?? "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_messages").split(",").map((scope) => scope.trim()).filter((scope) => /^[a-z_]{3,80}$/.test(scope));
+  return {
+    credentialKey: key?.length === 32 ? key : null,
+    webhookSecret: secret && secret.length >= 32 ? secret : null,
+    instagramLogin: loginId && /^\d{1,32}$/.test(loginId) && loginSecret ? { appId: loginId, appSecret: loginSecret, scopes } : null,
+    native: {
+      instagram: meta("INSTAGRAM"),
+      whatsapp: meta("WHATSAPP"),
+      tiktok: tiktok ? { clientSecret: tiktok } : null,
+      linkedin: linkedin ? { clientSecret: linkedin } : null,
+      youtube: youtube ? { hubSecret: youtube } : null,
+    },
+  };
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): EngineConfig {
   const supabaseUrl = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
   const appBaseUrl = (env.APP_BASE_URL ?? (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : "")).trim().replace(/\/$/, "");
@@ -231,6 +291,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     llm: llmFrom(env),
     youtube: channels.youtube,
     youtubeProblem: channels.problem,
+    socials: socialsFrom(env),
     directorDailyTurns: integer(env.DIRECTOR_DAILY_TURNS, 100, 1, 10_000),
     mediaUrlTtlSeconds: 3600,
     r2: r2From(env),

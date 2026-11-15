@@ -5,7 +5,7 @@ import { EngineError, StoreConflict } from "./errors.js";
 import { ChannelGrantExpired, createYoutubeClient, MAX_UPLOAD_BYTES, YOUTUBE_UPLOAD_SCOPE } from "./providers/youtube.js";
 import type { Publisher } from "./schedule.js";
 import { selectOne, type Row } from "./store.js";
-import { parse } from "./studio.js";
+import { parse, PLATFORMS } from "./studio.js";
 
 /**
  * Publishing destinations. Exactly one is real: YouTube. Instagram and TikTok need each platform's
@@ -14,7 +14,13 @@ import { parse } from "./studio.js";
  * A connected channel is a row in `provider_connections` holding the channel identity and the Google
  * refresh token, encrypted. The token is accepted only after Google confirms it was issued to THIS
  * deployment's OAuth client with upload permission, and it never leaves the server again.
+ *
+ * Its `provider` is `direct`: the same channel may also be reached through a social provider such as Buffer
+ * (socials.ts, its own row). This module only ever reads and writes its own rows. Instagram and TikTok accounts
+ * connected under /v1/socials (through Buffer, or Instagram directly) are managed and posted to there, not here.
  */
+/** `provider_connections.provider` of the channels connected here (migration 20261115070000_socials). */
+const DIRECT = "direct";
 export const NOT_AVAILABLE_YET = "Instagram and TikTok publishing need each platform’s app review; not available yet.";
 /** Google's rule, stated wherever a person decides to post publicly. */
 export const YOUTUBE_AUDIT_NOTE =
@@ -70,7 +76,7 @@ export function canManageChannels(deps: EngineDeps, ctx: Ctx): boolean {
 
 export async function getChannelStatus(deps: EngineDeps, ctx: Ctx): Promise<ChannelStatus> {
   requireScope(ctx, "campaign:read");
-  const rows = await deps.store.select("provider_connections", { org_id: ctx.org.id }, { order: ["created_at", "asc"] });
+  const rows = await deps.store.select("provider_connections", { org_id: ctx.org.id, provider: DIRECT }, { order: ["created_at", "asc"] });
   const configured = deps.config.youtube !== null;
   return parse(channelStatusSchema, {
     platforms: [
@@ -78,7 +84,7 @@ export async function getChannelStatus(deps: EngineDeps, ctx: Ctx): Promise<Chan
       { platform: "instagram", availability: "unavailable", reason: NOT_AVAILABLE_YET, note: null },
       { platform: "tiktok", availability: "unavailable", reason: NOT_AVAILABLE_YET, note: null },
     ],
-    connections: rows.map((row) => ({ id: row.id, platform: row.platform, displayName: row.display_name, state: row.state, connectedAt: new Date(row.created_at).toISOString() })),
+    connections: rows.filter((row) => PLATFORMS.includes(row.platform)).map((row) => ({ id: row.id, platform: row.platform, displayName: row.display_name, state: row.state, connectedAt: new Date(row.created_at).toISOString() })),
     canManage: canManageChannels(deps, ctx),
   });
 }
@@ -122,7 +128,7 @@ export async function connectChannel(deps: EngineDeps, ctx: Ctx, raw: unknown) {
 
     const now = deps.now().toISOString();
     const fields = { display_name: channel.title.slice(0, 120), state: "connected", scopes: refreshed.scopes.length ? refreshed.scopes : info.scopes, credentials_ciphertext: sealSecret(config.encryptionKey, input.refreshToken), updated_at: now };
-    const identity = { org_id: ctx.org.id, platform: "youtube", external_account_id: channel.id };
+    const identity = { org_id: ctx.org.id, provider: DIRECT, platform: "youtube", external_account_id: channel.id };
     let row = (await deps.store.update("provider_connections", identity, fields))[0];
     if (!row) {
       try {
@@ -143,7 +149,7 @@ export async function disconnectChannel(deps: EngineDeps, ctx: Ctx, raw: unknown
   requireScope(ctx, "connections:manage");
   const input = parse(disconnectChannelInputSchema, raw);
   return idempotent(deps, ctx, "disconnect_channel", input.operationKey, input, async () => {
-    const row = await selectOne(deps.store, "provider_connections", { id: input.connectionId, org_id: ctx.org.id });
+    const row = await selectOne(deps.store, "provider_connections", { id: input.connectionId, org_id: ctx.org.id, provider: DIRECT });
     if (!row) throw new EngineError("not_found", "This channel is not connected to your workspace.");
     // Posts that have not been sent can no longer be sent. Anything already uploaded stays on the channel.
     const cancelled = await deps.store.update("publish_jobs", { org_id: ctx.org.id, account_id: row.id, state: "scheduled" }, { state: "cancelled", error: "The channel was disconnected before this post was sent.", updated_at: deps.now().toISOString() });

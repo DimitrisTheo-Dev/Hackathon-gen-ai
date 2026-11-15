@@ -8,6 +8,7 @@ import { createLiveClient } from "./data/live";
 const Studio = lazy(() => import("./views/Studio").then((m) => ({ default: m.Studio })));
 const OAuthConsent = lazy(() => import("./views/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
 const FaceScanPage = lazy(() => import("./likeness/FaceScanPage"));
+const ConnectPage = lazy(() => import("./socials/ConnectPage"));
 import { Mark, Notice } from "./components/ui";
 import { boot } from "./components/ShellSkeleton";
 
@@ -87,13 +88,17 @@ export default function AuthApp() {
   const isConsent = location.pathname.startsWith("/oauth/consent");
   // The likeness capture ("Scan my face") is its own page; it shares this sign-in and nothing else.
   const isFaceScan = location.pathname.startsWith("/face-scan");
+  // Connecting a social account by signing in to its platform, which also sends the person back to this address.
+  // Like the consent page, it shares the sign-in and nothing else: the studio is not opened under it.
+  const connectProvider = location.pathname.match(/^\/studio\/connect\/([a-z0-9_]+)\/?$/)?.[1] ?? null;
+  const ownPage = isConsent || isFaceScan || connectProvider !== null;
   const isStudio = location.pathname.startsWith("/studio") || isFixture || isConsent || isFaceScan;
   const step = session ? "stuck" : pendingEmail ? "code" : "email";
   // The session has arrived and its client is created by the next effect; nothing else may flash in between.
-  const openingStudio = Boolean(session) && !client && !error && !isConsent && !isFaceScan && isStudio;
+  const openingStudio = Boolean(session) && !client && !error && !ownPage && isStudio;
   // One continuous skeleton from first paint until the studio is complete: while a stored session is restored,
-  // while the studio's code and data load, and after an interactive sign-in. Never over the consent page or the face scan.
-  const covering = isStudio && !isConsent && !isFaceScan && (client ? !studioReady : loading ? boot.expectsStudio() : openingStudio);
+  // while the studio's code and data load, and after an interactive sign-in. Never over a page of its own.
+  const covering = isStudio && !ownPage && (client ? !studioReady : loading ? boot.expectsStudio() : openingStudio);
   useLayoutEffect(() => { boot.cover(covering); }, [covering]);
   useEffect(() => { if (!client) setStudioReady(false); }, [client]);
 
@@ -160,7 +165,7 @@ export default function AuthApp() {
   }, []);
 
   useEffect(() => {
-    if (!session || isFixture || isConsent || isFaceScan) return;
+    if (!session || isFixture || ownPage) return;
     // Same-origin by default: the studio and its API ship as one deployment. No fixture is ever substituted.
     const origin = import.meta.env.VITE_CASTROOM_API_URL || location.origin;
     if (origin)
@@ -172,7 +177,7 @@ export default function AuthApp() {
       } catch {
         setError("The studio API is not configured correctly. Contact the workspace owner.");
       }
-  }, [session, isFixture, isConsent, isFaceScan]);
+  }, [session, isFixture, ownPage]);
 
   // Each step hands focus to its one field, so the keyboard never has to hunt for it.
   useEffect(() => {
@@ -188,7 +193,8 @@ export default function AuthApp() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         // Return to the consent request or the face scan when that is where sign-in started; otherwise to the studio.
-        options: { redirectTo: isConsent || isFaceScan ? location.href : `${location.origin}/studio/` },
+        // The connect page returns to itself without what follows "#": a one-time code left there is not sent on.
+        options: { redirectTo: connectProvider ? `${location.origin}${location.pathname}` : isConsent || isFaceScan ? location.href : `${location.origin}/studio/` },
       });
       if (error) throw error;
       // The browser is leaving for Google. The button stays busy until it does.
@@ -266,6 +272,12 @@ export default function AuthApp() {
         <FaceScanPage session={session} />
       </Suspense>
     );
+  if (connectProvider && session)
+    return (
+      <Suspense fallback={<Entering label="Opening the connection…" />}>
+        <ConnectPage provider={connectProvider} />
+      </Suspense>
+    );
   if (client)
     return <>
       {error && <div className="auth-feedback"><Notice error>{error}</Notice></div>}
@@ -275,8 +287,8 @@ export default function AuthApp() {
         </Suspense>
       </StudioBoundary>
     </>;
-  if (loading && isConsent) return <Entering label="Opening your workspace…" />;
   if (loading && isFaceScan) return <Entering label="Opening the face scan…" />;
+  if (loading && ownPage) return <Entering label="Opening your workspace…" />;
   // The shell skeleton is over the page; rendering anything here would only flash underneath it.
   if (loading || openingStudio) return null;
 
