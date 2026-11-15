@@ -1,6 +1,5 @@
 // Pure pieces of the machines gateway: who is calling, CORS, and reading a run's event stream.
 // No Cloudflare APIs here, so the root test suite covers this file.
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import { mintSignedToken, parseKeyring, verifySignedToken } from "../../workspace-store/src/signed-token";
 
 /** A Supabase user UUID, or a short slug for a personal token. */
@@ -20,33 +19,23 @@ export async function verifyGatewayToken(signingKey: string | undefined, token: 
   return (await verifySignedToken(parseKeyring(signingKey), PERSONAL_TOKEN.kind, GATEWAY_AUDIENCE, token, PERSONAL_TOKEN.maxTtlSeconds, now))?.uid ?? null;
 }
 
-/** Verifies a Faceful (Supabase) session against the project's public signing keys. No secret needed. */
-export function createSessionVerifier(supabaseUrl: string, keys?: JWTVerifyGetKey) {
-  const issuer = `${supabaseUrl.replace(/\/+$/, "")}/auth/v1`;
-  const jwks = keys ?? createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`), { cooldownDuration: 30_000, cacheMaxAge: 600_000 });
-  return async (token: string): Promise<string | null> => {
-    try {
-      // Signature, issuer, audience and expiry are all checked; asymmetric algorithms only.
-      const { payload } = await jwtVerify(token, jwks, { issuer, audience: "authenticated", algorithms: ["ES256", "RS256"] });
-      if (typeof payload.sub !== "string" || payload.role !== "authenticated" || payload.is_anonymous === true) return null;
-      // Tokens issued to an external agent (OAuth client) don't get a machine; first-party sessions do.
-      if (typeof payload.client_id === "string" && payload.client_id) return null;
-      const uid = payload.sub.toLowerCase();
-      return isUserId(uid) ? uid : null;
-    } catch { return null; }
-  };
-}
+/**
+ * Faceful sessions never reach the gateway: the page trades one at the engine (POST /v1/studio/machines/token, see
+ * packages/engine/src/machines.ts) for this ten-minute token, signed with MACHINES_GATEWAY_KEY. A raw session would
+ * also open the whole studio API to anyone who could read this Worker's traffic or logs.
+ */
+export const SESSION_TOKEN = { kind: "fgs1", maxTtlSeconds: 15 * 60 } as const;
 
 export type Identity = { uid: string; via: "token" | "session" };
-export async function identify(authorization: string | null, deps: { signingKey?: string; verifySession: (token: string) => Promise<string | null> }): Promise<Identity | null> {
-  const match = /^Bearer\s+(\S+)$/i.exec(authorization ?? "");
-  if (!match) return null;
-  if (/^fgw\d\./.test(match[1])) {
-    const uid = await verifyGatewayToken(deps.signingKey, match[1]);
-    return uid ? { uid, via: "token" } : null;
+/** The caller, from a machines session token or a personal token. Anything else, a raw Faceful session included, is refused. */
+export async function identify(authorization: string | null, keys: { personal?: string; session?: string }, now = Date.now()): Promise<Identity | null> {
+  const token = /^Bearer\s+(\S+)$/i.exec(authorization ?? "")?.[1] ?? "";
+  if (token.startsWith(`${SESSION_TOKEN.kind}.`)) {
+    const claims = await verifySignedToken(parseKeyring(keys.session), SESSION_TOKEN.kind, GATEWAY_AUDIENCE, token, SESSION_TOKEN.maxTtlSeconds, now);
+    return claims ? { uid: claims.uid, via: "session" } : null;
   }
-  const uid = await deps.verifySession(match[1]);
-  return uid ? { uid, via: "session" } : null;
+  const uid = token.startsWith(`${PERSONAL_TOKEN.kind}.`) ? await verifyGatewayToken(keys.personal, token, now) : null;
+  return uid ? { uid, via: "token" } : null;
 }
 
 /** MACHINE_ALLOWED_USERS: the user ids (Supabase UUIDs or personal-token slugs) that may have a machine. Empty lets nobody in. */

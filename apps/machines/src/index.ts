@@ -4,12 +4,13 @@
 //                  │                 └─ apps/claude-runner inside, reached only through the Durable Object
 //                  └─ D1 faceful-machines: machines, projects, saves
 //
-// The Worker decides who is calling (a Faceful session or a personal token) and never lets a caller name
-// another user's machine. The container's disk is fresh on every wake; the runner restores the user's
-// Claude sign-in and each project from their own R2 folder, and autosaves after every run.
+// The Worker decides who is calling (a short-lived token the engine trades for a Faceful session, or a personal
+// token), lets in only listed accounts, and never lets a caller name another user's machine. The container's disk
+// is fresh on every wake; the runner restores the user's Claude sign-in and each project from their own R2 folder,
+// and autosaves after every run.
 import { Container, getContainer } from "@cloudflare/containers";
 import { mintToken } from "../../workspace-store/src/index";
-import { asSaveRecord, corsFor, createLineScanner, createSessionVerifier, identify, isProjectId, limitProblem, limitsFrom, machineUsage, NOT_ENABLED, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, WAKE_SQL, type Identity, type LimitProblem, type SaveRecord, type Wake } from "./lib";
+import { asSaveRecord, corsFor, createLineScanner, identify, isProjectId, limitProblem, limitsFrom, machineUsage, NOT_ENABLED, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, WAKE_SQL, type Identity, type LimitProblem, type SaveRecord, type Wake } from "./lib";
 
 export type Env = {
   MACHINE: DurableObjectNamespace<UserMachine>;
@@ -18,7 +19,8 @@ export type Env = {
   STORE_SIGNING_KEY: string;
   /** Keyring that signs personal gateway tokens (fgw2.…, expiring). Optional: without it no personal token is accepted. */
   GATEWAY_SIGNING_KEY?: string;
-  SUPABASE_URL: string;
+  /** Same value as the engine's: checks the ten-minute tokens the engine trades for a Faceful session (fgs1.…). */
+  MACHINES_GATEWAY_KEY?: string;
   STORE_URL: string;
   ALLOWED_ORIGINS: string;
   INSTANCE_TYPE: string;
@@ -262,8 +264,6 @@ export class UserMachine extends Container<Env> {
 
 // ---------- the gateway ----------
 
-let verifySession: ((token: string) => Promise<string | null>) | null = null;
-
 async function route(request: Request, url: URL, env: Env, who: Identity): Promise<Response> {
   const machine = getContainer(env.MACHINE, who.uid);
   const identity = { "x-faceful-uid": who.uid, "x-faceful-via": who.via };
@@ -322,8 +322,7 @@ export default {
     if (!url.pathname.startsWith("/v1/")) return withCors(problem(404, "not_found", "Unknown endpoint."));
     if (origin && !cors) return problem(403, "origin_not_allowed", `This gateway doesn't accept requests from ${origin}.`);
 
-    verifySession ??= createSessionVerifier(env.SUPABASE_URL);
-    const who = await identify(request.headers.get("authorization"), { signingKey: env.GATEWAY_SIGNING_KEY, verifySession });
+    const who = await identify(request.headers.get("authorization"), { personal: env.GATEWAY_SIGNING_KEY, session: env.MACHINES_GATEWAY_KEY });
     if (!who) return withCors(problem(401, "unauthorized", "Sign in again, or check your access token."));
     // Default deny: an account only reaches any route once it is on the list.
     if (!parseAllowlist(env.MACHINE_ALLOWED_USERS).has(who.uid)) return withCors(problem(403, "machine_not_enabled", NOT_ENABLED));

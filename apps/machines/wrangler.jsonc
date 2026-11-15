@@ -26,7 +26,6 @@
     { "binding": "DB", "database_name": "faceful-machines", "database_id": "236a0e56-c855-4941-8178-5495e5ac4876" }
   ],
   "vars": {
-    "SUPABASE_URL": "https://hgsgvdujzatfhsjoojll.supabase.co",
     "ALLOWED_ORIGINS": "https://faceful.dtheo.dev,http://127.0.0.1:5173,http://localhost:5173",
     "INSTANCE_TYPE": "standard-1",
     // Per-user limits, on top of max_instances: wakes in any hour, and minutes awake per UTC day.
@@ -37,5 +36,6 @@
   //   wrangler secret put STORE_URL               the faceful-workspace-store Worker's address
   //   wrangler secret put STORE_SIGNING_KEY       same value as the faceful-workspace-store Worker's
   //   wrangler secret put GATEWAY_SIGNING_KEY     signs personal tokens (node mint-token.mjs <user-id> [ttl]); "2:<new>,1:<old>" rotates
+  //   wrangler secret put MACHINES_GATEWAY_KEY    same value as the engine's (Vercel): checks the tokens it trades for a Faceful session
   //   wrangler secret put MACHINE_ALLOWED_USERS   comma-separated user ids that may have a machine; empty lets nobody in
 }

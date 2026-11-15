@@ -2,21 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { generateKeyPair, SignJWT } from "jose";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { asSaveRecord, corsFor, createLineScanner, createSessionVerifier, identify, limitProblem, limitsFrom, machineUsage, mintGatewayToken, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, verifyGatewayToken, WAKE_SQL } from "../apps/machines/src/lib";
+import { loadConfig } from "../packages/engine/src/config";
+import { machinesToken } from "../packages/engine/src/machines";
+import { asSaveRecord, corsFor, createLineScanner, identify, limitProblem, limitsFrom, machineUsage, mintGatewayToken, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, verifyGatewayToken, WAKE_SQL } from "../apps/machines/src/lib";
 
 const SECRET = "g".repeat(64);
 const SUPABASE = "https://project.supabase.co";
 const USER = "3f2c1d7e-aaaa-4bbb-8ccc-000000000001";
 
-async function sessions() {
-  const { publicKey, privateKey } = await generateKeyPair("ES256");
-  const verify = createSessionVerifier(SUPABASE, createLocalJWKSet({ keys: [{ ...(await exportJWK(publicKey)), alg: "ES256", kid: "k1" }] }));
-  const token = (claims: Record<string, unknown> = {}, options: { issuer?: string; audience?: string; expires?: string } = {}) =>
-    new SignJWT({ role: "authenticated", ...claims }).setProtectedHeader({ alg: "ES256", kid: "k1" }).setSubject(USER).setIssuer(options.issuer ?? `${SUPABASE}/auth/v1`).setAudience(options.audience ?? "authenticated").setIssuedAt().setExpirationTime(options.expires ?? "5m").sign(privateKey);
-  return { verify, token };
+async function sessionJwt() {
+  const { privateKey } = await generateKeyPair("ES256");
+  return new SignJWT({ role: "authenticated" }).setProtectedHeader({ alg: "ES256", kid: "k1" }).setSubject(USER).setIssuer(`${SUPABASE}/auth/v1`).setAudience("authenticated").setIssuedAt().setExpirationTime("5m").sign(privateKey);
 }
 
 test("personal tokens are per user, expire, and can't be forged", async () => {
@@ -49,28 +48,20 @@ test("personal tokens are per user, expire, and can't be forged", async () => {
   assert.throws(() => mint("minas", "forever"), /30m, 12h or 7d/);
 });
 
-test("Faceful sessions are verified by signature, issuer, audience and expiry", async () => {
-  const { verify, token } = await sessions();
-  assert.equal(await verify(await token()), USER);
-  assert.equal(await verify(await token({}, { issuer: "https://evil.example/auth/v1" })), null);
-  assert.equal(await verify(await token({}, { audience: "anon" })), null);
-  assert.equal(await verify(await token({}, { expires: "-1m" })), null);
-  assert.equal(await verify(await token({ role: "anon" })), null);
-  assert.equal(await verify(await token({ is_anonymous: true })), null);
-  assert.equal(await verify(await token({ client_id: "external-agent" })), null, "agent tokens don't get a machine");
-  const other = await sessions();
-  assert.equal(await verify(await other.token()), null, "signed by a different key");
-  assert.equal(await verify("not.a.jwt"), null);
-});
-
-test("the caller is identified from the credential only", async () => {
-  const { verify, token } = await sessions();
-  const deps = { signingKey: SECRET, verifySession: verify };
-  assert.deepEqual(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas", 60)}`, deps), { uid: "minas", via: "token" });
-  assert.deepEqual(await identify(`Bearer ${await token()}`, deps), { uid: USER, via: "session" });
-  assert.equal(await identify("Bearer fgw1.minas.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", deps), null);
-  assert.equal(await identify(null, deps), null);
-  assert.equal(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas", 60)}`, { verifySession: verify }), null, "no signing key, no personal tokens");
+test("the caller is identified from a machines token or a personal token only", async () => {
+  const SESSION_KEY = "e".repeat(64);
+  const keys = { personal: SECRET, session: `3:${SESSION_KEY}` };
+  const engine = loadConfig({ MACHINES_GATEWAY_KEY: `3:${SESSION_KEY}`, MACHINE_ALLOWED_USERS: USER });
+  const minted = machinesToken({ config: engine, now: () => new Date() } as never, { principal: { kind: "human", userId: USER.toUpperCase(), email: null } } as never);
+  assert.deepEqual(await identify(`Bearer ${minted.token}`, keys), { uid: USER, via: "session" }, "the engine's token, user id lower-cased");
+  assert.equal(await identify(`Bearer ${minted.token}`, { personal: SECRET, session: SESSION_KEY }), null, "the key version is part of the token");
+  assert.equal(await identify(`Bearer ${minted.token}`, keys, Date.parse(minted.expiresAt) + 1000), null, "ten minutes, then refused");
+  assert.equal(await identify(`Bearer ${minted.token}`, { personal: `3:${SESSION_KEY}` }), null, "a session token is not a personal token");
+  assert.deepEqual(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas", 60)}`, keys), { uid: "minas", via: "token" });
+  assert.equal(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas", 60)}`, { session: keys.session }), null, "no signing key, no personal tokens");
+  assert.equal(await identify(`Bearer ${await sessionJwt()}`, keys), null, "a raw Faceful session is never accepted");
+  assert.equal(await identify("Bearer fgw1.minas.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", keys), null);
+  assert.equal(await identify(null, keys), null);
 });
 
 test("CORS answers only listed origins", () => {

@@ -9,8 +9,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@cloudflare/containers": "0.3.7",
-    "jose": "6.2.17"
+    "@cloudflare/containers": "0.3.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261023.1",
