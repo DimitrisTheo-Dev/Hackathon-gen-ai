@@ -768,3 +768,5 @@ html[data-booting] .director-panel.is-home :is(.director-intro > *, .director-co
   .home-meta .director-status { flex-wrap: wrap; justify-content: center; }
   .home-meta .director-status-link { flex-basis: 100%; justify-content: center; margin: 0; }
 }
+
+.posting-remove { justify-self: start; margin-top: 4px; font-size: 13px; color: var(--text-secondary); }
