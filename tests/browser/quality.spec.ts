@@ -188,7 +188,7 @@ test('video studio: Show product places the photo on the saved timeline, and the
   await expect(page.locator('.success-note')).toContainText('BeWell Omega is on screen at 0:02.5 and on the end card. Saved as version 1.');
   const placed = page.locator('.clip-list li').filter({ hasText: 'Overlay · Image · BeWell Omega.jpg' });
   await expect(placed).toHaveCount(1);
-  await expect(placed.getByLabel('Layout')).toHaveValue('split');
+  await expect(placed.getByRole('group', { name: 'Where it sits' }).getByRole('radio', { name: 'Split screen' })).toBeChecked();
   await expect(page.getByRole('toolbar', { name: 'Edit' }).getByRole('button', { name: /^Cards/ })).toContainText('2');
 
   // With the photo on screen, the visual pass no longer asks for it.
@@ -198,6 +198,35 @@ test('video studio: Show product places the photo on the saved timeline, and the
   await page.locator('#detail-review-trigger').click();
   await page.getByRole('button', { name: 'Check this draft' }).click();
   await expect(page.locator('#detail-review-panel').getByRole('region', { name: 'On screen' })).not.toContainText('is named at');
+  expect(errors).toEqual([]);
+});
+
+test('video studio: Render MP4 sits beside Save and says why it waits, platform links are refused, and a selected overlay shows where it sits', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/dev/studio/?view=video&item=fixture-video-3');
+  await expect(page.locator('.video-body')).toBeVisible();
+  // The development role cannot render; the reason sits beside the button instead of a mysteriously disabled control.
+  const renderButton = page.getByRole('button', { name: 'Render MP4' });
+  await expect(renderButton).toBeDisabled();
+  await expect(page.locator('.render-action')).toContainText('Your role can’t render');
+  // A YouTube page is not a media file: refused at input with the way forward.
+  await page.getByLabel('Media link').fill('https://www.youtube.com/shorts/V0morSTvZVI');
+  await page.getByRole('button', { name: 'Add at playhead' }).click();
+  const problem = page.locator('#link-problem');
+  await expect(problem).toContainText('That’s a YouTube page, not a media file');
+  await expect(problem.getByRole('link', { name: 'Templates → Clone a video you like' })).toHaveAttribute('href', /view=templates&tab=clone/);
+  await expect(page.locator('.timeline-clip.video.overlay')).toHaveCount(0);
+  // A direct image link is accepted; selecting it outlines its place on the preview.
+  await page.getByLabel('Media link').fill('https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=1080');
+  await page.getByLabel('Use the link as').selectOption('image');
+  await page.getByRole('button', { name: 'Add at playhead' }).click();
+  await expect(problem).toHaveCount(0);
+  await page.locator('.timeline-clip.video.overlay').first().click();
+  await expect(page.locator('.placement-outline')).toContainText('Overlay · Split screen');
+  await page.locator('.clip-row.selected').getByRole('radio', { name: 'Window' }).check();
+  await expect(page.locator('.placement-outline')).toContainText('Overlay · Window');
+  await expect(page.locator('.clip-summary')).toHaveText('1 main clip · 1 overlay');
   expect(errors).toEqual([]);
 });
 
