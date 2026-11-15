@@ -7,7 +7,8 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { loadConfig } from "../packages/engine/src/config";
 import { machinesToken } from "../packages/engine/src/machines";
-import { asSaveRecord, corsFor, createLineScanner, identify, limitProblem, limitsFrom, machineUsage, mintGatewayToken, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, verifyGatewayToken, WAKE_SQL } from "../apps/machines/src/lib";
+import { loadConfig as loadRunnerConfig } from "../apps/claude-runner/server";
+import { asSaveRecord, corsFor, createLineScanner, homeKeyFor, identify, limitProblem, limitsFrom, machineUsage, mintGatewayToken, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, verifyGatewayToken, WAKE_SQL } from "../apps/machines/src/lib";
 
 const SECRET = "g".repeat(64);
 const SUPABASE = "https://project.supabase.co";
@@ -160,4 +161,16 @@ test("the wake statements run against schema.sql", () => {
   assert.deepEqual(rows.map((row) => [row.started_at, row.stopped_at]), [[iso(-5), null], [iso(-50), iso(-40)]]);
   assert.deepEqual(machineUsage(rows, now), { wakesLastHour: 2, oldestWake: now - 50 * 60_000, awakeMinutesToday: 15, resetsAt: Date.parse("2026-11-16T00:00:00.000Z") });
   assert.equal((db.prepare("select count(*) as n from machine_wakes").get() as { n: number }).n, 3, "the week-old wake was pruned");
+});
+
+test("each user's home key is derived on the gateway, is 32 bytes, and differs per user", async () => {
+  const secret = "h".repeat(64);
+  const minas = await homeKeyFor(secret, "minas");
+  assert.match(minas, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(await homeKeyFor(secret, "minas"), minas, "the same on every wake");
+  assert.notEqual(await homeKeyFor(secret, "maria"), minas);
+  assert.notEqual(await homeKeyFor("i".repeat(64), "minas"), minas);
+  assert.equal(loadRunnerConfig({ RUNNER_ACCESS_KEY: "k".repeat(48), CLAUDE_HOME_KEY: minas }).homeKey?.length, 32, "the runner takes it as is");
+  await assert.rejects(homeKeyFor(undefined, "minas"), /HOME_ENCRYPTION_KEY/);
+  await assert.rejects(homeKeyFor(secret, "../x"), /User ids/);
 });

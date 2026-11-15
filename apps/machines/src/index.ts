@@ -10,13 +10,15 @@
 // and autosaves after every run.
 import { Container, getContainer } from "@cloudflare/containers";
 import { MACHINE_STORE_TOKEN_TTL, mintToken } from "../../workspace-store/src/index";
-import { asSaveRecord, corsFor, createLineScanner, identify, isProjectId, limitProblem, limitsFrom, machineUsage, NOT_ENABLED, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, WAKE_SQL, type Identity, type LimitProblem, type SaveRecord, type Wake } from "./lib";
+import { asSaveRecord, corsFor, createLineScanner, homeKeyFor, identify, isProjectId, limitProblem, limitsFrom, machineUsage, NOT_ENABLED, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, WAKE_SQL, type Identity, type LimitProblem, type SaveRecord, type Wake } from "./lib";
 
 export type Env = {
   MACHINE: DurableObjectNamespace<UserMachine>;
   DB: D1Database;
   /** Same value as the workspace store's secret: lets this Worker mint each machine's folder token. */
   STORE_SIGNING_KEY: string;
+  /** Only here, never on the store: each user's key for sealing Claude's sign-in is derived from it (lib.ts homeKeyFor). */
+  HOME_ENCRYPTION_KEY: string;
   /** Keyring that signs personal gateway tokens (fgw2.…, expiring). Optional: without it no personal token is accepted. */
   GATEWAY_SIGNING_KEY?: string;
   /** Same value as the engine's: checks the ten-minute tokens the engine trades for a Faceful session (fgs1.…). */
@@ -138,6 +140,7 @@ export class UserMachine extends Container<Env> {
         RUNNER_ALLOWED_ORIGINS: "http://container",
         STORE_URL: this.env.STORE_URL,
         STORE_TOKEN: await mintToken(this.env.STORE_SIGNING_KEY, uid),
+        CLAUDE_HOME_KEY: await homeKeyFor(this.env.HOME_ENCRYPTION_KEY, uid),
       };
       await this.startAndWaitForPorts({ ports: PORT, cancellationOptions: { instanceGetTimeoutMS: 60_000, portReadyTimeoutMS: 90_000 } });
       // A container that was already up kept the token from its own start, of unknown age: renew it right away.

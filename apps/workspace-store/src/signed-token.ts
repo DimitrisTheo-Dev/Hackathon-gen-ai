@@ -25,7 +25,8 @@ export function parseKeyring(value: string | undefined): Keyring | null {
 }
 
 const encoder = new TextEncoder();
-async function hmac(secret: string, message: string): Promise<string> {
+/** base64url HMAC-SHA256: 43 characters. */
+export async function hmac(secret: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   let binary = "";
   for (const byte of new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(message)))) binary += String.fromCharCode(byte);

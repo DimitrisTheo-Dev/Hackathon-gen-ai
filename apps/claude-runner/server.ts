@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse, Server } from "node:http";
 import { spawn, execFile } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
@@ -31,7 +31,16 @@ export type RunnerConfig = {
   /** Workspace store (apps/workspace-store): saves land in this user's own R2 folder. */
   storeUrl: string | null;
   storeToken: string | null;
+  /** 32 bytes that seal Claude's saved sign-in before it is uploaded (CLAUDE_HOME_KEY). Null: saved as is. */
+  homeKey: Buffer | null;
 };
+
+function homeKeyFrom(value: string | undefined): Buffer | null {
+  if (!value?.trim()) return null;
+  const key = Buffer.from(value.trim(), "base64url"); // also reads standard base64, as `openssl rand -base64 32` prints
+  if (key.length !== 32) throw new Error("CLAUDE_HOME_KEY must be 32 random bytes in base64. Generate one with: openssl rand -base64 32");
+  return key;
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
   const accessKey = env.RUNNER_ACCESS_KEY ?? "";
@@ -49,6 +58,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     maxRunMinutes: Number(env.RUNNER_MAX_RUN_MINUTES ?? 30),
     storeUrl: env.STORE_URL ? env.STORE_URL.replace(/\/+$/, "") : null,
     storeToken: env.STORE_TOKEN || null,
+    homeKey: homeKeyFrom(env.CLAUDE_HOME_KEY),
   };
 }
 
@@ -63,6 +73,29 @@ const MAX_SAVE_BYTES = 95 * 1024 * 1024;
 const isSaveKey = (project: string, key: string) => new RegExp(`^projects/${project}/saves/[0-9TZ-]+\\.tar\\.gz$`).test(key);
 
 // ---------- pure helpers (exported for tests) ----------
+
+/**
+ * Claude's saved sign-in, sealed: "FCH1" | 12-byte IV | 16-byte GCM tag | AES-256-GCM(archive). The key is the user's
+ * own and only the runner holds it, so the store, its logs and a leaked store token see ciphertext, and an archive
+ * anyone else wrote (or changed) is refused instead of being unpacked into Claude's home.
+ */
+const SEALED = Buffer.from("FCH1");
+export function sealHome(key: Buffer, archive: Buffer): Buffer<ArrayBuffer> {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(SEALED);
+  const body = Buffer.concat([cipher.update(archive), cipher.final()]);
+  return Buffer.concat([SEALED, iv, cipher.getAuthTag(), body]);
+}
+export function openHome(key: Buffer, sealed: Buffer): Buffer | null {
+  if (sealed.length < 32 || !sealed.subarray(0, 4).equals(SEALED)) return null;
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", key, sealed.subarray(4, 16));
+    decipher.setAAD(SEALED);
+    decipher.setAuthTag(sealed.subarray(16, 32));
+    return Buffer.concat([decipher.update(sealed.subarray(32)), decipher.final()]);
+  } catch { return null; }
+}
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 export function keyMatches(expected: string, authorization: string | undefined): boolean {
@@ -204,8 +237,10 @@ export async function saveHome(config: RunnerConfig): Promise<{ key: string; byt
   if (!hasStore(config)) return null;
   const entries = await homeEntries(config);
   if (!entries.length) return null;
-  const { body, files, sha256 } = await pack(config.homeDir, entries, HOME_EXCLUDES);
-  await storeFetch(config, `/v1/objects/${HOME_KEY}`, { method: "PUT", body, headers: { "Content-Type": "application/gzip", "x-store-meta": JSON.stringify({ files: String(files), sha256, kind: "home" }) } });
+  const archive = await pack(config.homeDir, entries, HOME_EXCLUDES);
+  const body = config.homeKey ? sealHome(config.homeKey, archive.body) : archive.body;
+  const meta = { files: String(archive.files), sha256: createHash("sha256").update(body).digest("hex"), kind: "home", sealed: config.homeKey ? "1" : "0" };
+  await storeFetch(config, `/v1/objects/${HOME_KEY}`, { method: "PUT", body, headers: { "Content-Type": config.homeKey ? "application/octet-stream" : "application/gzip", "x-store-meta": JSON.stringify(meta) } });
   return { key: HOME_KEY, bytes: body.length };
 }
 /** Puts Claude's sign-in and session history back on a fresh disk. True when something was restored. */
@@ -213,7 +248,14 @@ export async function restoreHome(config: RunnerConfig): Promise<boolean> {
   if (!hasStore(config)) return false;
   const response = await storeFetch(config, `/v1/objects/${HOME_KEY}`);
   if (!response) return false;
-  await unpack(Buffer.from(await response.arrayBuffer()), config.homeDir);
+  const stored = Buffer.from(await response.arrayBuffer());
+  // With a key, only an archive sealed with it is restored: an unsealed one is from before sealing, or not ours.
+  const archive = config.homeKey ? openHome(config.homeKey, stored) : stored.subarray(0, 4).equals(SEALED) ? null : stored;
+  if (!archive) {
+    console.error("[runner] the saved sign-in can't be opened with this machine's key; sign in to Claude again to replace it");
+    return false;
+  }
+  await unpack(archive, config.homeDir);
   return true;
 }
 
@@ -242,6 +284,7 @@ export function createRunner(config: RunnerConfig): Server & { stopWork: () => v
     // token opens this user's whole folder, Claude's saved sign-in included. The runner saves projects for it.
     delete env.STORE_URL;
     delete env.STORE_TOKEN;
+    delete env.CLAUDE_HOME_KEY; // with it, Claude could open the saved sign-in of any copy it got hold of
     const token = await storedToken();
     if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
     return env;

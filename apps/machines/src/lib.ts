@@ -1,6 +1,6 @@
 // Pure pieces of the machines gateway: who is calling, CORS, and reading a run's event stream.
 // No Cloudflare APIs here, so the root test suite covers this file.
-import { mintSignedToken, parseKeyring, verifySignedToken } from "../../workspace-store/src/signed-token";
+import { hmac, mintSignedToken, parseKeyring, verifySignedToken } from "../../workspace-store/src/signed-token";
 
 /** A Supabase user UUID, or a short slug for a personal token. */
 export const isUserId = (value: string) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(value);
@@ -36,6 +36,17 @@ export async function identify(authorization: string | null, keys: { personal?: 
   }
   const uid = token.startsWith(`${PERSONAL_TOKEN.kind}.`) ? await verifyGatewayToken(keys.personal, token, now) : null;
   return uid ? { uid, via: "token" } : null;
+}
+
+/**
+ * The key that seals one user's Claude sign-in (private/claude-home.tar.gz) before it leaves their machine: 32 bytes,
+ * base64url, derived from HOME_ENCRYPTION_KEY, which only this Worker holds. The runner process gets it and keeps it
+ * out of Claude's environment; the store and anyone holding a store token only ever see the sealed archive.
+ */
+export async function homeKeyFor(secret: string | undefined, uid: string): Promise<string> {
+  if (!secret || secret.length < 32) throw new Error("HOME_ENCRYPTION_KEY must be at least 32 characters.");
+  if (!isUserId(uid)) throw new Error("User ids are lowercase letters, digits and dashes.");
+  return hmac(secret, `claude-home:v1:${uid}`);
 }
 
 /** MACHINE_ALLOWED_USERS: the user ids (Supabase UUIDs or personal-token slugs) that may have a machine. Empty lets nobody in. */
