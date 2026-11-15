@@ -19,7 +19,7 @@ import {
 import { audit, idempotent, requireScope, sha256Hex, type Ctx, type EngineDeps } from "./access.js";
 import { getComposition, saveComposition } from "./composition.js";
 import { EngineError } from "./errors.js";
-import { FILES_TABLE, fileKey } from "./files.js";
+import { assertUploadAllowed, FILES_TABLE, fileKey } from "./files.js";
 import { UnconfiguredFileStore, type FileStore } from "./r2.js";
 import { selectOne, type Row } from "./store.js";
 import { loadItem, parse, PRODUCTS_TABLE, productContract, workspaceProducts } from "./studio.js";
@@ -82,8 +82,10 @@ export async function productImageUploadUrl(deps: EngineDeps, ctx: Ctx, raw: unk
   requireScope(ctx, "content:edit");
   const input = parse(productImageUploadInputSchema, raw);
   const files = storage(deps);
+  // Like draft files, face scans and persona photos: the size is signed into the link and counted against the quota.
+  await assertUploadAllowed(deps, ctx.org.id, input.size);
   const key = `${productFolder(ctx.org.id)}${crypto.randomUUID()}.${EXTENSIONS[input.type]}`;
-  const { url, headers } = await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.type, expiresSeconds: UPLOAD_TTL_SECONDS });
+  const { url, headers } = await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.type, bytes: input.size, expiresSeconds: UPLOAD_TTL_SECONDS });
   return parse(productImageTicketSchema, { key, uploadUrl: url, headers, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() });
 }
 

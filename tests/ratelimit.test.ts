@@ -293,6 +293,27 @@ test("MCP: start_render and create_checkout_link share the costly bucket and rep
   assert.equal(listed.isError, false, "reads are not costly");
 });
 
+test("upload links count against the costly bucket: draft files, persona photos and face scans in the studio, and request_file_upload over MCP", async () => {
+  const { call, deps } = engine({ RATE_LIMIT_COSTLY_PER_MINUTE: "3" });
+  // Counted before the body is read, so a request the domain then refuses still spends one.
+  assert.equal((await call("/v1/studio/operations/request_file_upload", post("user:u1", {}))).status, 400);
+  assert.equal((await call("/v1/studio/operations/persona_image_upload_url", post("user:u1", {}))).status, 400);
+  const scan = await call("/v1/studio/likeness/upload-url", post("user:u1", {}));
+  assert.equal(scan.status, 400);
+  assert.match(scan.headers.get("ratelimit-policy") ?? "", /"costly";q=3;w=60/);
+  const limited = await call("/v1/studio/likeness/upload-url", post("user:u1", {}));
+  assert.equal(limited.status, 429);
+  assert.match((await errorOf(limited)).message, /upload/);
+  const upload = async () => {
+    const response = await mcp(deps, "user:u2", rpc(1, "tools/call", { name: "request_file_upload", arguments: { projectId: crypto.randomUUID(), kind: "image", name: "Still", mime: "image/png", bytes: 10, sha256: "a".repeat(64) } }));
+    return ((await response.json()) as { result: { structuredContent: Record<string, any> } }).result.structuredContent;
+  };
+  for (let i = 0; i < 3; i++) assert.equal((await upload()).code, "not_found");
+  const refused = await upload();
+  assert.equal(refused.code, "quota_exceeded");
+  assert.equal(refused.retryAfterSeconds, 30);
+});
+
 test("MCP: unauthenticated discovery is limited per network; oversized bodies and large batches are refused", async () => {
   const { deps } = engine({ TRUST_PROXY_HEADERS: "true", RATE_LIMIT_ANONYMOUS_PER_MINUTE: "1" });
   const ip = { "x-forwarded-for": "203.0.113.70" };

@@ -88,23 +88,33 @@ export function bindComposition(composition, ids) {
 }
 
 /** One MCP tool call over the stateless JSON-RPC endpoint. Throws with the tool's own message on errors. */
-function mcpClient({ url, token, fetch: send = globalThis.fetch }) {
+function mcpClient({ url, token, fetch: send = globalThis.fetch, wait = (ms) => new Promise((done) => setTimeout(done, ms)), log = () => {} }) {
   let id = 0;
   return async function call(name, args) {
-    const response = await send(new URL("/mcp", url), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "tools/call", params: { name, arguments: args } }),
-    });
-    const text = await response.text();
-    // A streamable-HTTP server may answer as one SSE event; take the JSON from its data lines.
-    const body = (response.headers.get("content-type") ?? "").includes("text/event-stream")
-      ? JSON.parse(text.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5)).join(""))
-      : JSON.parse(text || "{}");
-    if (!response.ok || body.error) fail(`${name}: ${body.error?.message ?? `HTTP ${response.status}`}`);
-    const result = body.result ?? {};
-    if (result.isError) fail(`${name}: ${result.structuredContent?.message ?? result.content?.[0]?.text ?? "failed"}`);
-    return result.structuredContent ?? {};
+    for (let attempt = 1; ; attempt++) {
+      const response = await send(new URL("/mcp", url), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "tools/call", params: { name, arguments: args } }),
+      });
+      const text = await response.text();
+      // A streamable-HTTP server may answer as one SSE event; take the JSON from its data lines.
+      const body = (response.headers.get("content-type") ?? "").includes("text/event-stream")
+        ? JSON.parse(text.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5)).join(""))
+        : JSON.parse(text || "{}");
+      if (!response.ok || body.error) fail(`${name}: ${body.error?.message ?? `HTTP ${response.status}`}`);
+      const result = body.result ?? {};
+      const retryAfter = result.structuredContent?.retryAfterSeconds;
+      // Upload links are rate limited per minute, so a package with many files waits for the next window instead of
+      // failing. The limit is checked before anything is done, so asking again is safe.
+      if (result.isError && result.structuredContent?.code === "quota_exceeded" && retryAfter > 0 && retryAfter <= 60 && attempt < 4) {
+        log(`Waiting ${retryAfter} s for the workspace's upload limit.`);
+        await wait(retryAfter * 1000);
+        continue;
+      }
+      if (result.isError) fail(`${name}: ${result.structuredContent?.message ?? result.content?.[0]?.text ?? "failed"}`);
+      return result.structuredContent ?? {};
+    }
   };
 }
 
@@ -112,9 +122,9 @@ function mcpClient({ url, token, fetch: send = globalThis.fetch }) {
  * Uploads a package and saves its timeline. `itemId` reuses an existing presenter item (its project is
  * read from the timeline); otherwise a new project is created from `project` and `item`.
  */
-export async function pushPackage({ dir, url, token, itemId = null, render = false, fetch: send = globalThis.fetch, log = () => {} }) {
+export async function pushPackage({ dir, url, token, itemId = null, render = false, fetch: send = globalThis.fetch, log = () => {}, wait }) {
   const { manifest, files } = await loadPackage(dir);
-  const call = mcpClient({ url, token, fetch: send });
+  const call = mcpClient({ url, token, fetch: send, log, ...(wait ? { wait } : {}) });
   let projectId;
   if (itemId) {
     projectId = (await call("get_video_timeline", { itemId })).campaignId;

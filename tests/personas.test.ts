@@ -19,7 +19,8 @@ function engine() {
   const deps: HttpDeps = {
     store,
     files,
-    config: loadConfig({ SUPABASE_URL: "https://project.supabase.co", APP_BASE_URL: BASE }),
+    // A consent asks for seven upload links, and these tests record several in a minute; the limit has its own tests.
+    config: loadConfig({ SUPABASE_URL: "https://project.supabase.co", APP_BASE_URL: BASE, RATE_LIMIT_COSTLY_PER_MINUTE: "1000" }),
     now: () => new Date("2026-11-15T12:00:00.000Z"),
     verifyAccessToken: async (token) => {
       const [kind, id, client] = token.split(":");

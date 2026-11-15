@@ -46,7 +46,7 @@ export interface RateLimitConfig {
   principal: RateLimitPolicy;
   /** `POST /v1/studio/director/turn`: each model-backed turn costs money. Per principal. */
   director: RateLimitPolicy;
-  /** Operations that spend money or call providers: render, checkout, channel connection, social provider connect/sync. Per principal. */
+  /** Operations that spend money, call providers or hand out upload links: render, checkout, channel connection, social provider connect/sync, file, face-scan and persona-photo uploads. Per principal. */
   costly: RateLimitPolicy;
   /** Requests that present no credential at all. Per client IP. */
   anonymous: RateLimitPolicy;
@@ -110,6 +110,8 @@ export interface EngineConfig {
   mediaUrlTtlSeconds: number;
   /** Cloudflare R2 bucket for private files (likeness recordings, persona photos, reel draft files). Null when not configured. */
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string } | null;
+  /** Bytes of draft files (pending and ready) one workspace may hold; upload links past it are refused (files.ts). */
+  storageQuotaBytes: number;
   /**
    * Whether forwarded headers (`x-forwarded-for`, `x-forwarded-host`, `x-forwarded-proto`) were set by a proxy we
    * trust. True on Vercel, whose edge overwrites them; false elsewhere unless TRUST_PROXY_HEADERS says otherwise.
@@ -310,6 +312,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     directorDailyTurns: integer(env.DIRECTOR_DAILY_TURNS, 100, 1, 10_000),
     mediaUrlTtlSeconds: 3600,
     r2: r2From(env),
+    storageQuotaBytes: integer(env.STORAGE_QUOTA_BYTES, 5 * 1024 ** 3, 1024 ** 2, 2 ** 50),
     trustProxyHeaders,
     rateLimit: rateLimitFrom(env, trustProxyHeaders),
     reelWorkerToken: env.REEL_WORKER_TOKEN && env.REEL_WORKER_TOKEN.trim().length >= 32 ? env.REEL_WORKER_TOKEN.trim() : null,

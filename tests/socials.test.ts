@@ -565,28 +565,38 @@ test("TikTok's own format: signed with the client secret; a published video and 
   assert.equal(await state(), "connected");
 });
 
-test("YouTube: the engine subscribes connected channels at Google's hub, confirms only those, and reads signed upload notices", async () => {
+test("YouTube: the engine subscribes connected channels at Google's hub under its own per-channel address, confirms only those, and reads signed upload notices", async () => {
   const { call, connect, send, activity, remote, hub, advance } = engine({ ...NATIVE, CRON_SECRET: "cron-secret" });
   const CHANNEL = "UCabc123_-x";
   const topic = (channel: string) => `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channel}`;
   remote.state.channels = remote.state.channels.map((channel) => (channel.service === "youtube" ? { ...channel, serviceId: CHANNEL, isLocked: false } : channel));
+  // The address registered for a channel names it, with a token only this engine can make (HMAC of the channel ID).
+  const callback = (channel: string, token = hmac("sha256", HUB_SECRET, `youtube-callback.${channel}`)) => `/v1/socials/youtube/webhook?channel=${channel}&token=${token}`;
   // Connecting asks the hub right away: the address to deliver to, the channel's feed, and the secret that will sign deliveries.
   await connect();
-  assert.deepEqual(hub.map((request) => Object.fromEntries(request)), [{ "hub.callback": `${BASE}/v1/socials/youtube/webhook`, "hub.mode": "subscribe", "hub.topic": topic(CHANNEL), "hub.verify": "async", "hub.secret": HUB_SECRET, "hub.lease_seconds": "864000" }]);
+  assert.deepEqual(hub.map((request) => Object.fromEntries(request)), [{ "hub.callback": `${BASE}${callback(CHANNEL)}`, "hub.mode": "subscribe", "hub.topic": topic(CHANNEL), "hub.verify": "async", "hub.secret": HUB_SECRET, "hub.lease_seconds": "864000" }]);
   // The scheduler keeps it alive: nothing to do while it is fresh, asked again once it is two days old.
   const tick = async () => (await call("/v1/cron/tick", { headers: { authorization: "Bearer cron-secret" } })).body.webhooks;
   assert.deepEqual(await tick(), { renewed: 0, failed: 0 });
   advance(49 * 60);
   assert.deepEqual([await tick(), hub.length], [{ renewed: 1, failed: 0 }, 2]);
+  assert.equal(hub[1].get("hub.callback"), `${BASE}${callback(CHANNEL)}`, "a renewal registers the same address");
 
-  // The hub checks the address before delivering. Anyone can make it ask, so only what matches the connected
-  // accounts is confirmed: subscribing a connected channel, unsubscribing one that is not connected.
-  const confirm = (mode: string, channel: string) => call(`/v1/socials/youtube/webhook?hub.mode=${mode}&hub.topic=${encodeURIComponent(topic(channel))}&hub.challenge=7342891&hub.lease_seconds=864000`);
+  // The hub checks the address before delivering, keeping its query string. Anyone can make it ask, so only the
+  // address registered for that channel is confirmed, and only to subscribe a connected channel or unsubscribe one
+  // that is not connected.
+  const confirm = (mode: string, channel: string, address = callback(channel)) => call(`${address}&hub.mode=${mode}&hub.topic=${encodeURIComponent(topic(channel))}&hub.challenge=7342891&hub.lease_seconds=864000`);
   const confirmed = await confirm("subscribe", CHANNEL);
   assert.deepEqual([confirmed.status, confirmed.text], [200, "7342891"]);
   assert.equal((await confirm("subscribe", "UCsomeoneElse")).status, 404);
   assert.equal((await confirm("unsubscribe", CHANNEL)).status, 404);
   assert.equal((await confirm("unsubscribe", "UCsomeoneElse")).status, 200);
+  // Someone else subscribing this engine's bare address (to replace the secret with theirs), an address registered
+  // for another channel, or a guessed token is refused, even for the connected channel.
+  assert.equal((await call(`/v1/socials/youtube/webhook?hub.mode=subscribe&hub.topic=${encodeURIComponent(topic(CHANNEL))}&hub.challenge=7342891`)).status, 404);
+  assert.equal((await confirm("subscribe", CHANNEL, callback("UCsomeoneElse"))).status, 404);
+  assert.equal((await confirm("subscribe", CHANNEL, callback(CHANNEL, "0".repeat(64)))).status, 404);
+  assert.equal((await confirm("unsubscribe", "UCsomeoneElse", "/v1/socials/youtube/webhook?channel=UCsomeoneElse")).status, 404);
 
   // The notification from Google's guide, for this channel.
   const atom = `<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
@@ -609,10 +619,14 @@ test("YouTube: the engine subscribes connected channels at Google's hub, confirm
   </entry>
 </feed>`;
   const signed = { "content-type": "application/atom+xml", "x-hub-signature": `sha1=${hmac("sha1", HUB_SECRET, atom)}` };
-  assert.equal((await send("youtube", atom, { "x-hub-signature": `sha1=${hmac("sha1", "not-the-hub-secret", atom)}` })).status, 401);
-  assert.deepEqual((await send("youtube", atom, signed)).body, { received: 1, stored: 1, duplicates: 0, unmatched: 0 });
+  const deliver = (headers: Record<string, string>, address = callback(CHANNEL)) => call(address, { method: "POST", raw: atom, headers });
+  assert.equal((await deliver({ "x-hub-signature": `sha1=${hmac("sha1", "not-the-hub-secret", atom)}` })).status, 401);
+  // A correctly signed delivery is still refused at an address the engine did not register.
+  assert.equal((await send("youtube", atom, signed)).status, 401);
+  assert.equal((await deliver(signed, callback(CHANNEL, "0".repeat(64)))).status, 401);
+  assert.deepEqual((await deliver(signed)).body, { received: 1, stored: 1, duplicates: 0, unmatched: 0 });
   // An edited title arrives as the same video again.
-  assert.deepEqual((await send("youtube", atom, signed)).body, { received: 1, stored: 0, duplicates: 1, unmatched: 0 });
+  assert.deepEqual((await deliver(signed)).body, { received: 1, stored: 0, duplicates: 1, unmatched: 0 });
   assert.deepEqual((await activity("?platform=youtube")).map((event) => [event.type, event.source, event.text, event.subject.url, event.occurredAt]), [
     ["post.created", "youtube", "Launch day & what comes next", "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "2015-03-06T21:40:57.000Z"],
   ]);

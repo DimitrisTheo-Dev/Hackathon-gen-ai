@@ -13,6 +13,7 @@ import {
   type StripeGateway,
 } from "../packages/engine/src/billing-stripe";
 import { loadConfig } from "../packages/engine/src/config";
+import { handleEngineRequest, type HttpDeps } from "../packages/engine/src/http";
 import { EngineError } from "../packages/engine/src/errors";
 import { MemoryStore } from "../packages/engine/src/store-memory";
 
@@ -345,6 +346,32 @@ test("webhook: missing, wrong-secret, tampered and live-mode deliveries are reje
   assert.equal(await t.balance(orgId), 3, "no rejected delivery granted anything");
   assert.equal((await t.store.select("stripe_events", {})).length, 0, "rejected deliveries are not recorded as events");
   assert.equal(t.calls.retrieves, 0);
+});
+
+test("webhook over HTTP: the bounded read keeps the exact bytes, and a body over 1 MB is refused before it is buffered", async () => {
+  const t = setup();
+  const http: HttpDeps = { ...t.deps, planner: null };
+  const post = (body: BodyInit, signature: string) =>
+    handleEngineRequest(http, new Request("https://faceful.test/v1/stripe/webhook", { method: "POST", headers: { "stripe-signature": signature }, body, duplex: "half" } as RequestInit), "/v1/stripe/webhook") as Promise<Response>;
+  // Multi-byte text survives the bounded read byte for byte, so the signature over it still verifies.
+  const event = signedEvent("invoice.paid", { id: "in_stranger", customer: "cus_not_ours", description: "Συνδρομή — ελληνικά ✓", parent: { subscription_details: { subscription: "sub_x" } } });
+  const genuine = await post(event.payload, event.signature);
+  assert.deepEqual([genuine.status, await genuine.json()], [200, { received: true, outcome: "ignored_unknown_customer" }]);
+  // Larger than the 256 KB studio limit but within Stripe's bound: read and judged on its signature.
+  assert.equal((await post(" ".repeat(300 * 1024), "t=1,v1=bad")).status, 400);
+  assert.equal((await post("x".repeat(1024 * 1024 + 1), "t=1,v1=bad")).status, 413);
+  // Without a Content-Length (chunked), reading stops at the limit instead of buffering the whole body.
+  const chunk = new TextEncoder().encode("x".repeat(64 * 1024));
+  let sent = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent++ < 64) controller.enqueue(chunk);
+      else controller.close();
+    },
+  });
+  assert.equal((await post(stream, "t=1,v1=bad")).status, 413);
+  assert.ok(sent < 64, "reading stopped at the limit");
+  assert.equal((await t.store.select("stripe_events", {})).length, 1, "only the genuine delivery was recorded");
 });
 
 test("webhook: entitlement arrives from Stripe even if the user never returns; credits are granted exactly once", async () => {

@@ -140,7 +140,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   },
 } satisfies Record<string, OperationHandler>));
 /** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
-export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content"]);
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content", "request_file_upload", "persona_image_upload_url", "product_image_upload_url"]);
 
 async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
   const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
@@ -194,7 +194,11 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     return json(await directorTurn(deps, ctx, await body(request), deps.planner));
   }
   // Likeness capture ("Scan my face"). Signed-in people only; see likeness.ts.
-  if (post && path === "/likeness/upload-url") return json(await likenessUploadUrl(deps, ctx, await body(request)));
+  if (post && path === "/likeness/upload-url") {
+    // Each link lets the caller put a file in storage, so it counts against `costly` like the other upload links.
+    await limits.enforce(policies.costly, subject);
+    return json(await likenessUploadUrl(deps, ctx, await body(request)));
+  }
   if (post && path === "/likeness/live-token") return json(await likenessLiveToken(deps, ctx));
   if (post && path === "/likeness/consents") {
     // Where the consent was given from is part of its record. Both values are length-capped, never trusted for access;
@@ -250,7 +254,7 @@ async function socials(deps: HttpDeps, request: Request, path: string, correlati
       // Like the Stripe webhook, a genuine delivery is not rate limited: a platform retries what is refused, and a
       // dropped delivery loses activity. A delivery whose signature is refused counts as a failed credential.
       try {
-        return json(await receiveSocialWebhook(deps, match[1], request.headers, await readBoundedText(request)));
+        return json(await receiveSocialWebhook(deps, match[1], request.headers, await readBoundedText(request), query));
       } catch (error) {
         if (error instanceof EngineError && error.code === "unauthenticated") await refuseCredential(limits, policies, error);
         throw error;
@@ -343,7 +347,8 @@ export async function handleEngineRequest(deps: HttpDeps, request: Request, path
     else if (pathname === "/v1/stripe/webhook" && request.method === "POST") {
       // Not rate limited: every delivery is signature-verified, and dropping one would lose a billing event.
       // Signature verification needs the exact bytes Stripe sent, so the body is read as text and never re-serialised.
-      const result = await handleStripeWebhook(deps, await request.text(), request.headers.get("stripe-signature"));
+      // Bounded like every other body (Stripe events are a few KB), so an unsigned flood cannot buffer megabytes first.
+      const result = await handleStripeWebhook(deps, await readBoundedText(request, 1024 * 1024), request.headers.get("stripe-signature"));
       response = json(result.body, result.status);
     } else if (pathname === "/v1/cron/tick") {
       // An authorized scheduler is not rate limited; a wrong secret counts as a failed credential.
