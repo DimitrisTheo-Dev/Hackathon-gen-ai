@@ -261,7 +261,7 @@ export async function reviewContent(deps: ReviewDeps, ctx: Ctx, raw: unknown): P
           const checked = checkModelClaims(raw, { script, domain, products, sources, brandRules });
           claims = mergeClaims(script, checked.claims, basic);
           mode = "ai";
-          notes.push("Claims were checked by an AI model against your approved product facts and this project’s sources only, not outside knowledge, and the rule-based wording checks were kept.");
+          notes.push("Claims were checked by an AI model against your approved product facts and this project’s sources only, not outside knowledge. Every rule-based blocking flag the model did not cover was kept.");
           if (checked.dropped) notes.push(`${checked.dropped} claim${checked.dropped === 1 ? "" : "s"} from the AI check ${checked.dropped === 1 ? "was" : "were"} left out because ${checked.dropped === 1 ? "its quote was" : "their quotes were"} not in the script word for word.`);
           if (checked.corrected) notes.push(`${checked.corrected} claim${checked.corrected === 1 ? "" : "s"} the AI check called supported did not quote a provided fact or source exactly, so ${checked.corrected === 1 ? "it was" : "they were"} marked as still needing one.`);
         } catch (error) {
