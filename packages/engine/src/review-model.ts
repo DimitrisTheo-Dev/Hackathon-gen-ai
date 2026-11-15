@@ -74,7 +74,72 @@ export function reviewPrompt(input: ReviewModelInput): string {
   ].join("\n");
 }
 
-export function createReviewModel(config: LlmConfig): ReviewModel {
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta";
+/** Why Gemini stopped. Anything other than these two means the answer was withheld. */
+const GEMINI_FINISHED = new Set(["STOP", "MAX_TOKENS"]);
+interface GeminiResponse {
+  promptFeedback?: { blockReason?: string };
+  candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
+}
+
+/** The parsed answer, or an error whose message completes "The AI check was unavailable: …". */
+function readClaims(text: string): ModelClaim[] {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new EngineError("provider_unavailable", "the claims model returned an unreadable answer");
+  }
+  const parsed = modelReviewSchema.safeParse(json);
+  if (!parsed.success) throw new EngineError("provider_unavailable", "the claims model returned an answer in the wrong shape");
+  return parsed.data.claims;
+}
+
+/**
+ * The same claims pass through Google's `generateContent` API, for deployments whose director writes with Gemini
+ * (llm.ts). The key travels in a header, never in the URL; the answer is constrained to the review schema and
+ * validated again here, then checked by review.ts exactly like the Anthropic answer.
+ */
+function createGeminiReviewModel(config: LlmConfig, fetchImpl: typeof fetch): ReviewModel {
+  const url = `${GEMINI_API_URL}/models/${encodeURIComponent(config.model)}:generateContent`;
+  const { $schema: _dialect, ...responseJsonSchema } = z.toJSONSchema(modelReviewSchema);
+  return {
+    async claims(input) {
+      const body = JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: "user", parts: [{ text: reviewPrompt(input) }] }],
+        generationConfig: { maxOutputTokens: 16000, responseMimeType: "application/json", responseJsonSchema, thinkingConfig: { thinkingLevel: "low" } },
+      });
+      let response: Response | undefined;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          response = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": config.apiKey ?? "" }, body, signal: AbortSignal.timeout(60_000) });
+        } catch {
+          throw new EngineError("provider_unavailable", "the claims model could not be reached");
+        }
+        if (response.status < 500) break;
+      }
+      if (!response!.ok) {
+        const status = response!.status;
+        const error = ((await response!.json().catch(() => null)) as { error?: { status?: string; details?: Array<{ reason?: string }> } } | null)?.error;
+        const reasons = (error?.details ?? []).map((detail) => detail.reason);
+        if (status === 429) throw new EngineError("quota_exceeded", "the claims model is busy right now", { retryAfterSeconds: 20 });
+        if (status === 401 || status === 403 || reasons.includes("API_KEY_INVALID")) throw new EngineError("provider_unavailable", "the claims model rejected this deployment’s credentials");
+        console.error(JSON.stringify({ level: "error", event: "review_model_error", provider: "gemini", status, reason: error?.status ?? null }));
+        throw new EngineError("provider_unavailable", "the claims model returned an error");
+      }
+      const data = (await response!.json().catch(() => null)) as GeminiResponse | null;
+      if (data?.promptFeedback?.blockReason) throw new EngineError("unsupported", "the claims model declined to review this script");
+      const candidate = data?.candidates?.[0];
+      if (candidate?.finishReason === "MAX_TOKENS") throw new EngineError("provider_unavailable", "the claims model’s answer was too long to finish");
+      if (candidate?.finishReason && !GEMINI_FINISHED.has(candidate.finishReason)) throw new EngineError("unsupported", "the claims model declined to review this script");
+      return readClaims((candidate?.content?.parts ?? []).flatMap((part) => (typeof part.text === "string" && !part.thought ? [part.text] : [])).join(""));
+    },
+  };
+}
+
+export function createReviewModel(config: LlmConfig, fetchImpl: typeof fetch = globalThis.fetch): ReviewModel {
+  if (config.provider === "gemini") return createGeminiReviewModel(config, fetchImpl);
   const firstParty = config.provider === "anthropic";
   async function client() {
     if (firstParty) return new Anthropic({ apiKey: config.apiKey, timeout: 60_000, maxRetries: 1 });
@@ -111,16 +176,7 @@ export function createReviewModel(config: LlmConfig): ReviewModel {
       }
       if (response.stop_reason === "refusal") throw new EngineError("unsupported", "the claims model declined to review this script");
       if (response.stop_reason === "max_tokens") throw new EngineError("provider_unavailable", "the claims model’s answer was too long to finish");
-      const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
-      let json: unknown;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        throw new EngineError("provider_unavailable", "the claims model returned an unreadable answer");
-      }
-      const parsed = modelReviewSchema.safeParse(json);
-      if (!parsed.success) throw new EngineError("provider_unavailable", "the claims model returned an answer in the wrong shape");
-      return parsed.data.claims;
+      return readClaims(response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""));
     },
   };
 }

@@ -131,7 +131,7 @@ const RULE_TOPICS: Partial<Record<ClaimKind, RegExp>> = {
 
 /* ───────────────────────── domain ───────────────────────── */
 
-/** Products the script names, earliest mention first, with the character index of that mention. */
+/** Products the script names, earliest mention first, with the character index of that mention in `normalizeText(script)`. */
 export function productMentions(script: string, products: ReadonlyArray<Pick<Product, "id" | "name">>): Array<{ productId: string; index: number }> {
   const text = normalizeText(script);
   const found: Array<{ productId: string; index: number }> = [];
@@ -297,13 +297,17 @@ export function applySuggestion(script: string, claim: Pick<ReviewClaim, "quote"
 
 /* ───────────────────────── timeline helpers ───────────────────────── */
 
-/** Seconds on the timeline where the script's character `index` is spoken: from word timings, else by position. */
+/**
+ * Seconds on the timeline where character `index` of the *normalized* script is spoken (the index `productMentions`
+ * returns): from word timings, else by position in the text.
+ */
 export function timeAtScriptIndex(script: string, composition: Pick<Composition, "durationSeconds" | "transcript">, index: number): number {
-  const before = tokens(script.slice(0, index)).length;
-  const all = Math.max(1, tokens(script).length);
+  const text = normalizeText(script);
+  const before = tokens(text.slice(0, index)).length;
+  const all = Math.max(1, tokens(text).length);
   const words = composition.transcript?.words ?? [];
   if (words.length) return words[Math.min(words.length - 1, Math.round((before / all) * words.length))].start;
-  return Math.round(Math.min(composition.durationSeconds, (index / Math.max(1, script.length)) * composition.durationSeconds) * 10) / 10;
+  return Math.round(Math.min(composition.durationSeconds, (index / Math.max(1, text.length)) * composition.durationSeconds) * 10) / 10;
 }
 
 /** Longest-common-subsequence alignment of two token lists; returns runs present only in `a` and only in `b`. */
