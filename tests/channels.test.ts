@@ -486,3 +486,41 @@ test("Instagram and TikTok stay blocked with a specific reason; YouTube needs a 
   assert.equal(manifest.entries.length, 0);
   await rejects(approveSchedule(deps, ctx, { manifestId: manifest.id, hash: manifest.hash, operationKey: key() }), "approval_required");
 });
+
+test("an account connected through Buffer is its own row: the YouTube connection never touches it, and it is a destination once socials are switched on", async () => {
+  const kit = await readyToPublish(engine({ SOCIALS_CREDENTIAL_KEY: "ab".repeat(32) }));
+  const { deps, ctx } = kit;
+  const now = deps.now().toISOString();
+  const viaBuffer = (platform: string, externalAccountId: string) =>
+    deps.store.insert("provider_connections", { id: crypto.randomUUID(), org_id: ctx.org.id, platform, provider: "buffer", external_account_id: externalAccountId, provider_account_id: `ch_${platform}`, profile_url: null, display_name: `${platform} via Buffer`, state: "connected", scopes: [], credentials_ciphertext: "v1.sealed-for-buffer", created_by: null, created_at: now, updated_at: now });
+  // The same YouTube channel, also reached through Buffer, plus accounts the studio does and does not schedule to.
+  const sameChannel = await viaBuffer("youtube", "UC_channel_1");
+  const instagram = await viaBuffer("instagram", "17841400000000000");
+  await viaBuffer("linkedin", "urn:li:organization:1");
+
+  // Reconnecting the channel in the studio updates its own row only.
+  await connectChannel(deps, ctx, tokens());
+  const [buffered] = await deps.store.select("provider_connections", { id: sameChannel.id });
+  assert.deepEqual([buffered.credentials_ciphertext, buffered.display_name], ["v1.sealed-for-buffer", "youtube via Buffer"]);
+  // The channel panel lists the channels it manages; the studio lists every account it can schedule to.
+  assert.deepEqual((await getChannelStatus(deps, ctx)).connections.map((connection) => connection.id), [kit.connection.id]);
+  assert.deepEqual((await getContext(deps, ctx)).channels.map((channel) => channel.id).sort(), [kit.connection.id, sameChannel.id, instagram.id, "unavailable-tiktok"].sort());
+
+  // Instagram on the Buffer account can be approved; TikTok without an account asks for one.
+  const targets = (platforms: string[]) => platforms.map((platform) => ({ platform: platform as "instagram", accountId: platform === "instagram" ? instagram.id : null, scheduledAt: "2026-11-16T07:00:00.000Z", timezone: "Europe/Athens" }));
+  let item = await reviseContent(deps, ctx, { contentId: kit.item.id, expectedRevision: kit.item.revision, operationKey: key(), patch: { targets: targets(["instagram", "tiktok"]) } });
+  const prepare = async (on = deps) => prepareSchedule(on, ctx, { campaignId: kit.campaign.id, expectedRevision: (await getCampaign(deps, ctx, kit.campaign.id)).revision, operationKey: key() });
+  const mixed = await prepare();
+  assert.deepEqual(mixed.entries.map((entry) => [entry.platform, entry.accountId]), [["instagram", instagram.id]]);
+  assert.deepEqual(mixed.blockers.map((blocker) => blocker.message), ["Connect a TikTok channel and choose it for this item before scheduling there."]);
+  // Without SOCIALS_CREDENTIAL_KEY the Buffer account cannot post, and nothing changes from before.
+  const off = await prepare({ ...deps, config: { ...deps.config, socials: { ...deps.config.socials, credentialKey: null } } });
+  assert.deepEqual([off.entries.length, off.blockers.filter((blocker) => blocker.message === "Instagram and TikTok publishing need each platform’s app review; not available yet.").length], [0, 2]);
+
+  // Buffer does not hold a post until its time, so committing leaves it to the scheduler at the approved time.
+  item = await reviseContent(deps, ctx, { contentId: item.id, expectedRevision: item.revision, operationKey: key(), patch: { targets: targets(["instagram"]) } });
+  const manifest = await prepare();
+  await approveSchedule(deps, ctx, { manifestId: manifest.id, hash: manifest.hash, operationKey: key() });
+  const committed = await commitSchedule(deps, ctx, { manifestId: manifest.id, hash: manifest.hash, operationKey: key() });
+  assert.deepEqual((await deps.store.select("publish_jobs", { id: committed.jobIds[0] })).map((job) => [job.platform, job.account_id, job.state]), [["instagram", instagram.id, "scheduled"]]);
+});

@@ -78,7 +78,13 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | `POST /v1/studio/operations/:name` | Typed side-effecting operations (below) |
 | `POST /v1/stripe/webhook` | Stripe webhook (raw-body signature verification) |
 | `POST /v1/worker/render/*` | Render worker protocol (§7) |
-| `GET /v1/cron/tick` | Sweep stuck renders; process due publish jobs |
+| `GET /v1/cron/tick` | Sweep stuck renders; process due publish jobs and confirm submitted ones with their provider; renew YouTube webhook subscriptions |
+| `GET /v1/socials`, `/v1/socials/:platform` | Platforms, providers and this workspace's connected accounts (below) |
+| `POST /v1/socials/providers/:provider/connect`, `/sync` | Connect a provider with the workspace's own credentials; re-read its accounts |
+| `DELETE /v1/socials/providers/:provider`, `/v1/socials/accounts/:id` | Disconnect a provider, or remove one account |
+| `POST /v1/socials/:platform/webhook` | Signed delivery of account activity, in the platform's own format or the generic one (no member session) |
+| `GET /v1/socials/:platform/webhook` | The check a platform makes when the address is registered |
+| `GET /v1/socials/events` | Stored activity, newest first; signed-in members only |
 
 Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
 
@@ -88,15 +94,41 @@ Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, 
 | --- | --- | --- |
 | `principal` | 240 | user, OAuth agent or workspace token (IDs only) |
 | `director` | 10 | principal, for Director turns |
-| `costly` | 10 | principal, for `render_content`, `create_checkout`, `connect_channel` |
+| `costly` | 10 | principal, for `render_content`, `create_checkout`, `connect_channel`, and connecting or syncing a social provider |
 | `anonymous` | 120 | client network, requests without a credential |
 | `failed_auth` | 60 | client network, requests whose credential was refused |
 
-An exceeded limit is `429 quota_exceeded` with `retryAfterSeconds`, a `Retry-After` header, and the IETF `RateLimit-Policy` / `RateLimit` headers (for example `"principal";q=240;w=60` and `"principal";r=237;t=53`). The Stripe webhook, an authorized cron tick and the render worker are exempt. If the limiter's database call fails, requests are let through with a structured log (fail open), except `failed_auth`, which falls back to a per-instance counter. Limits are set with `RATE_LIMIT_*` variables (`.env.example`).
+An exceeded limit is `429 quota_exceeded` with `retryAfterSeconds`, a `Retry-After` header, and the IETF `RateLimit-Policy` / `RateLimit` headers (for example `"principal";q=240;w=60` and `"principal";r=237;t=53`). The Stripe webhook, social deliveries with a valid signature, an authorized cron tick and the render worker are exempt; a social delivery whose signature is refused counts against `failed_auth`, and the address check (`GET /v1/socials/:platform/webhook`) against `anonymous`. If the limiter's database call fails, requests are let through with a structured log (fail open), except `failed_auth`, which falls back to a per-instance counter. Limits are set with `RATE_LIMIT_*` variables (`.env.example`).
 
 Mapping from the brief's suggested action contract: `StartDraft` → `start_campaign` / `director/turn` / `create_from_template`; `EditDraft` → `revise_content` (version-checked patch) or a director proposal; `ListAvatars` → `context.avatars`; `StartRender` → `render_content`; `RenderResult` → `GET /jobs/:id` plus `item.media`; `GetAsset` → `campaigns/:id` and `versions`; `ProposeSchedule` → `revise_content` (`patch.targets`) then `prepare_schedule`; `ApproveSchedule` → `approve_schedule`; `BillingStatus` → `GET /billing`; `CreateCheckout` → `create_checkout`.
 
 **Idempotency.** Every operation takes an `operationKey` (UUID). The same key with the same request replays the recorded result; the same key with a different request is `idempotency_conflict`. The ledger is per organization and shared by the UI and MCP. Side effects also carry their own guards: revision compare-and-swap, one active render per item revision (partial unique index), unique credit-ledger references, a unique publication-intent key, and Stripe event IDs.
+
+### Social accounts (`/v1/socials`)
+
+Three lists in `packages/engine/src` drive this area, and each grows by one entry: `SOCIAL_PLATFORMS` (`tiktok`, `instagram`, `linkedin`, `youtube`, and `whatsapp` marked `kind: "messaging"`), `socialProviders` (how a platform is reached; `buffer` is the first, Faceful's own integration is the planned second) and `SOCIAL_EVENT_TYPES`.
+
+**Off by default.** Without `SOCIALS_CREDENTIAL_KEY` no account can be connected and nothing can be posted; without `SOCIALS_WEBHOOK_SECRET` generic deliveries are refused; each platform's own format needs that platform's credentials. `GET /v1/health` reports all three.
+
+**Accounts.** A connected account is a `provider_connections` row naming its platform and provider. Connecting is a signed-in owner's or admin's act (`connections:manage`); agents cannot. For Buffer the body is `{ "apiKey": "…", "organizationId"?: "…" }`: the key is checked against Buffer, its channels on the platforms above become accounts, and the key is stored encrypted (AES-256-GCM, bound to the workspace and provider) and never returned. A YouTube channel connected in the studio with Google (§12) is provider `direct` and is managed there; the same channel connected through Buffer is a separate row. The studio schedules to Instagram, TikTok and YouTube only; accounts on other platforms are listed here but are not schedule targets yet.
+
+**Posting.** There is no "create post" route: a post goes out only through an approved schedule (§5). An account connected through Buffer posts through Buffer: the scheduler hands the post over on its first tick at or after the approved time. Buffer is told to share immediately, fetches the video from a signed URL with at least an hour left, and is asked again on later ticks (and, at most once a minute, when an open project is read) until it reports the post sent or refused. Buffer has no idempotency key, so an unclear answer fails the post instead of retrying it.
+
+**Activity.** Each platform has one delivery address, `/v1/socials/:platform/webhook`, which takes two formats. Events are stored once per workspace that has the account connected (`social_events`, unique on platform, type and the sender's `id`); events for unknown accounts are counted and dropped. Types: `post.created`, `post.failed`, `post.deleted`, `story.created`, `comment.created`, `comment.deleted`, `like.created`, `like.removed`, `share.created`, `mention.created`, `follower.created`, `message.received`, `message.sent`, `message.delivered`, `message.read`, `message.failed`, `message.deleted`, `account.disconnected` (which also marks the account `expired`). Buffer sends no webhooks; the scheduler records `post.created` or `post.failed` itself when Buffer settles a post.
+
+*The generic format* is marked by its header: `X-Faceful-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">` with `SOCIALS_WEBHOOK_SECRET`, valid for five minutes. The body is `{ "source"?: "…", "events": [ { "id", "type", "accountId" | "externalAccountId", "occurredAt"?, "actor"?, "subject"?, "text"?, "data"? } ] }`. It is what Faceful's own provider, or any automation, sends, and a malformed one is refused.
+
+*The platform's own format* is anything without that header (`socials-webhooks.ts`). Each is switched on by its credentials and listed in `GET /v1/health` (`socials.nativeWebhooks`). Anything in a genuine delivery that has no place in the list above is skipped, never refused.
+
+| Platform | Credentials | Address check (`GET`) | Delivery signature | Becomes |
+| --- | --- | --- | --- | --- |
+| Instagram | `INSTAGRAM_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | `hub.verify_token` matches → echo `hub.challenge` | `X-Hub-Signature-256: sha256=` HMAC of the body | Comments (also live), mentions, messages received/sent/deleted/read, message reactions as `like.*` |
+| WhatsApp | `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Same as Instagram | Same as Instagram | Messages received, reactions as `like.*`, sent/delivered/read/failed receipts. The account is the business phone number ID |
+| TikTok | `TIKTOK_CLIENT_SECRET` | None | `TikTok-Signature: t=…,s=` HMAC-SHA256 of `"<t>.<body>"` | `post.created` (video published), `post.failed`, `account.disconnected`. The account is the user's open ID |
+| YouTube | `YOUTUBE_WEBHOOK_SECRET` | Echo `hub.challenge` only to subscribe a connected channel or unsubscribe one that is not | `X-Hub-Signature: sha1=` HMAC of the body | `post.created` for an upload. The account is the channel ID |
+| LinkedIn | `LINKEDIN_CLIENT_SECRET` | `challengeCode` (hex and dashes only) → its HMAC-SHA256 | `X-LI-Signature`: hex HMAC-SHA256 of `"hmacsha256=" + body` | Page likes, comments, shares, mentions. The account is the organization URN |
+
+No platform reports a like on a post or a new story, and TikTok and YouTube report no comments. Instagram, WhatsApp, TikTok and LinkedIn deliver only to an app registered with them that the account has authorized; with Buffer as the only provider that authorization is still a manual step in each platform's console. YouTube needs no app: the engine subscribes each connected channel (connected in the studio or through Buffer) at Google's hub when it is connected and again on the scheduler tick once the subscription is two days old (`provider_connections.webhook_renewed_at`).
 
 ## 5. Lifecycles (kept separate)
 
@@ -104,7 +136,7 @@ Mapping from the brief's suggested action contract: `StartDraft` → `start_camp
 
 **Render job.** `queued → running → succeeded | failed`, plus `cancel_requested → cancelled`. A job can become `succeeded` only after the engine finds the uploaded object in private storage, checks its size and computes its SHA-256. Queued jobs nobody claims (default 60 min) and running jobs that stop reporting (default 20 min) fail visibly. Failure, cancellation and timeout return the held credit exactly once.
 
-**Publish.** Draft times on items → `schedule_manifests` (`required → approved → committed`, or `stale`) → `publish_jobs` (`scheduled → processing → submitted → verified_published | failed | cancelled`). The manifest hash covers exact versions, file hashes, accounts, times and copy. At send time the worker re-checks the approved revision, the file hash and the account. **YouTube is the only publisher adapter, and only where the deployment is configured for it (§12).** Instagram and TikTok always carry a blocker, so nothing can be posted there.
+**Publish.** Draft times on items → `schedule_manifests` (`required → approved → committed`, or `stale`) → `publish_jobs` (`scheduled → processing → submitted → verified_published | failed | cancelled`). The manifest hash covers exact versions, file hashes, accounts, times and copy. At send time the worker re-checks the approved revision, the file hash and the account. A destination is reached through its account: **a YouTube channel connected in the studio uses the YouTube adapter, only where the deployment is configured for it (§12); an account connected through a social provider posts through that provider, only where `SOCIALS_CREDENTIAL_KEY` is set (§4, Social accounts).** Otherwise the entry carries a blocker and nothing is posted; Instagram and TikTok have no direct adapter.
 
 **Billing.** `free | checkout_pending | trialing | active | past_due | unpaid | paused | incomplete | cancelled`, or `not_configured` when Stripe keys are absent. Only verified webhooks change it. See `STRIPE_SANDBOX_SETUP.md`.
 
@@ -168,14 +200,17 @@ A POST may carry 1–10 JSON-RPC messages (otherwise `-32600`); every message co
 
 ## 10. Data model
 
-Tables (all with RLS enabled): `organizations`, `memberships`, `user_state`, `brand_profiles`, `projects`, `content_items`, `content_versions`, `media_assets`, `render_jobs`, `job_events`, `audit_events`, `operations`, `schedule_manifests`, `publish_jobs`, `provider_connections`, `agent_connections`, `billing_customers`, `billing_state`, `checkout_sessions`, `stripe_events`, `credit_ledger`, plus the earlier `castroom_director_access` / `castroom_director_entries`.
+Tables (all with RLS enabled): `organizations`, `memberships`, `user_state`, `brand_profiles`, `projects`, `content_items`, `content_versions`, `media_assets`, `render_jobs`, `job_events`, `audit_events`, `operations`, `schedule_manifests`, `publish_jobs`, `provider_connections`, `agent_connections`, `billing_customers`, `billing_state`, `checkout_sessions`, `stripe_events`, `credit_ledger`, `social_events`, plus the earlier `castroom_director_access` / `castroom_director_entries`.
 
 Browsers can `SELECT` their own organization's projects, items, versions, media rows, jobs, events, audit, manifests and publish jobs. Browsers cannot write any engine table, and cannot read ledgers, tokens, idempotency records, billing or Stripe events. All writes go through the engine with the server secret key. Project chat access (`castroom_director_access`) is granted by the engine when a project is created.
 
 ## 11. Not implemented
 
 - A Humanlike recorder (needs credentials; Minas's seam).
-- Instagram and TikTok publishing (each needs the platform’s app review). YouTube is implemented; see §12.
+- Direct Instagram and TikTok publishing (each needs the platform’s app review). YouTube is implemented; see §12. With `SOCIALS_CREDENTIAL_KEY` set, Instagram and TikTok accounts can be reached through Buffer (§4).
+- Faceful's own integration for the other social platforms: connecting an account by signing in to the platform, and posting without Buffer. Buffer is the only social provider, and it reports no comments, likes or messages; the platforms' own webhooks are accepted, but subscribing an account to them (other than YouTube) is not automated.
+- Scheduling to LinkedIn or WhatsApp (accounts connect; the studio's destinations are still Instagram, TikTok and YouTube).
+- A studio screen for connecting social accounts and reading activity; the routes exist, the UI does not.
 - File uploads, website import and brand extraction.
 - Collaborator invitations (the role model and checks exist; there is no invite flow).
 - Unattended publishing grants (`create_run_grant`).
@@ -184,7 +219,7 @@ Browsers can `SELECT` their own organization's projects, items, versions, media 
 
 ## 12. Publishing: YouTube
 
-YouTube is the one real publishing destination. Instagram and TikTok have no adapter (each needs the platform's app review) and every schedule that names them carries the blocker "Instagram and TikTok publishing need each platform’s app review; not available yet."
+YouTube is the one direct publishing destination. Instagram and TikTok have no direct adapter (each needs the platform's app review) and every schedule that names them carries the blocker "Instagram and TikTok publishing need each platform’s app review; not available yet.", unless the item's account was connected through Buffer and `SOCIALS_CREDENTIAL_KEY` is set (§4, Social accounts).
 
 **Configuration.** `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (the same Google OAuth client Supabase Auth uses) and `CONNECTIONS_ENCRYPTION_KEY` (32 random bytes, base64). Without all three, `GET /v1/studio/channels` reports YouTube as `not_configured` with the reason, `capabilities.canConnectChannels` is false and `connect_channel` answers `unsupported`. `GET /v1/health` lists `publishing.adapters`.
 

@@ -4,6 +4,8 @@ import { audit, canonical, idempotent, requireHuman, requireScope, sha256Hex, ty
 import { NOT_AVAILABLE_YET, youtubePublisher } from "./channels.js";
 import { EngineError, StoreConflict } from "./errors.js";
 import { ChannelGrantExpired, UnknownPublishOutcome } from "./providers/youtube.js";
+import { accountPublisher, connectedThroughProvider, isSocialPlatform, publishingAvailable } from "./socials.js";
+import { recordSocialEvents } from "./socials-events.js";
 import { selectOne, type Filter, type Row } from "./store.js";
 import { loadProject, parse } from "./studio.js";
 
@@ -22,15 +24,26 @@ export interface Publisher {
    * account must be reconnected, and `UnknownPublishOutcome` when a send started and its result is not known.
    */
   publish(input: { attemptKey: string; credentials: string | null; mediaUrl: string; mediaMime: string; itemTitle: string; payload: Row; scheduledAt: string }): Promise<{ providerPostId: string; state: "submitted" | "verified_published"; url: string | null }>;
-  /** Ask the provider what became of a submitted post. Only provider evidence may return `verified_published`. */
-  verify?(input: { credentials: string | null; providerPostId: string; scheduledAt: string; visibility: string }): Promise<{ state: "submitted" | "verified_published" | "failed"; publishedAt: string | null; note: string | null }>;
+  /**
+   * Ask the provider what became of a submitted post. Only provider evidence may return `verified_published`.
+   * `url`, when given, is where the post can be seen.
+   */
+  verify?(input: { credentials: string | null; providerPostId: string; scheduledAt: string; visibility: string }): Promise<{ state: "submitted" | "verified_published" | "failed"; publishedAt: string | null; note: string | null; url?: string | null }>;
 }
 /**
- * The one real destination is YouTube, and only when this deployment holds its OAuth client and an
- * encryption key. Instagram and TikTok have no adapter: both require platform app review first.
+ * The publisher for one destination. An account connected through a social provider (Buffer, socials.ts) posts
+ * through that provider, and only where connecting accounts is switched on. Otherwise the platform decides: the
+ * one direct adapter is YouTube, and only when this deployment holds its OAuth client and an encryption key.
+ * Instagram and TikTok have no direct adapter: both require platform app review first.
  */
-export function publisherFor(deps: EngineDeps, platform: Platform): Publisher | null {
+export function publisherFor(deps: EngineDeps, platform: Platform, account?: Row | null): Publisher | null {
+  if (connectedThroughProvider(account)) return accountPublisher(deps, account);
   return platform === "youtube" ? youtubePublisher(deps) : null;
+}
+/** The publisher for a job's own account. */
+async function jobPublisher(deps: EngineDeps, job: Row) {
+  const account = await selectOne(deps.store, "provider_connections", { id: job.account_id, org_id: job.org_id });
+  return publisherFor(deps, job.platform as Platform, account);
 }
 const PLATFORM_NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
 
@@ -77,7 +90,8 @@ export async function prepareSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown):
         const platform = target.platform as Platform;
         const variant = (item.variants as Row[]).find((entry) => entry.platform === platform);
         const account = accounts.find((entry) => entry.id === target.accountId && entry.platform === platform);
-        if (!publisherFor(deps, platform)) {
+        // Without a chosen account, a platform a social provider can reach asks for one instead of being blocked.
+        if (!publisherFor(deps, platform, account) && (account || !publishingAvailable(deps, platform))) {
           // Identical wording per cause, so the review groups it once instead of repeating it per item.
           blockers.push({ itemId: item.id, message: platform === "youtube" ? `YouTube publishing is not set up on this deployment yet. The schedule can be drafted, but nothing can be posted there.` : NOT_AVAILABLE_YET });
           continue;
@@ -222,7 +236,7 @@ export async function commitSchedule(deps: EngineDeps, ctx: Ctx, raw: unknown): 
     for (const id of jobIds) {
       if (sent >= MAX_NATIVE_SUBMISSIONS_PER_COMMIT) break;
       const job = await selectOne(deps.store, "publish_jobs", { id, org_id: ctx.org.id, state: "scheduled" });
-      if (!job || !publisherFor(deps, job.platform as Platform)?.schedulesNatively) continue;
+      if (!job || !(await jobPublisher(deps, job))?.schedulesNatively) continue;
       if ((await processPublishJob(deps, job)) !== "skipped") sent++;
     }
     return parse(operationSchema, { operationId: input.operationKey, state: "accepted", jobIds, nextPollAfterMs: 30000, reviewUrl: null });
@@ -251,17 +265,14 @@ export async function processPublishJob(deps: EngineDeps, candidate: Row): Promi
     await publishEvent(deps, job, type);
   };
   const platform = job.platform as Platform;
-  const publisher = publisherFor(deps, platform);
   const [item, asset, account] = await Promise.all([
     selectOne(deps.store, "content_items", { id: job.item_id, org_id: job.org_id }),
     selectOne(deps.store, "media_assets", { id: job.media_asset_id, org_id: job.org_id }),
     selectOne(deps.store, "provider_connections", { id: job.account_id, org_id: job.org_id }),
   ]);
+  // The account decides how it is reached (directly, or through the provider it was connected with).
+  const publisher = publisherFor(deps, platform, account);
   // Re-validate at send time: only the approved version, with its approved file, on a still-connected account.
-  if (!publisher) {
-    await finish({ state: "failed", error: `No publishing adapter is connected for ${PLATFORM_NAME[platform]}.` }, "failed");
-    return "failed";
-  }
   if (!item || item.approved_revision !== job.revision || !asset || asset.sha256 !== job.payload.assetHash) {
     await finish({ state: "failed", error: "The approved version or its video changed after approval. Review and approve again." }, "failed");
     return "failed";
@@ -270,8 +281,14 @@ export async function processPublishJob(deps: EngineDeps, candidate: Row): Promi
     await finish({ state: "failed", error: `Reconnect ${PLATFORM_NAME[platform]}; the approved post was not sent.` }, "failed");
     return "failed";
   }
+  if (!publisher) {
+    await finish({ state: "failed", error: `No publishing adapter is connected for ${PLATFORM_NAME[platform]}.` }, "failed");
+    return "failed";
+  }
   try {
-    const mediaUrl = (await deps.store.media.signedUrls([asset.storage_path], 900))[asset.storage_path];
+    // A provider such as Buffer fetches the file itself after accepting the post, and may take a while to start.
+    // Signed for two hours so that at least one is left even when the store hands back a link it signed earlier.
+    const mediaUrl = (await deps.store.media.signedUrls([asset.storage_path], 7200))[asset.storage_path];
     if (!mediaUrl) throw new EngineError("provider_unavailable", "The approved video could not be read from storage. Nothing was posted.");
     const result = await publisher.publish({ attemptKey: job.id, credentials: account.credentials_ciphertext ?? null, mediaUrl, mediaMime: asset.mime, itemTitle: item.title, payload: job.payload, scheduledAt: new Date(job.scheduled_at).toISOString() });
     await finish({ state: result.state, provider_post_id: result.providerPostId, published_url: result.url, published_at: result.state === "verified_published" ? deps.now().toISOString() : null, error: null }, result.state);
@@ -309,9 +326,9 @@ export async function verifySubmittedPublishJobs(deps: EngineDeps, scope: { orgI
   const filter: Filter = { state: "submitted", updated_at: { lte: before }, ...(scope.orgId ? { org_id: scope.orgId } : {}), ...(scope.projectId ? { project_id: scope.projectId } : {}) };
   const outcome = { checked: 0, verified: 0, failed: 0 };
   for (const job of await deps.store.select("publish_jobs", filter, { order: ["updated_at", "asc"], limit: scope.limit ?? 20 })) {
-    const publisher = publisherFor(deps, job.platform as Platform);
-    if (!publisher?.verify || !job.provider_post_id) continue;
     const account = await selectOne(deps.store, "provider_connections", { id: job.account_id, org_id: job.org_id });
+    const publisher = publisherFor(deps, job.platform as Platform, account);
+    if (!publisher?.verify || !job.provider_post_id) continue;
     const now = deps.now().toISOString();
     if (!account || account.state !== "connected") {
       // Without access we cannot ask. Say so, and leave the last confirmed state alone.
@@ -323,14 +340,17 @@ export async function verifySubmittedPublishJobs(deps: EngineDeps, scope: { orgI
       const result = await publisher.verify({ credentials: account.credentials_ciphertext ?? null, providerPostId: job.provider_post_id, scheduledAt: new Date(job.scheduled_at).toISOString(), visibility: String(job.payload?.visibility ?? "private") });
       if (result.state === "verified_published") {
         // The only path to "published": the provider itself reported the post as public.
-        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "verified_published", published_at: result.publishedAt ?? now, error: null, updated_at: now })).length) {
+        const publishedAt = result.publishedAt ?? now;
+        if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "verified_published", published_at: publishedAt, ...(result.url ? { published_url: result.url } : {}), error: null, updated_at: now })).length) {
           outcome.verified++;
           await publishEvent(deps, job, "verified_published");
+          await recordSettledPost(deps, job, account, { published: true, occurredAt: publishedAt, url: result.url ?? null });
         }
       } else if (result.state === "failed") {
         if ((await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { state: "failed", error: result.note ?? "The provider reports this post as failed.", updated_at: now })).length) {
           outcome.failed++;
           await publishEvent(deps, job, "failed", { reason: result.note });
+          await recordSettledPost(deps, job, account, { published: false, occurredAt: now, url: null });
         }
       } else {
         await deps.store.update("publish_jobs", { id: job.id, state: "submitted" }, { error: result.note, updated_at: now });
@@ -342,6 +362,17 @@ export async function verifySubmittedPublishJobs(deps: EngineDeps, scope: { orgI
     }
   }
   return outcome;
+}
+
+/**
+ * A provider such as Buffer sends no webhooks, so when it settles a post the outcome joins the account's activity
+ * (socials-events.ts) here, next to what arrives by webhook. Direct channels report their own uploads.
+ */
+async function recordSettledPost(deps: EngineDeps, job: Row, account: Row, outcome: { published: boolean; occurredAt: string; url: string | null }) {
+  if (!connectedThroughProvider(account) || !isSocialPlatform(job.platform)) return;
+  await recordSocialEvents(deps, job.platform, account.provider, [
+    { id: job.provider_post_id, type: outcome.published ? "post.created" : "post.failed", accountId: account.id, occurredAt: outcome.occurredAt, subject: { id: job.provider_post_id, url: outcome.url, parentId: null }, text: job.payload?.caption ?? undefined },
+  ]);
 }
 
 /** A job stuck in "processing" has an unknown outcome. It fails visibly and is never re-sent automatically. */
@@ -364,7 +395,7 @@ export async function processDuePublishJobs(deps: EngineDeps) {
   const outcome = { processed: 0, submitted: 0, failed: 0, retried: 0, unknown: 0, verified: 0, swept: 0 };
   for (const candidate of await deps.store.select("publish_jobs", { state: "scheduled" }, { order: ["scheduled_at", "asc"], limit: 20 })) {
     const due = new Date(candidate.scheduled_at).toISOString() <= nowIso;
-    if (!due && !publisherFor(deps, candidate.platform as Platform)?.schedulesNatively) continue;
+    if (!due && !(await jobPublisher(deps, candidate))?.schedulesNatively) continue;
     const result = await processPublishJob(deps, candidate);
     if (result === "skipped") continue;
     outcome.processed++;

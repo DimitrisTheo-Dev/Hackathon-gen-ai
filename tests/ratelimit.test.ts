@@ -5,6 +5,7 @@ import { loadConfig } from "../packages/engine/src/config";
 import { handleEngineRequest, type HttpDeps } from "../packages/engine/src/http";
 import { handleMcpRequest } from "../packages/engine/src/mcp";
 import { clientNetwork, normalizeNetwork } from "../packages/engine/src/ratelimit";
+import { signSocialWebhook } from "../packages/engine/src/socials-events";
 import { MemoryStore } from "../packages/engine/src/store-memory";
 import type { RateLimitHit } from "../packages/engine/src/store";
 
@@ -169,6 +170,34 @@ test("the Stripe webhook, an authorized scheduler tick and the render worker are
   }
   assert.equal((await call("/v1/cron/tick", { headers: { ...ip, Authorization: "Bearer wrong" } })).status, 401);
   assert.equal((await call("/v1/cron/tick", { headers: { ...ip, Authorization: "Bearer wrong" } })).status, 429);
+});
+
+test("social deliveries: a signed one is never limited, a refused signature counts as a failed credential; member routes count like the studio's", async () => {
+  const secret = "s".repeat(40);
+  const { call, deps } = engine({ TRUST_PROXY_HEADERS: "true", SOCIALS_CREDENTIAL_KEY: "ab".repeat(32), SOCIALS_WEBHOOK_SECRET: secret, RATE_LIMIT_FAILED_AUTH_PER_MINUTE: "1", RATE_LIMIT_ANONYMOUS_PER_MINUTE: "1", RATE_LIMIT_COSTLY_PER_MINUTE: "1" });
+  const ip = { "x-forwarded-for": "203.0.113.60" };
+  const raw = JSON.stringify({ events: [{ id: "c1", type: "comment.created", externalAccountId: "an-account-nobody-connected" }] });
+  for (let i = 0; i < 3; i++) {
+    const delivered = await call("/v1/socials/instagram/webhook", { method: "POST", headers: { ...ip, "x-faceful-signature": signSocialWebhook(secret, raw, deps.now()) }, body: raw });
+    assert.equal(delivered.status, 200);
+    assert.equal(delivered.headers.get("ratelimit"), null);
+  }
+  const forged = { method: "POST", headers: { ...ip, "x-faceful-signature": "t=1,v1=00" }, body: raw };
+  assert.equal((await call("/v1/socials/instagram/webhook", forged)).status, 401);
+  const refused = await call("/v1/socials/instagram/webhook", forged);
+  assert.equal(refused.status, 429);
+  assert.equal(refused.headers.get("ratelimit-policy"), '"failed_auth";q=1;w=60');
+  // The check a platform makes when the address is registered carries no credential.
+  const other = { headers: { "x-forwarded-for": "203.0.113.61" } };
+  assert.equal((await call("/v1/socials/instagram/webhook", other)).status, 404);
+  assert.equal((await call("/v1/socials/instagram/webhook", other)).status, 429);
+  // Members count per principal, and connecting a provider (which calls it) also against the costly bucket.
+  const connect = () => call("/v1/socials/providers/buffer/connect", post("user:u1", { apiKey: "a-buffer-key-for-tests" }));
+  const first = await connect();
+  assert.equal(first.status, 503, "the stand-in provider is unreachable");
+  assert.match(first.headers.get("ratelimit-policy") ?? "", /"principal";q=240;w=60, "costly";q=1;w=60/);
+  assert.equal((await connect()).status, 429);
+  assert.equal((await call("/v1/socials", bearer("user:u1"))).status, 200, "reading is not a costly request");
 });
 
 class UnavailableLimiterStore extends MemoryStore {
