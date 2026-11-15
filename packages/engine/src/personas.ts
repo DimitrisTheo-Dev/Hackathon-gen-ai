@@ -17,6 +17,7 @@ import {
 } from "../../contracts/src/index.js";
 import { audit, idempotent, requireHuman, requireScope, type Ctx, type EngineDeps } from "./access.js";
 import { EngineError } from "./errors.js";
+import { assertUploadAllowed } from "./files.js";
 import { UnconfiguredFileStore, type FileStore } from "./r2.js";
 import { selectOne, type Row } from "./store.js";
 import { parse } from "./studio.js";
@@ -231,6 +232,7 @@ export async function personaImageUploadUrl(deps: EngineDeps, ctx: Ctx, raw: unk
   const input = parse(personaImageUploadInputSchema, raw);
   const persona = await findPersona(deps, ctx, input.personaId);
   const files = storage(deps);
+  await assertUploadAllowed(deps, ctx.org.id, input.size);
   const key = `${personaFolder(ctx.org.id, persona.id)}${crypto.randomUUID()}.${EXTENSIONS[input.type]}`;
   const { url, headers } = await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.type, bytes: input.size, expiresSeconds: UPLOAD_TTL_SECONDS });
   return parse(likenessUploadTicketSchema, { key, uploadUrl: url, headers, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() });

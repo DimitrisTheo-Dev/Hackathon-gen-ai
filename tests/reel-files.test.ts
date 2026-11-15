@@ -4,6 +4,7 @@ import { uploadTicketSchema } from "../packages/contracts/src/index";
 import { archiveFile, completeUpload, listFiles, requestUpload, saveTextFile } from "../packages/engine/src/files";
 import { loadConfig } from "../packages/engine/src/config";
 import { presignUrl, R2FileStore } from "../packages/engine/src/r2";
+import { EngineError } from "../packages/engine/src/errors";
 import { engine, key, rejects, seed, sha256 } from "./reel-support";
 
 test("the R2 signer reproduces AWS's published SigV4 presigned URL", () => {
@@ -89,6 +90,36 @@ test("uploads refuse unsafe types, oversize files, wrong sizes and other project
   const ticket = await requestUpload(env.deps, ctx, { ...base, mime: "image/png", operationKey: key() });
   await env.files.put(`orgs/${ctx.org.id}/projects/${campaign.id}/files/${base.sha256}.png`, new Uint8Array(9), "image/png");
   await rejects(completeUpload(env.deps, ctx, { fileId: ticket.file.id, operationKey: key() }), "validation_error");
+});
+
+test("upload links stop at the workspace's storage quota; archiving gives room back; server-side writes are not limited", async () => {
+  const MB = 1024 * 1024;
+  const env = engine({ STORAGE_QUOTA_BYTES: String(3 * MB) });
+  const { ctx, campaign, item } = await seed(env);
+  const ask = (bytes: number) => requestUpload(env.deps, ctx, { campaignId: campaign.id, itemId: item.id, kind: "video", name: "Clip", mime: "video/mp4", bytes, sha256: sha256(crypto.randomUUID()), operationKey: key() });
+  const first = await ask(2 * MB);
+  // Pending files count: their bytes may already be on their way.
+  await assert.rejects(ask(MB + 1), (error: unknown) => error instanceof EngineError && error.code === "quota_exceeded" && /used 2 MB of its 3 MB of file storage/.test(error.message));
+  await ask(MB);
+  await rejects(ask(1), "quota_exceeded");
+  // The quota is per workspace: another workspace is unaffected.
+  const other = await seed(env, "user:u2");
+  await requestUpload(env.deps, other.ctx, { campaignId: other.campaign.id, itemId: other.item.id, kind: "video", name: "Clip", mime: "video/mp4", bytes: 2 * MB, sha256: sha256("other"), operationKey: key() });
+  await archiveFile(env.deps, ctx, { fileId: first.file.id, operationKey: key() });
+  assert.equal((await ask(2 * MB)).file.state, "pending");
+  // Text drafts are written by the engine itself, not through a link, so a full workspace can still save a script.
+  assert.equal((await saveTextFile(env.deps, ctx, { campaignId: campaign.id, itemId: item.id, kind: "script", name: "Script", mime: "text/plain", text: "Hello", operationKey: key() })).state, "ready");
+});
+
+test("a workspace has at most 20 uploads in progress; an expired link stops counting", async () => {
+  const env = engine();
+  const { ctx, campaign, item } = await seed(env);
+  const ask = () => requestUpload(env.deps, ctx, { campaignId: campaign.id, itemId: item.id, kind: "image", name: "Still", mime: "image/png", bytes: 10, sha256: sha256(crypto.randomUUID()), operationKey: key() });
+  for (let i = 0; i < 20; i++) await ask();
+  await rejects(ask(), "quota_exceeded");
+  // Links last 15 minutes; after that the pending file can no longer receive bytes through them.
+  env.advance(16);
+  assert.equal((await ask()).file.state, "pending");
 });
 
 test("text drafts are written by the engine; JSON must parse; archived files leave the list", async () => {

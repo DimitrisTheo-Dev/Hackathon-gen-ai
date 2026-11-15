@@ -108,7 +108,7 @@ export class SupabaseStore implements Store {
     return data as T;
   }
   async select<T extends Row = Row>(table: string, filter: Filter, options: SelectOptions = {}): Promise<T[]> {
-    let query = applyFilter(this.client.from(table).select("*"), filter);
+    let query = applyFilter(this.client.from(table).select(options.columns?.join(",") ?? "*"), filter);
     if (options.order) query = query.order(options.order[0], { ascending: options.order[1] === "asc" });
     query = query.limit(options.limit ?? 1000);
     const { data, error } = await query;

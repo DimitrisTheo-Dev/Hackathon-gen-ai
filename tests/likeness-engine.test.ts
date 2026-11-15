@@ -87,6 +87,23 @@ test("an upload link is for a signed-in person, one file, and their own folder i
     assert.equal((await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: bad })).status, 400, JSON.stringify(bad));
 });
 
+test("face scan and persona photo links are refused once the workspace's file storage is full", async () => {
+  const { call, store } = engine({ env: { STORAGE_QUOTA_BYTES: String(1024 * 1024) } });
+  const input = { type: "image/jpeg", size: 1000, sha256: "a".repeat(64) };
+  assert.equal((await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: input })).status, 200);
+  const [org] = await store.select("organizations", {});
+  // The workspace's draft files fill all but 999 bytes of it.
+  await store.insert("project_files", { id: crypto.randomUUID(), org_id: org.id, project_id: crypto.randomUUID(), item_id: null, name: "Clip", version: 1, state: "ready", bytes: 1024 * 1024 - 999, created_at: "2026-11-15T09:00:00.000Z" });
+  const full = await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: input });
+  assert.deepEqual([full.status, full.body.error.code], [429, "quota_exceeded"]);
+  assert.match(full.body.error.message, /file storage/);
+  const persona = await call("/v1/studio/operations/create_persona", { as: "user:u1", body: { name: "Dr. Maria", description: "Calm nutrition explainer", language: "el", operationKey: crypto.randomUUID() } });
+  const photo = await call("/v1/studio/operations/persona_image_upload_url", { as: "user:u1", body: { personaId: persona.body.id, ...input } });
+  assert.deepEqual([photo.status, photo.body.error.code], [429, "quota_exceeded"]);
+  assert.match(photo.body.error.message, /file storage/);
+  assert.equal((await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: { ...input, size: 999 } })).status, 200, "what still fits is accepted");
+});
+
 test("without R2 settings the capture is told storage is not connected, and health says so without leaking anything", async () => {
   const { call, deps } = engine({ files: false });
   const ticket = await call("/v1/studio/likeness/upload-url", { as: "user:u1", body: { type: "image/jpeg", size: 10, sha256: "b".repeat(64) } });
