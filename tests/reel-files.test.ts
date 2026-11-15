@@ -34,8 +34,8 @@ test("R2 upload links are bound to one object, its type, its SHA-256 and its siz
 
 test("server-side writes to R2 sign the length of the body they send", async () => {
   const sent: Array<{ url: URL; headers: Record<string, string>; size: number }> = [];
-  const store = new R2FileStore({ accountId: "0".repeat(32), accessKeyId: "AK", secretAccessKey: "SK", bucket: "faceful-media" }, () => new Date("2026-11-14T10:00:00Z"), (async (input: RequestInfo | URL, init?: RequestInit) => {
-    sent.push({ url: new URL(String(input)), headers: init?.headers as Record<string, string>, size: (init?.body as Blob).size });
+  const store = new R2FileStore({ accountId: "0".repeat(32), accessKeyId: "AK", secretAccessKey: "SK", bucket: "faceful-media" }, () => new Date("2026-11-14T10:00:00Z"), (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    sent.push({ url: new URL(String(input)), headers: init.headers as Record<string, string>, size: (init.body as Blob).size });
     return new Response(null, { status: 200 });
   }) as typeof fetch);
   await store.put("orgs/o/manifest.json", new TextEncoder().encode('{"ok":true}'), "application/json");
