@@ -191,3 +191,24 @@ test('OTP verification opens a server-confirmed session without inventing worksp
  await expect(page.getByRole('heading',{name:'The studio service isn’t available yet.'})).toBeVisible();await expect(page.locator('.auth-card')).toContainText('no sample content was substituted');await expect(page.locator('.content-card')).toHaveCount(0);
  await page.reload();await expect(page.getByRole('heading',{name:'The studio service isn’t available yet.'})).toBeVisible();await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByLabel('Email address')).toBeVisible();
 });
+test('every Details row opens and closes from any point on the row, including its value and chevron',async({page})=>{
+ // A press transform once made the row-wide ::after collapse to the label mid-click, so taps on the right half did nothing.
+ await page.goto('/dev/studio/?view=canvas');await page.getByRole('button',{name:'Details',exact:true}).click();
+ for(const label of ['Guidance','Presenter & style','Channels','Posting times']){
+  const trigger=page.locator('.editor-details').getByRole('button',{name:label,exact:true});await expect(trigger).toHaveAttribute('aria-expanded','false');
+  for(const [fraction,state] of [[.92,'true'],[.6,'false']] as const){
+   const box=await trigger.evaluate(button=>{const row=button.closest('.detail-row')!.getBoundingClientRect();return {x:row.x,y:row.y,width:row.width,height:row.height};});
+   await page.mouse.click(box.x+box.width*fraction,box.y+box.height/2);await expect(trigger).toHaveAttribute('aria-expanded',state);
+  }
+ }
+});
+test('Create starts fresh: past turns stay beside the canvas, never on the create screen',async({page})=>{
+ await page.goto('/dev/studio/');await expect(page.getByRole('heading',{name:'What will we create today?'})).toBeVisible();
+ await page.getByLabel('Direction for your content').fill('Set title: Kept beside the canvas');await page.getByLabel('Direction for your content').press('Enter');
+ await expect(page.locator('.director-panel.is-docked .director-user').last()).toHaveText('Set title: Kept beside the canvas');
+ await page.locator('.sidebar').getByRole('button',{name:/^Create/}).first().click();await expect(page.getByRole('heading',{name:'What will we create today?'})).toBeVisible();
+ await expect(page.locator('.director-panel.is-home .director-turn')).toHaveCount(0);
+ await expect(page.locator('.home-chips button')).toHaveCount(4);await expect(page.locator('.home-continue')).toBeVisible();
+ await page.locator('.home-continue').click();await page.locator('.content-select').first().click();
+ await expect(page.locator('.director-panel.is-docked .director-user').last()).toHaveText('Set title: Kept beside the canvas');
+});

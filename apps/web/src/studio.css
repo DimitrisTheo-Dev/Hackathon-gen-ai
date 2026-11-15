@@ -55,6 +55,9 @@
   .skeleton-block { block-size: 180px; inline-size: 100%; border-radius: 14px; }
   .view-skeleton { display: grid; gap: 14px; padding: 40px clamp(20px, 5vw, 56px); max-inline-size: 760px; }
 
+  /* A card reached with Tab scrolls in with room for its focus ring, not flush against the scroller's edge. */
+  .workspace-main { scroll-padding-block: 12px; }
+
   /* Toasts: float over the canvas instead of pushing it down */
   .workspace-main > .feedback { position: sticky; inset-block-start: calc(100% - 48px); z-index: 6; block-size: 0; display: grid; justify-items: center; align-content: end; gap: 8px; padding: 0 16px; pointer-events: none; margin: 0; }
   .workspace-main > .feedback > * { pointer-events: auto; max-inline-size: min(560px, 100%); margin: 0; box-shadow: var(--elev-2); border-radius: 12px; }
@@ -126,7 +129,8 @@
 
     .app-frame .projects-heading { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 4px; padding: 0 4px 0 10px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .app-frame .projects-heading .icon-button { inline-size: 24px; block-size: 24px; display: grid; place-items: center; border: 0; background: transparent; }
-    .app-frame .sidebar .project-list { display: flex; flex-direction: column; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; margin-inline: -4px; padding-inline: 4px; scrollbar-width: thin; }
+    /* A scroller clips on both axes: 4px of room on every side for row focus rings and the current row's shadow, given back by the margin. */
+    .app-frame .sidebar .project-list { display: flex; flex-direction: column; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; margin: -4px; padding: 4px; scroll-padding-block: 4px; scrollbar-width: thin; }
     .app-frame .sidebar .project-list button .project-name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
     .app-frame .sidebar .project-list button small { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
     .app-frame .sidebar .project-list button.current-project { background: var(--surface); color: var(--ink); font-weight: 550; box-shadow: var(--elev-1); }
