@@ -131,9 +131,9 @@ export function mergeDirectorEntry(old:DirectorEntry|undefined,next:DirectorEntr
 export type PromptPreferences = Partial<VideoSettings>;
 const PLATFORM_WORDS: Record<Platform, string> = { instagram: 'an Instagram Reel', tiktok: 'a TikTok', youtube: 'a YouTube Short' };
 /** The video's language and its copies: one version each, as the New project flow makes them. */
-export const MAX_LANGUAGES = 1 + MAX_COPIES;
+const MAX_LANGUAGES = 1 + MAX_COPIES;
 /** "in Greek"; several languages ask for one version each: "one version each in English, Greek and Spanish". */
-export function languageWords(codes: readonly string[]): string | undefined {
+function languageWords(codes: readonly string[]): string | undefined {
   const names=[...new Set(codes)].slice(0,MAX_LANGUAGES).map(code=>languageOf(code).name);
   if(!names.length)return undefined;
   if(names.length===1)return `in ${names[0]}`;

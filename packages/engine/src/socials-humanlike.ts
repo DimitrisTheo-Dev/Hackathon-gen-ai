@@ -91,7 +91,7 @@ async function call<T = Record<string, any>>(deps: EngineDeps, path: string, bod
 }
 
 /** The address a Faceful workspace's Humanlike workspace is known by: one per Faceful workspace, nobody's own mail. Pure. */
-export const humanlikeTenantEmail = (workspaceId: string, domain: string) => `faceful-${workspaceId.toLowerCase()}@${domain}`;
+const humanlikeTenantEmail = (workspaceId: string, domain: string) => `faceful-${workspaceId.toLowerCase()}@${domain}`;
 
 /**
  * This Faceful workspace's own Humanlike workspace, made on first use, with a fresh key: earlier keys stop working,
@@ -144,7 +144,7 @@ export function humanlikePostId(attemptKey: string) {
  * the account's limit, interactions and commercial disclosure stated, and a fingerprint over exactly what was reviewed.
  * The person reviewed them by approving the schedule; interactions stay off and nothing is declared commercial. Pure.
  */
-export function tiktokOptions(input: { tokenId: string; caption: string; media: { id: string; name: string }; privacy: string; durationSeconds: number }) {
+function tiktokOptions(input: { tokenId: string; caption: string; media: { id: string; name: string }; privacy: string; durationSeconds: number }) {
   const choices = { privacy: input.privacy, allowComment: false, allowDuet: false, allowStitch: false, commercial: false, ownBrand: false, brandedContent: false };
   const consentFingerprint = JSON.stringify([
     input.tokenId,

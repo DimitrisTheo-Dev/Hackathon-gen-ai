@@ -76,7 +76,7 @@ const REFUSALS: Record<string, [EngineError["code"], string]> = {
  * TikTok sends post IDs as 64-bit JSON numbers, which lose their last digits as JavaScript numbers, so they are read
  * as text. Null: not JSON. Pure.
  */
-export function parseAnswer(text: string): any {
+function parseAnswer(text: string): any {
   try {
     return JSON.parse(text.replace(/("publicaly_available_post_id"\s*:\s*\[)([^\]]*)\]/g, (_, head: string, list: string) => `${head}${list.replace(/-?\d+/g, (id) => `"${id}"`)}]`));
   } catch {

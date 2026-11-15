@@ -117,7 +117,7 @@ const speakerOf = (mode: PresenterMode | undefined) => (mode === "camera" || mod
 /** Everything a first draft is written from. Two drafts with the same key would be written alike. */
 export const scriptKeyOf = (draft: Pick<Draft, "brief" | "seconds" | "language" | "platform" | "templateId" | "face" | "making">) =>
   JSON.stringify([draft.brief.trim(), draft.seconds, draft.language, draft.platform, draft.templateId, speakerOf(presenterOf(draft)?.mode)]);
-export const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 export const spokenSeconds = (beats: ScriptBeat[] | null) => Math.round(wordCount(scriptFromBeats(beats ?? [])) / SPEECH_RATE_WPS);
 
 /* ───────────────────────── kept in this browser ───────────────────────── */
