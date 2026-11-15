@@ -8,9 +8,8 @@ import {
   PRODUCT_MAX_IMAGE_BYTES,
   productImageTicketSchema,
   productImageUploadInputSchema,
-  productMentions,
   productRefInputSchema,
-  timeAtScriptIndex,
+  productPlacementTime,
   updateProductInputSchema,
   type Composition,
   type PlaceProductResult,
@@ -226,19 +225,7 @@ async function productPhotoFile(deps: EngineDeps, ctx: Ctx, item: Row, product: 
 export function placement(script: string, composition: Composition, product: { id: string; name: string }, at: number | null, seconds: number) {
   const duration = composition.durationSeconds;
   const length = Math.min(seconds, duration);
-  let time = duration / 3;
-  let matchedMention = false;
-  if (at !== null) time = at;
-  else {
-    const mention = productMentions(script, [product])[0];
-    if (mention) {
-      time = timeAtScriptIndex(script, composition, mention.index);
-      matchedMention = true;
-    }
-    // A product named in the opening words would sit under the opening title or statement card: start when it ends.
-    const opening = composition.cards.find((card) => (card.kind === "title" || card.kind === "statement") && card.start <= time && time < card.end);
-    if (opening) time = opening.end;
-  }
+  const { time, matchedMention } = productPlacementTime(script, composition, product, at);
   const start = round(Math.min(Math.max(0, time), duration - length));
   return { start, end: round(Math.min(duration, start + length)), matchedMention };
 }

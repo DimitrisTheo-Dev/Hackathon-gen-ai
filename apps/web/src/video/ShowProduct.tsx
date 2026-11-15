@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { PictureInPicture2, RectangleVertical, Rows2 } from "lucide-react";
-import { productMentions, timeAtScriptIndex, type Composition, type ContentItem, type PlaceProductResult, type Product } from "@castroom/contracts";
+import { productMentions, productPlacementTime, type Composition, type ContentItem, type PlaceProductResult, type Product } from "@castroom/contracts";
 import { ApiError, type StudioClient } from "../data/client";
 import { Modal, Notice } from "../components/ui";
 import { operationKey } from "../lib/operation-key";
@@ -53,9 +53,10 @@ export function ShowProduct({
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
   const product = choices.find((entry) => entry.id === productId) ?? null;
-  const mention = product ? productMentions(item.script, [product])[0] : undefined;
-  // A preview of where it lands; the server decides, and the notice after placing says where it went.
-  const at = mention ? timeAtScriptIndex(item.script, composition, mention.index) : composition.durationSeconds / 3;
+  // A preview of where it lands, by the same rule the server uses; the notice after placing says where it went.
+  const placed = product ? productPlacementTime(item.script, composition, product, null) : null;
+  const mention = placed?.matchedMention;
+  const at = placed?.time ?? 0;
   const when = !product
     ? ""
     : mention

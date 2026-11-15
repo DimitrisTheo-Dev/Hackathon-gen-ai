@@ -310,6 +310,26 @@ export function timeAtScriptIndex(script: string, composition: Pick<Composition,
   return Math.round(Math.min(composition.durationSeconds, (index / Math.max(1, text.length)) * composition.durationSeconds) * 10) / 10;
 }
 
+/**
+ * Where a product photo starts on the timeline (place_product, its preview and the local fixture all use this): at `at`
+ * when given; else where the script first names the product, moved past an opening title or statement card it would
+ * sit under; else one third in. Callers clamp it to the timeline.
+ */
+export function productPlacementTime(
+  script: string,
+  composition: Pick<Composition, "durationSeconds" | "transcript" | "cards">,
+  product: Pick<Product, "id" | "name">,
+  at: number | null,
+): { time: number; matchedMention: boolean } {
+  if (at !== null) return { time: at, matchedMention: false };
+  const mention = productMentions(script, [product])[0];
+  if (!mention) return { time: composition.durationSeconds / 3, matchedMention: false };
+  let time = timeAtScriptIndex(script, composition, mention.index);
+  const opening = composition.cards.find((card) => (card.kind === "title" || card.kind === "statement") && card.start <= time && time < card.end);
+  if (opening) time = opening.end;
+  return { time, matchedMention: true };
+}
+
 /** Longest-common-subsequence alignment of two token lists; returns runs present only in `a` and only in `b`. */
 function diffRuns(a: string[], b: string[]): { missing: Array<{ at: number; words: string[] }>; extra: Array<{ at: number; words: string[] }> } {
   const n = a.length, m = b.length;

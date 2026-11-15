@@ -41,12 +41,11 @@ import {
   placeProductInputSchema,
   placeProductResultSchema,
   productImageUploadInputSchema,
-  productMentions,
+  productPlacementTime,
   productSchema,
   regulatedDomainSchema,
   reviewContentInputSchema,
   reviewStatus,
-  timeAtScriptIndex,
   updateProductInputSchema,
   visualFindings,
   type ContentReview,
@@ -1006,8 +1005,9 @@ export function createFixtureClient(storage?: Storage): StudioClient {
           true,
         );
         state.fileUrls[file.id] = photo.url;
-        const mention = input.at === null ? productMentions(item.script, [{ id: product.id, name: product.name }])[0] : undefined;
-        const at = input.at ?? (mention ? timeAtScriptIndex(item.script, composition, mention.index) : composition.durationSeconds / 3);
+        const placed = productPlacementTime(item.script, composition, { id: product.id, name: product.name }, input.at);
+        const mention = placed.matchedMention;
+        const at = placed.time;
         const span = windowAt(composition, at, input.seconds);
         const clip: VideoClip = {
           id: nextClipId(composition, "product"),
