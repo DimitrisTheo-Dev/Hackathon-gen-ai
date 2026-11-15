@@ -1,6 +1,59 @@
 # Faceful demo readiness
 
-Updated 14 November 2026, evening. Production: <https://faceful.vercel.app> (also served at <https://faceful.dtheo.dev>). What a deployment has configured is always visible at `/v1/health`.
+## Morning report: Sunday 15 November, 02:15 Athens
+
+Everything below is merged (PRs #13 and #14) and live on <https://faceful.vercel.app>. Each production item was checked against the live site after deploying.
+
+### Shipped overnight
+
+| What | Where to look |
+| --- | --- |
+| **Security release:** Postgres-backed rate limits with IETF `RateLimit` headers, 256 KB body cap, MCP batch cap, operation-dispatch fix (`constructor` is now 404), escaped prompt data, HSTS/COOP | `SECURITY.md`; production checks below |
+| **Stripe on production:** a declined card grants nothing. The Portal cancellation bug was found, fixed and re-verified: Billing shows "Ends 14 Dec" | `docs/demo/evidence/production/stripe-sandbox.md` |
+| **`/pitch`:** the one-minute presenter reveal. Eleni speaks; the camera pulls back to the studio; Director edit → Claude Code over MCP → human approval → end card. Press **F**, then **R** | `docs/demo/pitch-script.md` |
+| **Raw demo footage:** 10 clips at 1920×1080 (local only, `demo-footage/`, not in git) plus a cut list | `docs/demo/demo-video-cut-list.md` |
+| **Demo workspace on production** ("Quintessential", BeWell brand kit, sample project, one Greek project written by the agent) plus a seed/reset script | `DEMO_RUNBOOK.md` § Before the demo |
+| **Safari (WebKit), Firefox and Chromium:** 342 browser tests across the three engines; three real Safari bugs fixed (hero lines shifting when the font loads, focus lost after a dialog, video byte ranges) | `docs/demo/evidence/quality/` |
+| **Accessibility:** axe serious/critical findings went from 45 to 0 in all three engines (WCAG 2.2 AA) | `docs/demo/evidence/quality/axe-summary.json` |
+| **Performance:** landing Lighthouse 100 on mobile and desktop (local server with brotli, LCP 1.1 s mobile). On production, unthrottled, measured with Playwright: LCP 0.42–0.73 s and CLS ≤ 0.003 on the landing and sign-in. Signed-out studio visits now preload only the sign-in code | `docs/demo/evidence/quality/lighthouse-summary.json` |
+| **Agent discovery and docs:** MCP server card at `/.well-known/mcp/server-card.json`; public docs and `llms.txt` state the live rate limits; the OAuth consent page refuses script-bearing callbacks | `INTEGRATION_CONTRACTS.md` §4, §9 |
+| **Submission write-up** | `docs/submission/SUBMISSION.md` |
+
+**Tests on the deployed commit (clean checkout, its own install):** typecheck clean · 187 unit tests · browser suites: default 72, landing 20, live 11, onboarding 13, pitch 10 · local Postgres RLS scripts pass. The three-engine matrix (342 passed, 6 skipped with reasons) ran on the commit before the last two small changes, the pitch credit label and signed-out preloads; both of those passed the Chromium suites above.
+
+**Production checks after deploying:**
+- Server card served with `Access-Control-Allow-Origin: *`.
+- `/pitch`, the landing and studio sign-in open with no console errors in Chromium and WebKit.
+- Rate-limit headers are present; HSTS, COOP and CSP are present.
+- `operations/constructor` returns 404; an oversized MCP batch is refused.
+- Billing reflects the Portal cancellation.
+
+### Needs you, in order
+
+1. **Repository access for judges.** The repo is private. Make it public or add the judges. I did not change its visibility.
+2. **The demo video.**
+   - Record the voice-over and cut the footage using the cut list, then replace the placeholder link in `SUBMISSION.md`.
+   - Blur the demo account's email on Stripe's page in clip 09.
+   - Submit by 18:00.
+3. **A model credential.** It turns the first thing a judge types into real drafts. Either `ANTHROPIC_API_KEY` on Vercel, or a card on the Vercel AI Gateway plus `DIRECTOR_PROVIDER=vercel-gateway`. Without it the studio says plainly that AI writing isn't connected and offers the Claude Code hand-off.
+4. **Optional: a real presenter clip for the pitch opening** (Minas, Humanlike). Put it at `apps/web/public/pitch/presenter.mp4` with `presenter.json` stating the true credit. Without it the page uses the drawn presenter, labelled "Illustration".
+5. **Run the two scans I was not permitted to run:**
+   - `corepack pnpm dlx is-agentic faceful.vercel.app --json`
+   - `corepack pnpm dlx lighthouse@13.6.0 https://faceful.vercel.app/ --preset=desktop`
+6. **Five minutes on a real iPhone and an Android phone:** landing, sign-in, studio, `/pitch`.
+7. **Optional:** click "Connect YouTube" once and enable the YouTube Data API on the Google project.
+8. **Decisions:** the €19 price is a placeholder; whether to connect Minas's runner to Faceful's MCP server (his code was not changed).
+9. **After the hackathon:** rotate the secrets pasted in chat (Supabase secret key, Google client secret, Stripe sandbox key) and the other server keys (see "Failures found by testing").
+
+### State to know before presenting
+
+- The demo account holds an **active Stripe sandbox subscription** from recording clip 09, with 33 credits. Upgrade is therefore not offered on that account. To show checkout live, cancel the subscription immediately in the Stripe sandbox Dashboard first, or use a fresh account.
+- The sample draft "Find your next moment" is at version 4 after the recordings. `node --env-file=.env.local --import tsx scripts/demo-seed.ts --demo-account --reset` restores the workspace. It does not touch Stripe.
+- Feature freeze at 14:00 Athens; fixes only after that.
+
+---
+
+Production: <https://faceful.vercel.app> (also served at <https://faceful.dtheo.dev>). What a deployment has configured is always visible at `/v1/health`.
 
 Labels: **VERIFIED LIVE** — exercised on production with real services. **IMPLEMENTED, NOT VERIFIED LIVE** — code and tests exist; the live path has not been run. **BLOCKED** — cannot work until someone supplies something. **DEFERRED** — deliberately not built.
 
@@ -27,16 +80,20 @@ Labels: **VERIFIED LIVE** — exercised on production with real services. **IMPL
 | Instagram, TikTok publishing | **BLOCKED** by each platform's app review. Shown as "not available yet" | — |
 | Claude Code in the browser (`/claude-login-test/`, Minas): the official CLI on your own server, signed in with your own Claude subscription, streamed to a page | **IMPLEMENTED, NOT VERIFIED LIVE by this workstream.** The page is served on production and its unit tests pass; no runner was reachable to exercise sign-in or a session. It is not yet connected to a Faceful workspace (the runner starts Claude without Faceful's MCP server) | `apps/claude-runner/README.md`. Check Anthropic's terms before offering subscription sign-in to other people; the README scopes it to your own use |
 | Installable app (manifest, icons, offline page, service worker) | **IMPLEMENTED, NOT VERIFIED on a phone** | — |
+| Chromium, Safari (WebKit) and Firefox; accessibility (axe, WCAG 2.2 AA) | **VERIFIED** in all three engines on a production-shaped build: 342 browser tests, 0 serious or critical axe findings. Production pages opened without console errors in Chromium and WebKit. Not yet checked on a physical iPhone or Android phone | `docs/demo/evidence/quality/` |
+| `/pitch` presenter reveal | **VERIFIED LIVE** (served on production, no console errors in Chromium and WebKit; 10 browser tests). Uses a drawn presenter labelled "Illustration" until a real clip is added | `docs/demo/pitch-script.md`, `docs/demo/evidence/production/pitch-prod-studio-beat.png` |
+| MCP server card for discovery | **VERIFIED LIVE** at `/.well-known/mcp/server-card.json` (draft format, SEP-1649/SEP-2127) | `INTEGRATION_CONTRACTS.md` §9 |
 | File uploads, website/brand import, collaborator invitations, unattended publishing grants, template marketplace, realtime push | **DEFERRED** | — |
 
 ## Proof that was actually run
 
 | Check | Result |
 | --- | --- |
-| Unit and contract tests (`corepack pnpm test`) | 128 passed, 0 failed (last full run, with the YouTube work in the tree) |
+| Unit and contract tests (`corepack pnpm test`) | 187 passed, 0 failed (clean checkout of the deployed commit, 15 Nov) |
 | Typecheck, production build incl. API-function and prerender checks | pass |
-| Browser tests against the real engine logic (`test:ui:live`) | 10 passed |
-| Migration + RLS in a throwaway local Postgres (`scripts/test-engine-rls.mjs`) | pass |
+| Browser suites, Chromium (clean checkout of the deployed commit) | default 72 (includes the accessibility spec), landing 20, live engine 11, onboarding 13, pitch 10: all passed |
+| Browser matrix, Chromium + WebKit + Firefox (`tests/browser/browsers.config.ts`) | 342 passed, 6 skipped, each skip with a reason stated in its spec (Chromium-only touch emulation and phone browsers launched once) |
+| Migration + RLS in a throwaway local Postgres (`scripts/test-engine-rls.mjs`, `scripts/test-director-rls.mjs`) | pass, including rate-limiter atomicity (8 sessions × 25 hits admitted exactly 100) |
 | Live Supabase checks (`corepack pnpm smoke:engine`) | 32/32 |
 | Production: health, studio API with a real session, MCP with a token, OAuth, Stripe checkout | see `docs/demo/evidence/production/` |
 
@@ -58,6 +115,8 @@ Mocked vs real: Stripe network calls are faked in unit tests (signature verifica
 | Humanlike key + LiveKit + voice + recorder | Minas | Real presenter videos, then scheduling and YouTube upload |
 | One person clicking "Connect YouTube"; YouTube Data API enabled on the Google project | Dimitris / Minas | A real connected channel |
 | A phone | anyone | Checking the installed app and touch behaviour |
+| Repository access for judges (it is private) | Dimitris | Judges reading the code |
+| A recorded voice-over and the cut demo video | Dimitris | The submission's demo video |
 
 ## Honest summary
 
