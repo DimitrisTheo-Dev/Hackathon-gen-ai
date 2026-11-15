@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Check, Instagram, LoaderCircle, Music2, Youtube } from "lucide-react";
+import { Check, CircleAlert, Instagram, LoaderCircle, Music2, RotateCcw, Youtube } from "lucide-react";
 import type { StudioContext } from "@castroom/contracts";
 import { ApiError, type ChannelConnection, type ChannelStatus, type StudioClient } from "../data/client";
 import { Notice } from "../components/ui";
@@ -152,6 +152,7 @@ export function Channels({ context, client, onChanged }: { context: StudioContex
   const headingId = useId();
   const [status, setStatus] = useState<ChannelStatus | null>(null);
   const [loadError, setLoadError] = useState<"unsupported" | "failed" | null>(null);
+  const [loadReason, setLoadReason] = useState("");
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -170,6 +171,7 @@ export function Channels({ context, client, onChanged }: { context: StudioContex
     } catch (failure) {
       if (!active.current) return;
       setLoadError(failure instanceof ApiError && failure.code === "unsupported" ? "unsupported" : "failed");
+      setLoadReason(failure instanceof ApiError ? failure.message : "");
     }
   }, [client]);
 
@@ -270,24 +272,22 @@ export function Channels({ context, client, onChanged }: { context: StudioContex
           </>
         )}
       </p>
-      {loadError ? (
-        <p className="channels-failed" role={loadError === "failed" ? "alert" : undefined}>
-          {loadError === "unsupported" ? (
-            "Channels aren’t available in this local preview."
-          ) : (
-            <>
-              <span>Couldn’t load channels</span>
-              {context.capabilities.mode === "live" && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <button className="text-button" disabled={retrying} onClick={() => void retry()}>
-                    {retrying ? "Retrying…" : "Retry"}
-                  </button>
-                </>
-              )}
-            </>
+      {loadError === "unsupported" ? (
+        <p className="channels-unsupported">Channels aren’t available in this local preview.</p>
+      ) : loadError ? (
+        <div className="channels-failed" role="alert">
+          <span className="channels-failed-icon" aria-hidden="true"><CircleAlert size={16} /></span>
+          <p>
+            <strong>Couldn’t load channels</strong>
+            <span>{loadReason || "Check your connection and try again."}</span>
+          </p>
+          {context.capabilities.mode === "live" && (
+            <button className="button secondary" disabled={retrying} onClick={() => void retry()}>
+              {retrying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RotateCcw size={14} aria-hidden="true" />}
+              {retrying ? "Retrying…" : "Retry"}
+            </button>
           )}
-        </p>
+        </div>
       ) : (
         <ul className="channel-list">
           <li className="channel-card" data-availability={status ? (youtube?.availability ?? "not_configured") : "loading"} data-connected={youtubeConnections.length > 0 || undefined}>

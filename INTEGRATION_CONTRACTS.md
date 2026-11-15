@@ -201,7 +201,11 @@ Model: `claude-opus-5-5` through the Anthropic SDK, structured output, low effor
 
 `POST /mcp` — Streamable HTTP, stateless, protocol `2025-11-25` (`@modelcontextprotocol/sdk` 1.32.2). The 2026-07-28 revision is not implemented; a client offering it is answered `2025-11-25`. Protected-resource metadata is at `/.well-known/oauth-protected-resource[/mcp]`; the authorization server is Supabase Auth.
 
-Tools: `list_projects`, `create_project`, `create_draft`, `revise_draft`, `list_avatars`, `start_render`, `get_render_status`, `list_assets`, `get_asset`, `propose_schedule`, `approve_schedule`, `get_billing_status`, `create_checkout_link`. Each maps to one engine function and inherits its checks. Side-effecting tools accept `idempotencyKey`.
+Tools (21):
+- **Drafting, rendering, schedule and billing:** `list_projects`, `create_project`, `create_draft`, `revise_draft`, `list_avatars`, `start_render`, `get_render_status`, `list_assets`, `get_asset`, `propose_schedule`, `approve_schedule`, `get_billing_status`, `create_checkout_link`.
+- **Reel production** (`docs/agents/reel-production.md`): `list_draft_files`, `save_text_draft`, `request_file_upload`, `complete_file_upload`, `get_video_timeline`, `save_video_timeline`, `queue_video_render`, `get_video_renders`. Draft files need the files store, and `queue_video_render` needs a Remotion render worker. Neither is configured on production yet (`/v1/health`: `files.connected` and `reelRendering.connected` are false).
+
+Each tool maps to one engine function and inherits its checks. Side-effecting tools accept `idempotencyKey`.
 
 A POST may carry 1–10 JSON-RPC messages (otherwise `-32600`); every message counts against the caller's `principal` bucket, and `start_render` / `create_checkout_link` also count against `costly`. Going over `principal` refuses the whole POST with `429` and the headers above; going over `costly` inside a call returns a tool error with `quota_exceeded` and `retryAfterSeconds`; the server's `instructions` tell agents to wait that long rather than retry at once. Unauthenticated calls get `401` with the protected-resource metadata link and count against `anonymous` or `failed_auth`.
 
@@ -219,7 +223,7 @@ Browsers can `SELECT` their own organization's projects, items, versions, media 
 - Replying to comments or messages; activity is stored and listed, nothing is sent back.
 - Scheduling to LinkedIn or WhatsApp (accounts connect; the studio's destinations are still Instagram, TikTok and YouTube).
 - A studio screen for listing accounts and reading activity. The only page is `/studio/connect/:provider`, for providers connected by signing in (Instagram); Buffer is connected through the API.
-- File uploads, website import and brand extraction.
+- Website import and brand extraction. (Draft file uploads exist for reel production, through signed upload links to the files store, which is not configured on production yet.)
 - Collaborator invitations (the role model and checks exist; there is no invite flow).
 - Unattended publishing grants (`create_run_grant`).
 - Realtime push; the studio polls every five seconds.

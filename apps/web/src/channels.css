@@ -13,8 +13,17 @@
   .channels-status:empty { display: none; }
   .channels-status svg { flex: none; }
   .channels .notice { margin: 0; }
-  .channels-failed { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
-  .channels-failed .text-button { min-block-size: 28px; padding: 0; font-size: 13px; color: var(--ink); text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+  .channels-unsupported { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  /* A failed load says what failed, why (the server's own sentence), and offers the retry beside it. */
+  .channels-failed { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .channels-failed-icon { display: grid; place-items: center; inline-size: 30px; block-size: 30px; border-radius: 50%; background: var(--danger-surface); color: var(--danger); }
+  .channels-failed p { display: grid; gap: 2px; margin: 0; font-size: 13px; line-height: 1.45; }
+  .channels-failed strong { font-weight: 600; color: var(--ink); }
+  .channels-failed span { color: var(--text-secondary); text-wrap: pretty; }
+  @media (max-width: 560px) {
+    .channels-failed { grid-template-columns: auto minmax(0, 1fr); }
+    .channels-failed > .button { grid-column: 2; justify-self: start; }
+  }
 
   .channel-list { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; }
   /* Card: icon and name on top, one line of state, the one action at the foot. */
@@ -53,11 +62,11 @@
 
   @media (hover: hover) and (pointer: fine) {
     .channel-confirm .button.danger:hover:not(:disabled) { filter: brightness(0.94); }
-    .channel-note summary:hover, .channels-failed .text-button:hover { text-decoration-color: currentColor; }
+    .channel-note summary:hover { text-decoration-color: currentColor; }
     .channel-row-actions .text-button:hover { color: var(--ink); }
   }
   @media (pointer: coarse) {
-    .channel-note summary, .channels-failed .text-button, .channel-row-actions .text-button { min-block-size: 44px; }
+    .channel-note summary, .channel-row-actions .text-button { min-block-size: 44px; }
     .channel-action .button { min-block-size: 44px; }
   }
   /* Narrow: the same cards become rows (icon, name and state, action) so three fit without crowding. */

@@ -1,5 +1,38 @@
 # Faceful demo readiness
 
+## Midday update: Sunday 15 November
+
+**One action unblocks four screens.** Five migrations merged with Minas's work were never applied to the hosted database:
+- `socials`
+- `reel_production`
+- `socials_webhook_renewal`
+- `personas`
+- `clone_jobs`
+
+Until they are, production answers 503 ("The studio database could not complete this request") for:
+- **Channels:** `/v1/studio/channels`
+- **Personas:** `/v1/studio/personas`
+- **Clone a video:** `/v1/studio/clone/jobs`
+- **The Video tab's timeline, files and renders**
+
+All five are additive: new tables (row-level security on, server-only grants) and new columns. Two constraints are swapped for looser equivalents. They applied cleanly, in the hosted order, on a throwaway Postgres 15.
+
+Run from the repo root:
+
+```bash
+supabase db push --include-all
+```
+
+`--include-all` is needed because `templates` and `likeness_consents` were applied out of order. The agent's own push was blocked by its permission settings, so a person must run it.
+
+**Built but not configured on production** (from `/v1/health`):
+- draft file storage (`files.connected: false`)
+- the Remotion reel renderer (`reelRendering.connected: false`)
+- social connections and webhooks (`socials.connections: false`)
+- Humanlike rendering
+
+Publishing adapters on production: YouTube only.
+
 ## Morning report: Sunday 15 November, 02:15 Athens
 
 Everything below is merged (PRs #13 and #14) and live on <https://faceful.vercel.app>. Each production item was checked against the live site after deploying.
@@ -66,7 +99,7 @@ Labels: **VERIFIED LIVE** — exercised on production with real services. **IMPL
 | Studio wired to the engine: first-run composer, labelled sample project, billing view | **VERIFIED LIVE** in a real browser on production with a real session (no console errors) | `evidence/production/studio-*.png` |
 | Studio: prompt → written drafts → docked chat, edit proposals, versions, templates | **IMPLEMENTED, NOT VERIFIED LIVE** (10 browser tests against the real engine logic with an in-memory store and a stubbed model; on production the prompt correctly answers "AI writing isn’t connected") | `tests/browser/live-engine.spec.ts` |
 | AI Creative Director writing drafts from a prompt | **BLOCKED — no model credential.** Runs in honest "basic" mode: finds/opens content, credits, schedule review, exact edits, templates | Add `ANTHROPIC_API_KEY` on Vercel, **or** add a card to the Vercel team's AI Gateway and set `DIRECTOR_PROVIDER=vercel-gateway` (the gateway answered `customer_verification_required`) |
-| Remote MCP server (13 tools), scoped workspace tokens | **VERIFIED LIVE** — Claude Code 2.1.325 against production; Codex CLI 0.169.0 and Claude Code against a local engine on the real database | `evidence/production/mcp-and-oauth.md`, `evidence/engine/mcp-client-trials.md` |
+| Remote MCP server (21 tools: 13 for drafting, rendering, schedule and billing, plus 8 for reel production), scoped workspace tokens | **VERIFIED LIVE** — Claude Code 2.1.325 against production; Codex CLI 0.169.0 and Claude Code against a local engine on the real database | `evidence/production/mcp-and-oauth.md`, `evidence/engine/mcp-client-trials.md` |
 | MCP OAuth 2.1 (discovery, dynamic registration, consent page, PKCE, refresh) | **VERIFIED LIVE with a scripted client**; not yet through a host's own OAuth UI | `evidence/production/mcp-and-oauth.md` |
 | UI ↔ MCP parity (same projects, same rules) | **VERIFIED LIVE**. On 15 Nov, a nine-step Claude Code run against production MCP was followed by the studio showing the same project, credited to the agent, with the same three blockers | `evidence/production/terminal-and-interface-e2e.md` |
 | Stripe sandbox: hosted Checkout, webhook-confirmed plan and credits, Customer Portal, double-subscribe guard, tenant isolation | **VERIFIED LIVE** (test card 4242…, credits 1 → 31 via `invoice.paid`) | `evidence/production/stripe-sandbox.md` |
@@ -80,6 +113,10 @@ Labels: **VERIFIED LIVE** — exercised on production with real services. **IMPL
 | Instagram, TikTok publishing | **BLOCKED** by each platform's app review. Shown as "not available yet" | — |
 | Claude Code in the browser (`/claude-login-test/`, Minas): the official CLI on your own server, signed in with your own Claude subscription, streamed to a page | **IMPLEMENTED, NOT VERIFIED LIVE by this workstream.** The page is served on production and its unit tests pass; no runner was reachable to exercise sign-in or a session. It is not yet connected to a Faceful workspace (the runner starts Claude without Faceful's MCP server) | `apps/claude-runner/README.md`. Check Anthropic's terms before offering subscription sign-in to other people; the README scopes it to your own use |
 | Installable app (manifest, icons, offline page, service worker) | **IMPLEMENTED, NOT VERIFIED on a phone** | — |
+| Template library (11 short-form formats, each with a rendered Greek sample) | **VERIFIED LIVE**: `/v1/studio/templates/library` returns 11 templates with signed sample videos, posters and beat stills | Studio → Templates |
+| Video tab: Remotion timeline editor, draft files, MP4 render queue (8 MCP tools) | **BLOCKED on production** until the migrations above are applied (timeline, files and renders return 503). Rendering also needs a Remotion worker, and files need the files store; neither is configured | `docs/agents/reel-production.md`, `workers/reel-render/` |
+| Personas (presenters backed by a face-scan consent) and Clone a video | **BLOCKED on production** until the migrations above are applied (both return 503) | — |
+| Social accounts through Buffer, or Instagram directly; activity webhooks | **IMPLEMENTED, NOT VERIFIED LIVE.** The migration is not applied, and no Buffer or Instagram credentials are configured on production | `INTEGRATION_CONTRACTS.md` §4, §11 |
 | Chromium, Safari (WebKit) and Firefox; accessibility (axe, WCAG 2.2 AA) | **VERIFIED** in all three engines on a production-shaped build: 342 browser tests, 0 serious or critical axe findings. Production pages opened without console errors in Chromium and WebKit. Not yet checked on a physical iPhone or Android phone | `docs/demo/evidence/quality/` |
 | `/pitch` presenter reveal | **VERIFIED LIVE** (served on production, no console errors in Chromium and WebKit; 10 browser tests). Uses a drawn presenter labelled "Illustration" until a real clip is added | `docs/demo/pitch-script.md`, `docs/demo/evidence/production/pitch-prod-studio-beat.png` |
 | MCP server card for discovery | **VERIFIED LIVE** at `/.well-known/mcp/server-card.json` (draft format, SEP-1649/SEP-2127) | `INTEGRATION_CONTRACTS.md` §9 |

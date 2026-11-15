@@ -15,7 +15,7 @@ Short presenter-led videos (Reels, Shorts, TikToks) are the most effective forma
 
 1. **Describe a video, get editable drafts.** One composer ("What will we create today?") with format, length and language. Drafts are saved, versioned work — not chat text.
 2. **Direct it by chatting.** The AI Director sits beside the canvas. Every change comes back as a proposal with a diff; applying it saves a new version, and every earlier version can be restored.
-3. **Your own agent works in the same studio.** A remote MCP server (13 tools) lets Claude Code, Codex or any MCP client create projects, write drafts and read status in the same workspace, under the same rules. Connect with a scoped, expiring workspace token or OAuth 2.1.
+3. **Your own agent works in the same studio.** A remote MCP server (21 tools) lets Claude Code, Codex or any MCP client create projects, write drafts, edit a reel's timeline and read status in the same workspace, under the same rules. Connect with a scoped, expiring workspace token or OAuth 2.1.
 4. **Nothing posts without you.** Scheduling is an exact, hashed review that a person approves; agents can propose but never approve, publish or manage billing.
 5. **Brand kit.** Identity, voice, guardrails and sources — every draft, and every agent, starts from it.
 6. **Credits shared by the studio and agents,** billed through Stripe (sandbox), granted only by signed webhooks.
@@ -34,7 +34,12 @@ Short presenter-led videos (Reels, Shorts, TikToks) are the most effective forma
 | Studio refresh: one continuous loading state, zero layout shift | measured on production with a signed-in session |
 | Works in Chromium, Safari (WebKit) and Firefox; no serious or critical axe findings (WCAG 2.2 AA) on 12 surfaces at desktop and phone widths; landing Lighthouse 100 mobile and desktop on a compressed server | 342 browser tests across three engines; `docs/demo/evidence/quality/` |
 
-**Not yet live (stated plainly in the product):** presenter-video rendering waits for the Humanlike recorder; AI writing on the server needs a model key (until then the studio offers the hand-off to your own agent); YouTube publishing is built but not yet verified with a real channel; Instagram and TikTok need each platform's app review.
+**Not yet live (stated plainly in the product):**
+- **Presenter-video rendering** waits for the Humanlike recorder.
+- **AI writing on the server** needs a model key. Until then, the studio offers the hand-off to your own agent.
+- **The reel editor** (Remotion timeline, draft files, MP4 renders), **Personas**, **Clone a video** and **social accounts** (Buffer, or Instagram directly) are built. They wait on a database migration and on their services: a files store, a render worker, and Buffer or Instagram credentials.
+- **YouTube publishing** is built but not yet verified with a real channel. TikTok needs the platform's app review or Buffer.
+- **The template library** is live: 11 formats with rendered Greek samples.
 
 ## How it works
 
@@ -47,7 +52,7 @@ flowchart LR
     CC["Claude Code / Codex / any MCP client"]
   end
   Studio -- "Supabase session" --> API["/v1 domain API"]
-  CC -- "workspace token or OAuth 2.1" --> MCP["/mcp (13 tools)"]
+  CC -- "workspace token or OAuth 2.1" --> MCP["/mcp (21 tools)"]
   API --> Engine["One domain engine: tenancy · scopes · versions · approvals · credits"]
   MCP --> Engine
   Engine --> DB[("Postgres + RLS · private storage")]
