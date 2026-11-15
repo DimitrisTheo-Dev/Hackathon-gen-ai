@@ -4,6 +4,7 @@ import { instantSchema } from "../../contracts/src/index.js";
 import { requireHuman, requireScope, type Ctx, type EngineDeps } from "./access.js";
 import { EngineError, StoreConflict } from "./errors.js";
 import { isSocialPlatform, subscribeProviderAccounts, type SocialPlatform } from "./socials.js";
+import { respondToActivity, sendDueCampaignMessages } from "./socials-campaigns.js";
 import { nativeWebhooks } from "./socials-webhooks.js";
 import type { Row } from "./store.js";
 import { parse } from "./studio.js";
@@ -68,7 +69,12 @@ export type SocialEventInput = z.input<typeof socialEventInputSchema>;
 
 /** Stores events for every workspace that has the account connected. Unknown accounts are counted, never stored. */
 export async function recordSocialEvents(deps: EngineDeps, platform: SocialPlatform, source: string, events: SocialEventInput[]) {
+  return (await storeSocialEvents(deps, platform, source, events)).outcome;
+}
+/** Like `recordSocialEvents`, and also answers with the rows stored now: what happened for the first time. */
+async function storeSocialEvents(deps: EngineDeps, platform: SocialPlatform, source: string, events: SocialEventInput[]) {
   const outcome = { received: events.length, stored: 0, duplicates: 0, unmatched: 0 };
+  const rows: Row[] = [];
   const received = deps.now().getTime();
   const now = new Date(received).toISOString();
   for (const [index, event] of events.entries()) {
@@ -81,7 +87,7 @@ export async function recordSocialEvents(deps: EngineDeps, platform: SocialPlatf
     const workspaces = new Map(accounts.map((account) => [account.org_id as string, account]));
     for (const account of workspaces.values()) {
       try {
-        await deps.store.insert("social_events", {
+        const row = await deps.store.insert("social_events", {
           id: crypto.randomUUID(),
           org_id: account.org_id,
           account_id: account.id,
@@ -97,6 +103,7 @@ export async function recordSocialEvents(deps: EngineDeps, platform: SocialPlatf
           // One millisecond apart within a delivery, so reading back in pages (`before`) never skips a tie.
           received_at: new Date(received + index).toISOString(),
         });
+        rows.push(row);
         outcome.stored++;
       } catch (error) {
         if (!(error instanceof StoreConflict)) throw error;
@@ -109,7 +116,16 @@ export async function recordSocialEvents(deps: EngineDeps, platform: SocialPlatf
         for (const row of accounts.filter((row) => row.org_id === account.org_id)) await deps.store.update("provider_connections", { id: row.id }, { state: "expired", updated_at: now });
     }
   }
-  return outcome;
+  return { outcome, rows };
+}
+
+/**
+ * What follows a delivery: comment-to-DM campaigns answer what happened for the first time (a repeated delivery is
+ * never answered twice), and follow-ups that came due are sent. Never thrown: the delivery itself was accepted.
+ */
+async function afterDelivery(deps: EngineDeps, rows: Row[]) {
+  await respondToActivity(deps, rows);
+  await sendDueCampaignMessages(deps).catch(() => undefined);
 }
 
 /* ───────────────────────── deliveries ───────────────────────── */
@@ -194,7 +210,26 @@ export async function receiveSocialWebhook(deps: EngineDeps, platformId: string,
   // A platform retries anything not answered with success, so one entry of its delivery that does not fit the
   // shared shape is left out instead of failing the rest. The generic format was already checked strictly.
   const events = native ? delivery.events.flatMap((event) => socialEventInputSchema.safeParse(event).data ?? []) : delivery.events;
-  return recordSocialEvents(deps, platform, delivery.source ?? adapter.source, events);
+  const { outcome, rows } = await storeSocialEvents(deps, platform, delivery.source ?? adapter.source, events);
+  await afterDelivery(deps, rows);
+  return outcome;
+}
+
+/**
+ * Sends events made up by "Try it" (socials-campaigns.ts) the way a sender would: as a delivery in the generic format,
+ * signed with SOCIALS_WEBHOOK_SECRET, through the same checks and steps as any other. Without that secret there is no
+ * signed address to go through, and they are taken in directly.
+ */
+export async function deliverTestEvents(deps: EngineDeps, platform: SocialPlatform, events: SocialEventInput[]) {
+  const secret = deps.config.socials.webhookSecret;
+  if (!secret) {
+    const { outcome, rows } = await storeSocialEvents(deps, platform, "test", events);
+    await afterDelivery(deps, rows);
+    return { via: "direct" as const, outcome };
+  }
+  const rawBody = JSON.stringify({ source: "test", events });
+  const headers = new Headers({ "content-type": "application/json", [SIGNATURE_HEADER]: signSocialWebhook(secret, rawBody, deps.now()) });
+  return { via: "webhook" as const, outcome: await receiveSocialWebhook(deps, platform, headers, rawBody) };
 }
 
 const RENEW_AFTER_HOURS = 48;

@@ -18,6 +18,7 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   publish_jobs: [{ columns: ["item_id", "revision", "platform", "account_id", "scheduled_at"] }],
   provider_connections: [{ columns: ["org_id", "provider", "platform", "external_account_id"] }],
   social_events: [{ columns: ["org_id", "platform", "type", "external_id"] }],
+  dm_conversations: [{ columns: ["org_id", "account_id", "contact_id"] }],
   agent_connections: [{ columns: ["token_sha256"] }],
   billing_customers: [{ columns: ["org_id"] }, { columns: ["stripe_customer_id"] }],
   billing_state: [{ columns: ["org_id"] }, { columns: ["stripe_subscription_id"], where: (r) => r.stripe_subscription_id != null }],
