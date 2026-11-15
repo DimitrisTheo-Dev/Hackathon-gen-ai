@@ -238,11 +238,17 @@ test("deleting a persona deletes its looks and their photos, and keeps the perso
   const given = await consent("user:u1", persona.id);
   const photo = await uploadPhoto("user:u1", persona.id);
   await op("create_persona_look", "user:u1", { personaId: persona.id, name: "Studio", imageKey: photo, operationKey: crypto.randomUUID() });
+  // A voice that clones from a reference clip on every request: the clip is the person's voice and goes too.
+  const [row] = await store.select("personas", { id: persona.id });
+  const clip = `orgs/${row.org_id}/personas/${persona.id}/${crypto.randomUUID()}.wav`;
+  await files.put(clip, bytesOf("voice"), "audio/wav");
+  await store.insert("persona_voices", { id: crypto.randomUUID(), org_id: row.org_id, persona_id: persona.id, name: "HeyGen on fal", provider: "fal", model: "heygen/heygen-voice", reference_audio_key: clip, priority: 1 });
   const deleted = await op("delete_persona", "user:u1", { personaId: persona.id });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
   assert.deepEqual(await list(), []);
   assert.equal((await store.select("persona_looks", {})).length, 0);
   assert.equal(files.objects.has(photo), false);
+  assert.equal(files.objects.has(clip), false);
   const [kept] = await store.select("likeness_consents", { id: given.id });
   assert.equal(kept.revoked_at, null);
   assert.ok(kept.scan_video_key && files.objects.has(kept.scan_video_key));
@@ -258,5 +264,17 @@ test("the migration keeps personas server-only and ties every consent and look t
   assert.match(sql, /consent_id uuid unique,/);
   assert.match(sql, /foreign key \(consent_id, org_id\) references public\.likeness_consents\(id, org_id\) on delete set null \(consent_id\)/);
   assert.match(sql, /foreign key \(persona_id, org_id\) references public\.personas\(id, org_id\) on delete cascade/);
+  assert.doesNotMatch(sql, /drop |grant /i);
+});
+
+test("persona voices are server-only, belong to the persona's workspace, and keep one voice per fallback step", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20261115140000_persona_voices.sql", import.meta.url), "utf8");
+  assert.match(sql, /create table public\.persona_voices \(/);
+  assert.match(sql, /alter table public\.persona_voices enable row level security;/);
+  assert.match(sql, /revoke all on public\.persona_voices from anon, authenticated;/);
+  assert.match(sql, /foreign key \(persona_id, org_id\) references public\.personas\(id, org_id\) on delete cascade/);
+  assert.match(sql, /provider in \('cartesia', 'elevenlabs', 'fal'\)/);
+  assert.match(sql, /create unique index persona_voices_priority on public\.persona_voices\(persona_id, priority\) where priority is not null;/);
+  assert.match(sql, /check \(provider_voice_id is not null or reference_audio_key is not null\)/);
   assert.doesNotMatch(sql, /drop |grant /i);
 });

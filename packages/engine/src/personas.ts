@@ -38,6 +38,8 @@ import { parse } from "./studio.js";
  */
 export const PERSONAS_TABLE = "personas";
 export const PERSONA_LOOKS_TABLE = "persona_looks";
+/** Voices a persona speaks with (supabase/migrations/20261115140000_persona_voices.sql). */
+export const PERSONA_VOICES_TABLE = "persona_voices";
 /** likeness.ts owns this table; named here so the two modules do not import each other. */
 const CONSENTS_TABLE = "likeness_consents";
 const UPLOAD_TTL_SECONDS = 10 * 60;
@@ -201,8 +203,12 @@ export async function deletePersona(deps: EngineDeps, ctx: Ctx, raw: unknown) {
   editor(ctx, "Deleting a persona");
   const input = parse(personaRefInputSchema, raw);
   const persona = await findPersona(deps, ctx, input.personaId);
-  const looks = await deps.store.select(PERSONA_LOOKS_TABLE, { persona_id: persona.id, org_id: ctx.org.id }, { limit: PERSONA_LOOK_LIMIT });
-  const keys = looks.map((look) => look.image_key).filter((key): key is string => typeof key === "string" && key.length > 0);
+  const [looks, voices] = await Promise.all([
+    deps.store.select(PERSONA_LOOKS_TABLE, { persona_id: persona.id, org_id: ctx.org.id }, { limit: PERSONA_LOOK_LIMIT }),
+    // Voice rows go with the persona (on delete cascade); their reference clips in R2 are removed here.
+    deps.store.select(PERSONA_VOICES_TABLE, { persona_id: persona.id, org_id: ctx.org.id }, { limit: PERSONA_LOOK_LIMIT }),
+  ]);
+  const keys = [...looks.map((look) => look.image_key), ...voices.map((voice) => voice.reference_audio_key)].filter((key): key is string => typeof key === "string" && key.length > 0);
   // A failed delete stops here with every row intact, so deleting again finishes the job.
   if (keys.length) {
     const files = storage(deps);
@@ -210,7 +216,7 @@ export async function deletePersona(deps: EngineDeps, ctx: Ctx, raw: unknown) {
   }
   await deps.store.remove(PERSONA_LOOKS_TABLE, { persona_id: persona.id, org_id: ctx.org.id });
   await deps.store.remove(PERSONAS_TABLE, { id: persona.id, org_id: ctx.org.id });
-  await audit(deps, ctx, { action: "Deleted a persona", objectId: persona.id, outcome: `${looks.length} looks and ${keys.length} photos deleted; the consent was kept` });
+  await audit(deps, ctx, { action: "Deleted a persona", objectId: persona.id, outcome: `${looks.length} looks, ${voices.length} voices and ${keys.length} files deleted; the consent was kept` });
   return { deleted: true as const };
 }
 
