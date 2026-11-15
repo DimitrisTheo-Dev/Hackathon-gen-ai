@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHmac } from "node:crypto";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -18,16 +19,34 @@ async function sessions() {
   return { verify, token };
 }
 
-test("personal tokens are per user and can't be forged", async () => {
-  const token = await mintGatewayToken(SECRET, "minas");
-  assert.match(token, /^fgw1\.minas\.[A-Za-z0-9_-]{43}$/);
+test("personal tokens are per user, expire, and can't be forged", async () => {
+  const token = await mintGatewayToken(SECRET, "minas", 3600);
+  assert.match(token, /^fgw2\.1\.minas\.\d+\.\d+\.[A-Za-z0-9_-]{43}$/);
   assert.equal(await verifyGatewayToken(SECRET, token), "minas");
   assert.equal(await verifyGatewayToken(SECRET, token.replace("minas", "admin")), null);
   assert.equal(await verifyGatewayToken("h".repeat(64), token), null);
   assert.equal(await verifyGatewayToken(undefined, token), null);
-  await assert.rejects(mintGatewayToken(SECRET, "Not Valid"), /User ids/);
-  const cli = execFileSync(process.execPath, ["apps/machines/mint-token.mjs", "minas"], { env: { ...process.env, FACEFUL_GATEWAY_SIGNING_KEY: SECRET } }).toString();
-  assert.equal(cli, token);
+  assert.equal(await verifyGatewayToken(SECRET, token, Date.now() + 3_601_000), null, "expired");
+  const legacy = `fgw1.minas.${createHmac("sha256", SECRET).update("fgw1:minas").digest("base64url")}`;
+  assert.equal(await verifyGatewayToken(SECRET, legacy), null, "the old tokens that never expired are refused");
+  await assert.rejects(mintGatewayToken(SECRET, "minas", 31 * 86_400), /30 days/);
+  await assert.rejects(mintGatewayToken(SECRET, "Not Valid", 60), /User ids/);
+
+  // Rotation: a new version signs, the old one still verifies until it is removed, which revokes what it signed.
+  const rotated = `2:${"n".repeat(64)},1:${SECRET}`;
+  assert.equal(await verifyGatewayToken(rotated, token), "minas");
+  assert.match(await mintGatewayToken(rotated, "minas", 60), /^fgw2\.2\./);
+  assert.equal(await verifyGatewayToken(`2:${"n".repeat(64)}`, token), null);
+
+  const mint = (...args: string[]) => execFileSync(process.execPath, ["apps/machines/mint-token.mjs", ...args], { env: { ...process.env, FACEFUL_GATEWAY_SIGNING_KEY: rotated }, stdio: "pipe" }).toString();
+  const cli = mint("minas", "12h");
+  assert.equal(await verifyGatewayToken(rotated, cli), "minas");
+  const [, version, , issued, expires] = cli.split(".");
+  assert.deepEqual([version, Number(expires) - Number(issued)], ["2", 12 * 3600]);
+  const [, , , defaultIssued, defaultExpires] = mint("minas").split(".");
+  assert.equal(Number(defaultExpires) - Number(defaultIssued), 7 * 86_400, "seven days unless told otherwise");
+  assert.throws(() => mint("minas", "45d"), /at most 30d/);
+  assert.throws(() => mint("minas", "forever"), /30m, 12h or 7d/);
 });
 
 test("Faceful sessions are verified by signature, issuer, audience and expiry", async () => {
@@ -47,11 +66,11 @@ test("Faceful sessions are verified by signature, issuer, audience and expiry", 
 test("the caller is identified from the credential only", async () => {
   const { verify, token } = await sessions();
   const deps = { signingKey: SECRET, verifySession: verify };
-  assert.deepEqual(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas")}`, deps), { uid: "minas", via: "token" });
+  assert.deepEqual(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas", 60)}`, deps), { uid: "minas", via: "token" });
   assert.deepEqual(await identify(`Bearer ${await token()}`, deps), { uid: USER, via: "session" });
   assert.equal(await identify("Bearer fgw1.minas.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", deps), null);
   assert.equal(await identify(null, deps), null);
-  assert.equal(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas")}`, { verifySession: verify }), null, "no signing key, no personal tokens");
+  assert.equal(await identify(`Bearer ${await mintGatewayToken(SECRET, "minas", 60)}`, { verifySession: verify }), null, "no signing key, no personal tokens");
 });
 
 test("CORS answers only listed origins", () => {

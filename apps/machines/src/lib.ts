@@ -1,37 +1,23 @@
 // Pure pieces of the machines gateway: who is calling, CORS, and reading a run's event stream.
 // No Cloudflare APIs here, so the root test suite covers this file.
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
+import { mintSignedToken, parseKeyring, verifySignedToken } from "../../workspace-store/src/signed-token";
 
 /** A Supabase user UUID, or a short slug for a personal token. */
 export const isUserId = (value: string) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(value);
 export const isProjectId = (value: string) => /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(value);
 
-const encoder = new TextEncoder();
-function base64url(bytes: ArrayBuffer): string {
-  let binary = "";
-  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+export const GATEWAY_AUDIENCE = "faceful-machines";
+/** Personal tokens (mint-token.mjs), signed with GATEWAY_SIGNING_KEY. They expire; rotating the key revokes them all. */
+export const PERSONAL_TOKEN = { kind: "fgw2", maxTtlSeconds: 30 * 86_400 } as const;
+export async function mintGatewayToken(signingKey: string, uid: string, ttlSeconds: number, now = Date.now()): Promise<string> {
+  const keyring = parseKeyring(signingKey);
+  if (!keyring) throw new Error("GATEWAY_SIGNING_KEY must be at least 32 characters, or a keyring like 2:<secret>,1:<older secret>.");
+  if (ttlSeconds > PERSONAL_TOKEN.maxTtlSeconds) throw new Error("Personal tokens live 30 days at most.");
+  return mintSignedToken(keyring, PERSONAL_TOKEN.kind, GATEWAY_AUDIENCE, uid, ttlSeconds, now);
 }
-async function sign(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return base64url(await crypto.subtle.sign("HMAC", key, encoder.encode(message)));
-}
-const sameText = (a: string, b: string) => {
-  let difference = a.length ^ b.length;
-  for (let index = 0; index < a.length; index++) difference |= a.charCodeAt(index) ^ (b.charCodeAt(index) || 0);
-  return difference === 0;
-};
-
-/** Personal token for one user: fgw1.<uid>.<HMAC-SHA256(secret, "fgw1:<uid>")>. */
-export async function mintGatewayToken(secret: string, uid: string): Promise<string> {
-  if (!secret || secret.length < 32) throw new Error("GATEWAY_SIGNING_KEY must be at least 32 characters.");
-  if (!isUserId(uid)) throw new Error("User ids are lowercase letters, digits and dashes.");
-  return `fgw1.${uid}.${await sign(secret, `fgw1:${uid}`)}`;
-}
-export async function verifyGatewayToken(secret: string | undefined, token: string): Promise<string | null> {
-  const match = /^fgw1\.([a-z0-9][a-z0-9-]{0,63})\.([A-Za-z0-9_-]{43})$/.exec(token);
-  if (!match || !secret || secret.length < 32) return null;
-  return sameText(await sign(secret, `fgw1:${match[1]}`), match[2]) ? match[1] : null;
+export async function verifyGatewayToken(signingKey: string | undefined, token: string, now = Date.now()): Promise<string | null> {
+  return (await verifySignedToken(parseKeyring(signingKey), PERSONAL_TOKEN.kind, GATEWAY_AUDIENCE, token, PERSONAL_TOKEN.maxTtlSeconds, now))?.uid ?? null;
 }
 
 /** Verifies a Faceful (Supabase) session against the project's public signing keys. No secret needed. */
@@ -55,7 +41,7 @@ export type Identity = { uid: string; via: "token" | "session" };
 export async function identify(authorization: string | null, deps: { signingKey?: string; verifySession: (token: string) => Promise<string | null> }): Promise<Identity | null> {
   const match = /^Bearer\s+(\S+)$/i.exec(authorization ?? "");
   if (!match) return null;
-  if (match[1].startsWith("fgw1.")) {
+  if (/^fgw\d\./.test(match[1])) {
     const uid = await verifyGatewayToken(deps.signingKey, match[1]);
     return uid ? { uid, via: "token" } : null;
   }

@@ -16,7 +16,7 @@ export type Env = {
   DB: D1Database;
   /** Same value as the workspace store's secret: lets this Worker mint each machine's folder token. */
   STORE_SIGNING_KEY: string;
-  /** Signs personal gateway tokens (fgw1.…). Optional: without it only Faceful sessions are accepted. */
+  /** Keyring that signs personal gateway tokens (fgw2.…, expiring). Optional: without it no personal token is accepted. */
   GATEWAY_SIGNING_KEY?: string;
   SUPABASE_URL: string;
   STORE_URL: string;
