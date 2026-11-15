@@ -210,7 +210,7 @@
 .fd-heading strong { font-size: 1.85em; font-weight: 500; letter-spacing: -.03em; line-height: 1.15; }
 .fd-heading span { font-size: .95em; color: var(--l-text-2); }
 /* Three cards sit centred; when the agent's fourth arrives the row slides half a step to make room. */
-.fd-track { position: absolute; top: 15.4em; left: 50%; width: 53.8em; margin-left: -26.9em; display: flex; gap: 1.4em; transform: translateX(6.9em); transition: transform 640ms var(--l-ease-in-out); }
+.fd-track { position: absolute; top: 15.4em; left: 50%; width: 53.8em; margin-left: -26.9em; display: flex; gap: 1.4em; transform: translateX(6.9em); transition: transform 640ms var(--l-ease-in-out), opacity 280ms ease-out; }
 .fd.has-agent-card .fd-track { transform: none; }
 .fd-pill { position: absolute; left: 0; top: -3.1em; display: grid; padding: .42em .9em .42em .75em; border: 1px solid var(--l-border); border-radius: 999px; background: var(--l-surface); box-shadow: var(--l-lift); font-size: .88em; opacity: 0; transform: translateY(.5em); transition: opacity 240ms ease-out, transform 360ms var(--l-ease-out), background-color 320ms ease, border-color 320ms ease, color 320ms ease; }
 .fd-pill.is-in { opacity: 1; transform: none; }
@@ -223,7 +223,7 @@
 .fd-pill-working i:nth-child(2), .fd-dots i:nth-child(2) { animation-delay: 140ms; }
 .fd-pill-working i:nth-child(3), .fd-dots i:nth-child(3) { animation-delay: 280ms; margin-right: .2em; }
 @keyframes fd-dot { 0%, 60%, 100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-.22em); } }
-.landing-demo[data-playing="false"] :is(.fd-pill-working i, .fd-dots i, .fd-caret, .fd-figure, .fd-meter i, .fd-caption-line i::after, .fd-face) { animation-play-state: paused; }
+.landing-demo[data-playing="false"] :is(.fd-pill-working i, .fd-dots i, .fd-caret, .fd-figure, .fd-meter i, .fd-caption-line i::after, .fd-face, .fd-scan-line) { animation-play-state: paused; }
 
 /* Drafts are dealt onto the canvas: each arrives a touch askew and settles square. */
 .fd-card { position: relative; flex: 0 0 12.4em; opacity: 0; transform: translateY(2em) rotate(var(--deal, -2.2deg)) scale(.95); transition: opacity 300ms ease-out, transform 620ms var(--l-ease-out); }
@@ -314,6 +314,34 @@
 .fd-cursor svg { width: 1.7em; height: 1.7em; fill: var(--l-ink); stroke: #fff; stroke-width: 1.4; filter: drop-shadow(0 .15em .3em rgba(42, 42, 39, .3)); transition: transform 160ms var(--l-ease-out); }
 .fd-cursor.is-clicked svg { transform: scale(.86); }
 .fd-cursor span { margin: 1.25em 0 0 -.1em; padding: .22em .7em; border-radius: .7em .7em .7em .15em; background: var(--l-ink); color: #fff; font-size: .82em; font-weight: 550; box-shadow: 0 .3em .8em -.3em rgba(42, 42, 39, .5); }
+/* Who presents: a face scanned once in Personas, or text only. The drafts step back while the choice is on. */
+.fd.has-choice .fd-track { opacity: .28; }
+.fd-choice { position: absolute; z-index: 2; left: 50%; top: 13.2em; width: 31em; margin-left: -15.5em; display: grid; gap: .3em; padding: 1.3em 1.4em 1.4em; border: 1px solid var(--l-border); border-radius: 1.3em; background: var(--l-surface); box-shadow: var(--l-lift), 0 1.6em 3.2em -1.6em rgba(42, 42, 39, .32); opacity: 0; transform: translateY(1em) scale(.97); transition: opacity 260ms ease-out, transform 480ms var(--l-ease-out); pointer-events: none; }
+.fd-choice.is-in { opacity: 1; transform: none; }
+.fd-choice > small { font-size: .8em; color: var(--l-text-2); }
+.fd-choice > strong { font-size: 1.25em; font-weight: 500; letter-spacing: -.025em; line-height: 1.25; }
+.fd-choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: .9em; margin-top: .9em; }
+.fd-option { position: relative; display: grid; gap: .1em; padding: .75em .75em .85em; border: 1px solid var(--l-border); border-radius: 1em; background: var(--l-bg); }
+/* The ring is drawn once and faded in, so the choice lands without repainting the border. */
+.fd-option::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 .14em var(--l-ink); opacity: 0; transition: opacity 200ms ease-out; }
+.fd-option b { margin-top: .55em; font-size: .95em; }
+.fd-option small { font-size: .76em; color: var(--l-text-2); }
+.fd-option-art { position: relative; display: grid; place-items: center; height: 7.6em; border-radius: .7em; overflow: hidden; background: var(--l-subtle); }
+.fd .fd-option-art svg { width: 6.6em; height: 6.6em; }
+.fd-scan-figure { fill: #d9d4c6; }
+.fd-scan-frame { fill: none; stroke: var(--l-ink); stroke-width: 2.4; stroke-linecap: round; opacity: .7; }
+/* The scan line: a soft band that sweeps the silhouette top to bottom and back. */
+.fd-scan-line { position: absolute; left: 18%; right: 18%; top: 12%; height: .16em; border-radius: 999px; background: #e0a100; box-shadow: 0 0 .9em .2em rgba(255, 196, 0, .45); opacity: .85; animation: fd-scan 1600ms ease-in-out infinite alternate; }
+@keyframes fd-scan { to { transform: translateY(5.6em); } }
+.fd-text-card { display: grid; align-content: center; justify-items: center; gap: .45em; width: 4.1em; height: 6.4em; border-radius: .55em; background: linear-gradient(172deg, #f4cb48, #eed79b 56%, #e0d4b7); box-shadow: 0 .5em 1em -.6em rgba(42, 42, 39, .4); }
+.fd-text-card i { display: block; height: .5em; width: 2.9em; border-radius: .2em; background: #fff; }
+.fd-text-card i:nth-child(2) { width: 2.2em; background: rgba(28, 26, 21, .74); }
+.fd-text-card i:nth-child(3) { width: 2.6em; background: rgba(28, 26, 21, .74); }
+.fd-option-check { position: absolute; top: .5em; right: .5em; display: grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 50%; background: var(--l-ink); color: #fff; opacity: 0; transform: scale(.6); transition: opacity 180ms ease-out, transform 300ms var(--l-ease-out); }
+.fd .fd-option-check svg { width: .9em; height: .9em; stroke-width: 2.6; }
+.fd-choice.is-chosen .fd-option-face { animation: fd-press 360ms var(--l-ease-out); }
+.fd-choice.is-chosen .fd-option-face::after, .fd-choice.is-chosen .fd-option-check { opacity: 1; transform: none; }
+@keyframes fd-press { 35% { transform: scale(.97); } }
 .fd-footer { position: absolute; inset: auto 0 0 0; height: 3.3em; padding: 0 2em; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--l-border); background: color-mix(in srgb, var(--l-bg) 90%, transparent); font-size: .82em; color: var(--l-text-2); font-variant-numeric: tabular-nums; }
 .fd-footer span:first-child { display: flex; align-items: center; gap: .5em; }
 .fd-footer i { width: .5em; height: .5em; border-radius: 50%; background: var(--green, #3aa676); }
@@ -473,6 +501,9 @@
   .fd-cast { right: 6.5em; }
   .fd-slot { top: calc(100% + .5em); font-size: .72em; }
   .fd-cursor { left: 32.7em; top: 24.4em; }
+  .fd-choice { left: 1.5em; right: 1.5em; top: 11.6em; width: auto; margin-left: 0; padding: 1.1em 1.1em 1.2em; }
+  .fd-choice > strong { font-size: 1.15em; }
+  .fd-choice-row { gap: .7em; }
   .fd-chat { inset: auto 0 0 0; width: auto; height: 24.7em; border-left: 0; border-top: 1px solid var(--l-border); border-radius: 1.7em 1.7em 0 0; box-shadow: 0 -1.2em 3em -1.6em rgba(42, 42, 39, .35); transform: translateY(104%); }
   .fd-sheet-handle { display: block; width: 3.4em; height: .42em; margin: .8em auto 0; border-radius: 999px; background: #d6d3c8; }
   /* The latest message sits whole above the composer; it used to slide underneath it. */
