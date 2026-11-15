@@ -318,5 +318,5 @@ test("only the face scan page may use the camera and microphone, and its files m
   // Skipping the site-wide rule must not drop any of its other protections on these paths.
   for (const source of ["/assets/(.*)", "/face-scan", "/face-scan/"])
     for (const key of ["Strict-Transport-Security", "Cross-Origin-Opener-Policy", "Referrer-Policy", "X-Frame-Options"]) assert.equal(header(source, key), header(site.source, key), `${source}: ${key}`);
-  assert.match(config.proxy.matcher[0], /\|face-scan\)/);
+  assert.match(config.proxy.matcher[0], /\|face-scan[|)]/);
 });
