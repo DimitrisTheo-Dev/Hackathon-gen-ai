@@ -136,13 +136,13 @@ export function useProduction({
   };
 }
 
-/** Whether the rough preview is shown. Kept per browser; it is only a viewing preference. */
+/** Whether the rough preview is shown. Off unless the person turns it on; kept per browser as a viewing preference. */
 export function usePreviewShown(): [boolean, (shown: boolean) => void] {
   const [shown, setShown] = useState(() => {
     try {
-      return localStorage.getItem("faceful.newProject.preview") !== "hidden";
+      return localStorage.getItem("faceful.newProject.preview") === "shown";
     } catch {
-      return true;
+      return false;
     }
   });
   return [

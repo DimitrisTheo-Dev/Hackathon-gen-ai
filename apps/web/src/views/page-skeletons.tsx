@@ -30,7 +30,7 @@ export function TemplateGridSkeleton() {
           <li key={index}>
             <span className="tl-card">
               <span className="tl-poster" />
-              <span className="tl-card-text"><i className="tl-sk-name" /><i className="tl-sk-line" /><i className="tl-sk-line short" /></span>
+              <span className="tl-card-text"><i className="tl-sk-name" /></span>
             </span>
           </li>
         ))}
