@@ -4,7 +4,8 @@ import { ArrowUp, AudioLines, CalendarDays, Captions, Check, ChevronRight, Clapp
 /**
  * A coded illustration of the real studio: Projects on the left, the storyboard canvas in the
  * middle, the AI Director chat on the right. It tells one short story in a loop:
- * prompt → the composer docks into the chat → presenter drafts land → a presenter is chosen →
+ * prompt → the composer docks into the chat → presenter drafts land → who presents: your scanned face or
+ * text only → a presenter is chosen →
  * an edit becomes version 2 → a posting time waits for approval → a connected agent adds a draft →
  * the draft opens in the video editor (template, persona, brand kit, a multi-track timeline playing) →
  * the agent adds a closing card to the timeline over MCP → the three destinations wait for approval.
@@ -15,7 +16,7 @@ import { ArrowUp, AudioLines, CalendarDays, Captions, Check, ChevronRight, Clapp
  */
 const PROMPT = "Create a 15-second Reel for BeWell with a friendly Greek presenter, ready for Monday.";
 
-const STEP = { home: 0, typing: 1, send: 2, dock: 3, drafts: 4, ready: 5, pick: 6, ask: 7, proposal: 8, applied: 9, schedule: 10, agentCursor: 11, agentCard: 12, video: 13, play: 14, agentEdit: 15, destinations: 16, fade: 17, rewind: 18 } as const;
+const STEP = { home: 0, typing: 1, send: 2, dock: 3, drafts: 4, ready: 5, choice: 6, chose: 7, pick: 8, ask: 9, proposal: 10, applied: 11, schedule: 12, agentCursor: 13, agentCard: 14, video: 15, play: 16, agentEdit: 17, destinations: 18, fade: 19, rewind: 20 } as const;
 
 /** [time in ms, step]. Steps only ever toggle classes; all motion is CSS transform/opacity. */
 const TIMELINE: ReadonlyArray<readonly [number, number]> = [
@@ -25,21 +26,23 @@ const TIMELINE: ReadonlyArray<readonly [number, number]> = [
   [1950, STEP.dock], // composer docks right, chat and canvas open, message lands
   [2450, STEP.drafts], // drafts arrive, "Drafting…"
   [3250, STEP.ready], // "3 drafts ready", the presenter row appears
-  [3900, STEP.pick], // another presenter is chosen; every draft takes them on
-  [4800, STEP.ask], // follow-up request
-  [5300, STEP.proposal], // reviewable change
-  [6150, STEP.applied], // applied → version 2, the caption on the card changes with it
-  [6900, STEP.schedule], // posting time proposed, needs approval
-  [7700, STEP.agentCursor], // agent cursor glides in
-  [8400, STEP.agentCard], // agent's draft lands
-  [9500, STEP.video], // the first draft opens in the video editor
-  [9900, STEP.play], // the timeline plays: playhead, karaoke captions, voice
-  [11500, STEP.agentEdit], // the agent drops a closing card onto the timeline over MCP
-  [12600, STEP.destinations], // Reels, TikTok and Shorts, waiting for approval
-  [14300, STEP.fade],
-  [14600, STEP.rewind], // rewind poses with transitions off
+  [3900, STEP.choice], // who presents: a face scan sweeps a silhouette beside "Text only"
+  [5500, STEP.chose], // "Your face" is chosen
+  [7000, STEP.pick], // another presenter is chosen; every draft takes them on
+  [7900, STEP.ask], // follow-up request
+  [8400, STEP.proposal], // reviewable change
+  [9250, STEP.applied], // applied → version 2, the caption on the card changes with it
+  [10000, STEP.schedule], // posting time proposed, needs approval
+  [10800, STEP.agentCursor], // agent cursor glides in
+  [11500, STEP.agentCard], // agent's draft lands
+  [12600, STEP.video], // the first draft opens in the video editor
+  [13000, STEP.play], // the timeline plays: playhead, karaoke captions, voice
+  [14600, STEP.agentEdit], // the agent drops a closing card onto the timeline over MCP
+  [15700, STEP.destinations], // Reels, TikTok and Shorts, waiting for approval
+  [17400, STEP.fade],
+  [17700, STEP.rewind], // rewind poses with transitions off
 ];
-const LOOP_MS = 14750;
+const LOOP_MS = 17850;
 const TYPE_START = 400;
 const TYPE_END = 1650;
 const FINAL_STEP: number = STEP.agentCard;
@@ -232,8 +235,9 @@ export function StudioDemo() {
   const on = (from: number) => live && step >= from;
   const docked = step >= STEP.dock && step !== STEP.rewind;
   const picked = on(STEP.pick);
+  const choosing = live && (step === STEP.choice || step === STEP.chose);
   const latest = step >= STEP.agentEdit ? "agentEdit" : step >= STEP.video ? "video" : step >= STEP.schedule ? "schedule" : step >= STEP.proposal ? "proposal" : step >= STEP.ask ? "ask" : step >= STEP.ready ? "saved" : step >= STEP.dock ? "working" : "";
-  const rootClass = ["fd", docked ? "is-docked" : "is-home", step === STEP.send ? "is-sending" : "", picked ? "has-pick" : "", on(STEP.agentCard) ? "has-agent-card" : "", on(STEP.video) ? "is-video" : "", on(STEP.agentEdit) ? "has-edit-msg" : "", step === STEP.fade ? "is-fading" : "", step === STEP.rewind ? "is-rewinding" : ""].filter(Boolean).join(" ");
+  const rootClass = ["fd", docked ? "is-docked" : "is-home", step === STEP.send ? "is-sending" : "", choosing ? "has-choice" : "", picked ? "has-pick" : "", on(STEP.agentCard) ? "has-agent-card" : "", on(STEP.video) ? "is-video" : "", on(STEP.agentEdit) ? "has-edit-msg" : "", step === STEP.fade ? "is-fading" : "", step === STEP.rewind ? "is-rewinding" : ""].filter(Boolean).join(" ");
   /** The name chip on a draft: the presenter's name beside a small "speaking" meter. */
   const nameChip = (names: readonly PresenterId[]) => (
     <span className="fd-presenter">
@@ -246,7 +250,7 @@ export function StudioDemo() {
     <figure
       ref={figure}
       className="landing-demo"
-      aria-label="Animated illustration of the Faceful studio. A typed request becomes three presenter drafts with captions beside the AI Director chat. A presenter is chosen for them, an edit is saved as version 2, a posting time waits for approval, and a connected agent adds a draft. The first draft then opens in the video editor with its template, persona and brand kit and a timeline of picture, voice, music and captions; the agent adds a closing card over MCP, and Instagram Reels, TikTok and YouTube Shorts wait for approval."
+      aria-label="Animated illustration of the Faceful studio. A typed request becomes three presenter drafts with captions beside the AI Director chat. The presenter can be your own face, scanned once with the camera in Personas, or the video can be text-only; a presenter is chosen for them, an edit is saved as version 2, a posting time waits for approval, and a connected agent adds a draft. The first draft then opens in the video editor with its template, persona and brand kit and a timeline of picture, voice, music and captions; the agent adds a closing card over MCP, and Instagram Reels, TikTok and YouTube Shorts wait for approval."
       data-playing={playing ? "true" : "false"}
       data-step={step}
       onClick={(event) => { if (motion && !(event.target as Element).closest("button")) setHeld((value) => !value); }}
@@ -328,6 +332,27 @@ export function StudioDemo() {
                     </div>
                     <div className="fd-card-meta"><strong>{AGENT_DRAFT.title}</strong><span className="fd-state"><i />Draft<span className="fd-version"><span>v1</span></span><em>via MCP</em></span></div>
                   </div>
+                </div>
+                {/* Who presents: a face scanned once in Personas, or no face at all. A drawn silhouette, never a photo. */}
+                <div className={`fd-choice ${choosing ? "is-in" : ""} ${step === STEP.chose ? "is-chosen" : ""}`}>
+                  <small>Presenter</small>
+                  <strong>Scan your face once, or keep it text-only.</strong>
+                  <span className="fd-choice-row">
+                    <span className="fd-option fd-option-face">
+                      <span className="fd-option-art">
+                        <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false"><path className="fd-scan-figure" d="M60 22c13 0 22 10 22 25 0 17-10 31-22 31S38 64 38 47c0-15 9-25 22-25Zm-46 98c2-22 16-34 34-38l12 6 12-6c18 4 32 16 34 38Z" /><path className="fd-scan-frame" d="M30 16h-8q-6 0-6 6v8M90 16h8q6 0 6 6v8M30 104h-8q-6 0-6-6v-8M90 104h8q6 0 6-6v-8" /></svg>
+                        <i className="fd-scan-line" />
+                      </span>
+                      <b>Your face</b>
+                      <small>Camera scan in Personas</small>
+                      <span className="fd-option-check"><Check /></span>
+                    </span>
+                    <span className="fd-option fd-option-text">
+                      <span className="fd-option-art"><span className="fd-text-card"><i /><i /><i /></span></span>
+                      <b>Text only</b>
+                      <small>Text cards and captions</small>
+                    </span>
+                  </span>
                 </div>
                 <span className={`fd-cursor ${on(STEP.agentCursor) && !on(STEP.video) ? "is-on" : ""} ${step >= STEP.agentCard ? "is-clicked" : ""}`}><MousePointer2 /><span>Codex</span></span>
                 {/* Act two: the first draft in the video editor. Same presenter, the revised caption, the brand kit and a template. */}

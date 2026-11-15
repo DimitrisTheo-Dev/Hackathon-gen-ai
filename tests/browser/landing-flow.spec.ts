@@ -239,6 +239,11 @@ test('the demo plays by itself, tells the studio story in order, loops, and hold
   await expect(demo.locator('.fd-card-a .fd-presenter .is-first')).toHaveText('Eleni');
   await expect(demo.locator('.fd-card-a .fd-caption-line').first()).toHaveText('Γεια σου! Καλώς ήρθες στο φεστιβάλ BeWell.');
   await expect(demo.locator('.fd-cast.is-in:not(.is-picked) .fd-face')).toHaveCount(4);
+  // Who presents: a face scanned once in Personas, or text only. One of them is chosen, then the flow goes on.
+  await until(page, demo.locator('.fd.has-choice .fd-choice.is-in:not(.is-chosen)'), 'the presenter choice: your face or text only');
+  await expect(demo.locator('.fd-choice')).toContainText('Scan your face once, or keep it text-only.');
+  await expect(demo.locator('.fd-option b')).toHaveText(['Your face', 'Text only']);
+  await until(page, demo.locator('.fd-choice.is-chosen'), 'your face being chosen');
   // A presenter is chosen from the row, and every draft takes that presenter on.
   await until(page, demo.locator('.fd.has-pick .fd-cast.is-picked'), 'a presenter being chosen');
   for (const card of ['a', 'b', 'c']) await expect(demo.locator(`.fd-card-${card} .fd-figure.is-picked`)).toHaveCSS('opacity', '1');
