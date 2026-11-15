@@ -3,7 +3,7 @@ import { z } from "zod";
 import { instantSchema } from "../../contracts/src/index.js";
 import { requireHuman, requireScope, type Ctx, type EngineDeps } from "./access.js";
 import { EngineError, StoreConflict } from "./errors.js";
-import { isSocialPlatform, type SocialPlatform } from "./socials.js";
+import { isSocialPlatform, subscribeProviderAccounts, type SocialPlatform } from "./socials.js";
 import { nativeWebhooks } from "./socials-webhooks.js";
 import type { Row } from "./store.js";
 import { parse } from "./studio.js";
@@ -201,7 +201,8 @@ const RENEW_AFTER_HOURS = 48;
 
 /**
  * Keeps platform subscriptions alive where the engine holds them itself (YouTube's hub forgets one after some
- * days). Runs on the scheduler tick for every workspace, and right after a workspace connects accounts.
+ * days), and asks again for the ones a provider holds that have not taken yet. Runs on the scheduler tick for every
+ * workspace, and right after a workspace connects accounts.
  */
 export async function renewWebhookSubscriptions(deps: EngineDeps, orgId?: string) {
   const outcome = { renewed: 0, failed: 0 };
@@ -221,7 +222,9 @@ export async function renewWebhookSubscriptions(deps: EngineDeps, orgId?: string
       }
     }
   }
-  return outcome;
+  // Subscriptions a provider holds for its accounts (Instagram directly): asked again until they take.
+  const held = await subscribeProviderAccounts(deps, orgId);
+  return { renewed: outcome.renewed + held.subscribed, failed: outcome.failed + held.failed };
 }
 
 /* ───────────────────────── reading ───────────────────────── */

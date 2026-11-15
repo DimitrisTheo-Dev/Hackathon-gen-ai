@@ -43,7 +43,7 @@ export function bootProbe(): void {
     }
     if (state === "shell") {
       var named = query.get("view") || "";
-      var view = /^(home|canvas|schedule|connect|brand|billing|templates|personas|clone)$/.test(named) ? named : query.has("campaign") || query.has("item") ? "canvas" : "home";
+      var view = /^(home|canvas|schedule|connect|brand|billing|templates|personas|clone|settings)$/.test(named) ? named : query.has("campaign") || query.has("item") ? "canvas" : "home";
       // Templates has two tabs, each with its own skeleton (the format grid, or the clone form); `?view=clone` is the
       // older address of the second. Personas is a card grid without tabs.
       if (view === "clone" || (view === "templates" && query.get("tab") === "clone")) view = "clone";
