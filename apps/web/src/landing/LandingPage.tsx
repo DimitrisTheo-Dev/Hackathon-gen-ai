@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "re
 import { ArrowRight, ArrowUpRight, Check, Copy, Menu, Minus, Plus, ShieldCheck, Sparkles, X } from "lucide-react";
 import { AgentList, RotatingAgentHeadline } from "./AgentRotator";
 import { Caption, Presenter, StudioDemo, cast, type PresenterId } from "./StudioDemo";
+import { Showcase } from "./Showcase";
 
 export { RotatingAgentHeadline } from "./AgentRotator";
 
@@ -54,6 +55,7 @@ function LandingNav() {
       <div className="landing-nav-inner">
         <Wordmark />
         <nav className="landing-nav-links" aria-label="Main navigation">
+          <a href="#made">Examples</a>
           <a href="#how">How it works</a>
           <a href="#agents">For agents</a>
           <a href="/docs/">Docs</a>
@@ -71,6 +73,7 @@ function LandingNav() {
       }}>
         <div className="landing-mobile-menu-heading"><span id={`${menuId}-title`}>Explore Faceful</span><button className="landing-menu-toggle" aria-label="Close navigation" onClick={closeMenu}><X size={19} /></button></div>
         <nav aria-label="Mobile navigation">
+          <a href="#made" onClick={closeMenu}>Examples <ArrowRight size={16} /></a>
           <a href="#how" onClick={closeMenu}>How it works <ArrowRight size={16} /></a>
           <a href="#agents" onClick={closeMenu}>For agents <ArrowRight size={16} /></a>
           <a href="/docs/" onClick={closeMenu}>Docs <ArrowRight size={16} /></a>
@@ -264,7 +267,7 @@ function Agents() {
 
 const questions = [
   ["Do I need an AI agent?", "No. Sign in and type what you want. Agents are optional, and they work on the same projects you see in the studio."],
-  ["Are the videos real?", "Drafts, scripts, versions and schedules are real and saved to your workspace. Presenter video rendering with Humanlike is rolling out, so the demo above shows storyboards, not rendered video."],
+  ["Are the videos real?", "Drafts, scripts, versions and schedules are real and saved to your workspace. The reels under Made with Faceful are rendered videos. The studio demo at the top shows storyboards."],
   ["Can it post without my approval?", "No. A person approves the exact video, caption and time. Agents can prepare a schedule but cannot approve it. Publishing to social accounts is not connected yet."],
   ["What does it cost?", "Every workspace starts with a few render credits. Plans run in Stripe test mode today, so no real payment is taken."],
 ] as const;
@@ -276,6 +279,7 @@ export function LandingPage() {
     <main>
       <Hero />
       <div className="landing-wide"><StudioDemo /></div>
+      <Showcase />
       <HowItWorks />
       <Agents />
       <section className="landing-faq landing-section" aria-labelledby="faq-heading">

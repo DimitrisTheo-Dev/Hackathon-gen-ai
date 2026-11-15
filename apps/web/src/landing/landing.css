@@ -772,3 +772,34 @@
   .castroom-landing { --l-text-2: #45434a; --l-border: #a9a69c; }
   .landing-header { border-bottom-color: var(--l-border); }
 }
+
+/* ───────────── Made with Faceful ───────────── */
+.sc { max-width: 1240px; }
+.sc .landing-section-heading p { margin-top: 14px; font-size: 17px; color: var(--l-text-2); text-wrap: balance; }
+.sc h3 { font-size: 23px; font-weight: 550; line-height: 1.18; letter-spacing: -.025em; }
+.sc-doctor { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 2fr); gap: 40px; align-items: center; margin-top: 52px; padding: 32px; border: 1px solid var(--l-border); border-radius: 26px; background: var(--l-surface); }
+.sc-doctor-copy p { margin-top: 10px; font-size: 15.5px; color: var(--l-text-2); text-wrap: pretty; }
+.sc-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.sc-templates { margin-top: 56px; }
+.sc-templates h3 { margin: 32px 0 14px; }
+.sc-templates h3:first-child { margin-top: 0; }
+.sc-rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(168px, calc((100% - 5 * 16px) / 6)); gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; scrollbar-width: thin; }
+.sc-rail .sc-reel { scroll-snap-align: start; }
+.sc-reel { margin: 0; min-width: 0; }
+.sc-frame { position: relative; display: block; width: 100%; aspect-ratio: 9 / 16; padding: 0; border: 0; border-radius: 18px; overflow: hidden; background: var(--l-subtle); cursor: pointer; box-shadow: var(--l-lift); transition: transform 200ms var(--l-ease-out); }
+.sc-frame video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.sc-sound { position: absolute; right: 10px; bottom: 10px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: rgba(20, 20, 18, .5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.sc-reel figcaption { display: grid; gap: 1px; margin-top: 10px; }
+.sc-reel figcaption strong { font-size: 14.5px; font-weight: 550; letter-spacing: -.015em; }
+.sc-reel figcaption small { font-size: 13px; color: var(--l-text-2); }
+@media (hover: hover) and (pointer: fine) { .sc-frame:hover { transform: translateY(-2px); } }
+.sc-frame:active { transform: scale(.98); }
+@media (max-width: 900px) {
+  .sc-doctor { grid-template-columns: 1fr; gap: 24px; padding: 24px; }
+}
+@media (max-width: 760px) {
+  .sc-doctor { padding: 18px; border-radius: 22px; }
+  .sc-row { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 72%; overflow-x: auto; scroll-snap-type: x mandatory; }
+  .sc-row .sc-reel { scroll-snap-align: start; }
+  .sc-rail { grid-auto-columns: 46%; }
+}
