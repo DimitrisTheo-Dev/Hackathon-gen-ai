@@ -25,15 +25,27 @@ const PROVIDER_SUMMARY: Record<string, string> = {
   buffer: "Use the accounts you already have in Buffer.",
 };
 /** What a person types to connect a provider that takes credentials. Sent to the engine, which stores it encrypted. */
-const PROVIDER_FIELD: Record<string, { name: string; label: string; hint: string }> = {
-  buffer: { name: "apiKey", label: "Buffer API key", hint: "Create one in Buffer under Settings → API. Faceful stores it encrypted and never shows it again." },
+const PROVIDER_FIELD: Record<string, { name: string; label: string; hint: string; minLength: number; tooShort: string }> = {
+  buffer: {
+    name: "apiKey",
+    label: "Buffer API key",
+    hint: "Create one in Buffer under Settings → API. Faceful stores it encrypted and never shows it again.",
+    // The engine refuses shorter keys (socials-buffer.ts), so this is said here, before anything is sent.
+    minLength: 16,
+    tooShort: "That’s shorter than a Buffer API key. Copy the whole key from Buffer (Settings → API).",
+  },
 };
 
 const stateLabel = { connected: "Connected", expired: "Reconnect needed", unavailable: "Unavailable" } as const;
-/** The engine's messages for these actions are written for people and pass through; a transport failure gets a plain sentence. */
+/**
+ * The engine's messages for these actions are written for people and pass through; a transport failure gets a plain
+ * sentence. So does a request its contract refuses: that message names a field and a rule, which is for developers.
+ */
 function failureText(failure: unknown, fallback: string) {
   if (!(failure instanceof ApiError) || !failure.message.trim()) return fallback;
-  return failure.code === "unauthenticated" ? "Your sign-in ended. Sign in again to manage accounts." : failure.message;
+  if (failure.code === "unauthenticated") return "Your sign-in ended. Sign in again to manage accounts.";
+  if (failure.code === "validation_error" && failure.message.startsWith("The request does not match")) return fallback;
+  return failure.message;
 }
 
 type Busy = { action: "starting" | "connecting" | "refreshing" | "removing"; id: string } | null;
@@ -141,6 +153,12 @@ export function Settings({ onOpenSchedule }: { onOpenSchedule: () => void }) {
     const field = PROVIDER_FIELD[provider.id];
     const value = form?.value.trim() ?? "";
     if (!field || !value) return;
+    if (value.length < field.minLength) {
+      setNotice("");
+      setError(field.tooShort);
+      fieldInput.current?.focus();
+      return;
+    }
     void run({ action: "connecting", id: provider.id }, `${provider.label} couldn’t be connected. Nothing was saved; try again.`, async () => {
       const { accounts } = await api.connectWithCredentials(provider.id, { [field.name]: value });
       const usable = accounts.filter((account) => account.state === "connected").length;

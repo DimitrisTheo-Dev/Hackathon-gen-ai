@@ -11,7 +11,9 @@ import { dirname, join } from "node:path";
  *   • the renderer: `/__e2e/complete-renders` finishes queued jobs through the real worker protocol
  *     with a one-second silent audio clip standing in for a rendered file;
  *   • the video platforms: YouTube's oEmbed answers with a fixed title and author (video ID AAAAAAAAAAA is
- *     "not found"); every other outside call fails, as if the network were down.
+ *     "not found"); every other outside call fails, as if the network were down;
+ *   • Buffer, for Settings → Social accounts: the key BUFFER_KEY reaches one organization with an Instagram and a
+ *     TikTok channel; any other key is refused the way Buffer refuses one.
  * The likeness capture ("Scan my face") can be tried by hand on it too:
  *   • `/__e2e/face-scan` signs this browser in as a stand-in person and opens the capture;
  *   • recordings are PUT to `/__e2e/files/<key>`, which checks the SHA-256 header the way R2 does, and are
@@ -35,6 +37,10 @@ import { MemoryMedia, MemoryStore } from "../../../packages/engine/src/store-mem
 import { handleMcpRequest } from "../../../packages/engine/src/mcp";
 
 const WORKER_TOKEN = "e2e-render-worker-token-not-a-real-credential-0001";
+/** Test-only stand-ins for the socials secrets, so Buffer can be connected and the generic webhook format is on. */
+const SOCIALS_CREDENTIAL_KEY = "e2e0".repeat(16);
+const SOCIALS_WEBHOOK_SECRET = "e2e-socials-webhook-secret-not-a-credential";
+const BUFFER_KEY = "e2e-buffer-key-not-a-credential";
 const AVATARS = JSON.stringify([{ id: "minas_kontis", name: "Minas", languages: ["en", "el"] }]);
 
 /** One second of silence. A <video> element can load it, which is all the player tests need. */
@@ -85,6 +91,24 @@ class E2EFiles extends MemoryFileStore {
     return `${this.origin}/__e2e/files/${key}?ttl=${expiresSeconds}`;
   }
 }
+/** Stand-in for Buffer's GraphQL API (packages/engine/src/socials-buffer.ts): the two reads that list a key's channels. */
+function standInBuffer(init: RequestInit | undefined) {
+  if (new Headers(init?.headers).get("authorization") !== `Bearer ${BUFFER_KEY}`)
+    return Response.json({ errors: [{ message: "Unauthorized", extensions: { code: "UNAUTHENTICATED" } }] }, { status: 401 });
+  const query = String(JSON.parse(String(init?.body ?? "{}")).query ?? "");
+  if (/\baccount\s*\{\s*organizations\b/.test(query)) return Response.json({ data: { account: { organizations: [{ id: "e2e-buffer-org" }] } } });
+  if (/\bchannels\(/.test(query))
+    return Response.json({
+      data: {
+        channels: [
+          { id: "e2e-buffer-ig", name: "bewell.app", displayName: "BeWell", service: "instagram", serviceId: "17840000000000001", externalLink: "https://www.instagram.com/bewell.app", isDisconnected: false, isLocked: false },
+          { id: "e2e-buffer-tt", name: "bewell", displayName: "BeWell on TikTok", service: "tiktok", serviceId: "7000000000000000001", externalLink: "https://www.tiktok.com/@bewell", isDisconnected: false, isLocked: false },
+        ],
+      },
+    });
+  return new Response("{}", { status: 503 });
+}
+
 /** An unsigned session only this harness accepts (`claims` below), in the shape the Supabase client stores. */
 function standInSession() {
   const id = `local-${crypto.randomUUID()}`;
@@ -152,7 +176,7 @@ const PIXEL = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKD
 
 export function createMemoryEngine(origin: string) {
   const store = new E2EStore(origin);
-  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET });
+  const settings = loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS, HUMANLIKE_TRANSCRIBE_KEY: process.env.HUMANLIKE_TRANSCRIBE_KEY, FACEFUL_R2_ACCOUNT_ID: process.env.FACEFUL_R2_ACCOUNT_ID, FACEFUL_R2_ACCESS_KEY_ID: process.env.FACEFUL_R2_ACCESS_KEY_ID, FACEFUL_R2_SECRET_ACCESS_KEY: process.env.FACEFUL_R2_SECRET_ACCESS_KEY, FACEFUL_R2_BUCKET: process.env.FACEFUL_R2_BUCKET, SOCIALS_CREDENTIAL_KEY, SOCIALS_WEBHOOK_SECRET });
   const memoryFiles = new E2EFiles(origin);
   const files: FileStore = settings.r2 ? new R2FileStore(settings.r2, () => new Date(), globalThis.fetch) : memoryFiles;
   // The Supabase client keeps its session under a key named after the project the app was built for.
@@ -173,8 +197,9 @@ export function createMemoryEngine(origin: string) {
     config: { ...settings, llm: { provider: "anthropic", apiKey: "e2e-not-a-key", model: "scripted" } },
     now: () => new Date(),
     verifyAccessToken: async (token) => claims(token),
-    fetch: async (input) => {
+    fetch: async (input, init) => {
       const url = new URL(String(input));
+      if (url.origin === "https://api.buffer.com") return standInBuffer(init);
       if (url.origin === "https://www.youtube.com" && url.pathname === "/oembed") {
         if (url.searchParams.get("url")?.includes("AAAAAAAAAAA")) return new Response("Not Found", { status: 404 });
         return Response.json({ title: "Stand-in video: five tips in thirty seconds", author_name: "Stand-in Channel", author_url: "https://www.youtube.com/@standin", type: "video" });
