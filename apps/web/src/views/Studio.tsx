@@ -173,8 +173,8 @@ export function Studio({
   const [showActivity, setShowActivity] = useState(false);
   // The signed-in member's email, read from this browser's session when the activity record is opened, so their own entries read "You".
   const [memberEmail, setMemberEmail] = useState<string | null>(null);
-  // A panel request from the schedule ("Suggest times", "Set a time") waiting for the item's panel to be on screen.
-  const pendingReveal = useRef<{ itemId: string; target: "chat" | "schedule" } | null>(null);
+  // A panel request from the schedule ("Suggest times", "Set a time", the review's Claims step) waiting for the item's panel to be on screen.
+  const pendingReveal = useRef<{ itemId: string; target: "chat" | "schedule" | "review" } | null>(null);
   const [homeIdea,setHomeIdea]=useState("");
   const [homeReply,setHomeReply]=useState("");
   // First-run conversation, before any project exists to hold it.
@@ -238,7 +238,7 @@ export function Studio({
     void supabase.auth.getSession().then(({ data }) => { if (live) setMemberEmail(data.session?.user.email ?? null); }).catch(() => undefined);
     return () => { live = false; };
   }, [showActivity, memberEmail]);
-  // Opens the selected draft's panel on the AI Chat composer or on Details → Posting times, once that panel exists.
+  // Opens the selected draft's panel on the AI Chat composer, or on Details → Posting times or Review, once that panel exists.
   // The panel's tab and row buttons are pressed as a person would press them, so the panel keeps its own state rules.
   useEffect(() => {
     const want = pendingReveal.current;
@@ -258,7 +258,7 @@ export function Studio({
           input?.setSelectionRange(input.value.length, input.value.length);
           return;
         }
-        const row = panel.querySelector<HTMLButtonElement>("#detail-schedule-trigger");
+        const row = panel.querySelector<HTMLButtonElement>(`#detail-${want.target}-trigger`);
         if (!row) return;
         if (row.getAttribute("aria-expanded") !== "true") row.click();
         row.focus({ preventScroll: true });
@@ -596,8 +596,8 @@ export function Studio({
       setManifest(next);
     });
   }
-  /** From the schedule: open a draft's panel on the AI Chat composer (optionally prefilled) or on its posting times. */
-  function openPanel(target: ContentItem, panel: "chat" | "schedule", prefill?: string) {
+  /** From the schedule: open a draft's panel on the AI Chat composer (optionally prefilled), its posting times or its review. */
+  function openPanel(target: ContentItem, panel: "chat" | "schedule" | "review", prefill?: string) {
     if (prefill) setDirectorDrafts((previous) => ({ ...previous, [target.id]: previous[target.id]?.trim() ? previous[target.id] : prefill }));
     pendingReveal.current = { itemId: target.id, target: panel };
     select(target);
@@ -1242,6 +1242,7 @@ export function Studio({
             playOnOpen={playItem===item.id}
             onPlayed={()=>setPlayItem(null)}
             versions={fixture?undefined:{load:client.listVersions,restore:restoreVersion}}
+            reviews={client}
             channels={fixture?undefined:<Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense>}
             directorInstruction={directorDrafts[item.id]??""}
             onDirectorInstruction={value=>setDirectorDrafts(previous=>({...previous,[item.id]:value}))}

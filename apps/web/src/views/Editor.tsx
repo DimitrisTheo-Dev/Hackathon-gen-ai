@@ -41,12 +41,14 @@ import type { DirectorAction, DirectorEntry } from '../director/model';
 import type { DirectorTurn } from '../director/planner';
 import type { ContentVersion, DirectorTurnResult } from "@castroom/contracts";
 import { failedRender, itemBadge } from "../lib/status";
+import { ReviewPanel, useContentReview, type ReviewApi } from "../review/ReviewPanel";
+import { reviewSummary } from "../review/vocabulary";
 import "../editor.css";
 // Version history is opened occasionally; it loads with its section.
 const Versions = lazy(() => import("./Versions").then((module) => ({ default: module.Versions })));
 export { contentPatch } from "./editor/model";
 export type Draft = { baseRevision: number; value: ContentItem };
-type SectionId = "guidance" | "presenter" | "channels" | "schedule" | "versions";
+type SectionId = "guidance" | "review" | "presenter" | "channels" | "schedule" | "versions";
 const languageName = (code: string) => (code === "en" ? "English" : code === "el" ? "Greek" : code);
 type Props = {
   directorInstruction: string;
@@ -71,6 +73,8 @@ type Props = {
   onPlayed?: () => void;
   /** Present only when the workspace keeps server-side version history. */
   versions?: { load: (contentId: string) => Promise<ContentVersion[]>; restore: (revision: number) => Promise<ContentItem> };
+  /** Content review of the saved script: claims, voice and captions, what is on screen, and a named approval. */
+  reviews?: ReviewApi;
   campaign: Campaign;
   director: { entries: DirectorEntry[]; error: string; record: (entry:DirectorEntry)=>Promise<void>; retry:()=>Promise<void> };
   onDirectorAction: (action:DirectorAction,key:string,reconcile?:boolean)=>Promise<DirectorEntry['results'][string]>;
@@ -97,7 +101,7 @@ type Props = {
 
 export function Editor({
   campaign, director, onDirectorAction, directorInstruction, onDirectorInstruction, home=false, open=true, onStart, onCreate, onShowContent,
-  onDirectorTurn, onDirectorCreated, onDirectorOpen, onDirectorBusy, channels, onTemplates, onBilling, onAgents, onSources, focusDirector=false, playOnOpen=false, onPlayed, versions,
+  onDirectorTurn, onDirectorCreated, onDirectorOpen, onDirectorBusy, channels, onTemplates, onBilling, onAgents, onSources, focusDirector=false, playOnOpen=false, onPlayed, versions, reviews,
   item,
   index,
   context,
@@ -236,6 +240,8 @@ export function Editor({
     : item.sourceIds.length
       ? countLabel(item.sourceIds.length, "source")
       : "None yet";
+  const contentReview = useContentReview(reviews, item.id);
+  const reviewValue = reviewSummary(contentReview.review, item);
   const presenterValue = !isVideo
     ? "Not used"
     : avatar
@@ -624,6 +630,32 @@ export function Editor({
               checks eligibility.
             </small>
           </DetailSection>
+
+          {reviews && (
+            <DetailSection
+              {...section("review")}
+              label="Review"
+              value={
+                <>
+                  {reviewValue.tone !== "none" && <span className="cr-dot" data-tone={reviewValue.tone} aria-hidden="true" />}
+                  {reviewValue.text}
+                </>
+              }
+            >
+              <ReviewPanel
+                item={item}
+                script={value.script}
+                dirty={dirty}
+                editable={editable && !changedRemotely}
+                offline={offline}
+                context={context}
+                products={context.products}
+                state={contentReview}
+                onScript={(next) => update({ script: next }, `review:${next}`)}
+                onUndo={undo}
+              />
+            </DetailSection>
+          )}
 
           <DetailSection {...section("presenter")} label="Presenter & style" value={presenterValue}>
             {!isVideo && (

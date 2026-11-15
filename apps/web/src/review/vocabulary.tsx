@@ -1,4 +1,4 @@
-import { Check, CircleQuestionMark, CircleX, HeartPulse, Landmark, TriangleAlert, UserRoundSearch, type LucideIcon } from "lucide-react";
+import { Check, CircleAlert, CircleQuestionMark, CircleX, HeartPulse, Info, Landmark, Lightbulb, TriangleAlert, UserRoundSearch, type LucideIcon } from "lucide-react";
 import { blockingCount, type ClaimStatus, type ContentItem, type ContentReview, type RegulatedDomain, type ReviewSeverity } from "@castroom/contracts";
 import "./review.css";
 
@@ -41,6 +41,18 @@ export function ClaimChip({ status, severity }: { status: ClaimStatus; severity:
     <span className="claim-chip" data-tone={severity === "blocking" ? "danger" : severity === "warning" ? "warning" : status === "supported" ? "positive" : "neutral"}>
       <Icon size={12} strokeWidth={2.25} aria-hidden="true" />
       {label}
+    </span>
+  );
+}
+
+const SEVERITY_ICON: Record<ReviewSeverity, LucideIcon> = { blocking: CircleAlert, warning: Lightbulb, info: Info };
+/** Findings carry no claim status, so their chip names what they ask of a person: To fix, Advice or Note. */
+export function SeverityChip({ severity }: { severity: ReviewSeverity }) {
+  const Icon = SEVERITY_ICON[severity];
+  return (
+    <span className="claim-chip" data-tone={severity === "blocking" ? "danger" : severity === "warning" ? "warning" : "neutral"}>
+      <Icon size={12} strokeWidth={2.25} aria-hidden="true" />
+      {SEVERITY_WORD[severity] || "Note"}
     </span>
   );
 }

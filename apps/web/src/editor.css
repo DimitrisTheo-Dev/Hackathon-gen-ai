@@ -14,7 +14,9 @@
 
 /* ───────────── Details: one column — preview, title, script, then a short list ───────────── */
 .editor-details { --group: var(--background); }
-.editor-details .editor-scroll { padding: 16px 16px 28px; scrollbar-width: thin; overscroll-behavior: contain; }
+/* The containing block of everything inside it: screen-reader-only text far down the list is clipped and scrolls here,
+   instead of stretching the phone dialog into a second, page-level scroll. */
+.editor-details .editor-scroll { position: relative; padding: 16px 16px 28px; scrollbar-width: thin; overscroll-behavior: contain; }
 
 .editor-details .editor-preview { inline-size: 164px; margin: 2px auto 0; container-type: inline-size; }
 .editor-details .editor-preview.is-storyboard { inline-size: 128px; }
@@ -85,6 +87,62 @@
 .guidance-source :is(a, strong) { display: inline-flex; align-items: center; gap: 5px; justify-self: start; color: var(--ink-secondary); font-size: 12.5px; font-weight: 500; }
 .editor-details .channel-tabs { display: flex; margin: 0; }
 .editor-details .channel-tabs button { flex: 1; min-inline-size: 0; min-block-size: 32px; padding: 0 8px; gap: 6px; font-size: 12.5px; }
+
+/* ───────────── Details → Review: three groups, what was checked, and a named approval ───────────── */
+/* The row's status dot: amber while something waits on a person, green only once a person approved it. */
+.cr-dot { flex: 0 0 auto; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--highlight); }
+.cr-dot[data-tone="positive"] { background: var(--green); }
+.cr { display: grid; gap: 16px; min-inline-size: 0; }
+.cr :is(p, h4, ol, ul) { margin: 0; }
+.cr-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; }
+/* Before the first check: the one line of explanation, then the action under it. */
+.cr-head[data-first] { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 10px; }
+.cr-lead { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+/* Busy is waiting, not unavailable: the button keeps its look and only its words change. */
+.cr .button[aria-disabled="true"] { cursor: default; }
+.cr .button[aria-disabled="true"]:active { transform: none; }
+.cr-approved:focus { outline: none; }
+.cr-approved:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.cr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-inline-size: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.editor-details .cr .button { min-block-size: 32px; padding-inline: 12px; font-size: 12.5px; }
+.cr-stale { padding: 9px 12px; border-radius: 10px; background: var(--warning-surface); color: var(--warning-ink); font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
+.cr-why { font-size: 12px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+.cr-group { display: grid; gap: 8px; min-inline-size: 0; }
+.cr-group h4, .cr-checked h4, .cr-approve h4 { display: flex; align-items: baseline; gap: 6px; font-size: 13px; font-weight: 550; line-height: 1.3; color: var(--ink); }
+.cr-count { font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.cr-none { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+/* One grouped surface per pass, a hairline between items. */
+.cr-list { display: grid; padding: 0; list-style: none; border: 1px solid transparent; border-radius: 12px; background: var(--surface); box-shadow: var(--elev-1); }
+.cr-item { display: grid; gap: 6px; min-inline-size: 0; padding: 12px; }
+.cr-item + .cr-item { border-block-start: 1px solid var(--border); }
+.cr-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-inline-size: 0; }
+.cr-severity { flex: 0 0 auto; font-size: 11.5px; font-weight: 550; color: var(--text-secondary); white-space: nowrap; }
+.cr-time { flex: 0 0 auto; padding: 1px 7px; border-radius: 6px; background: rgba(42,42,39,.055); color: var(--ink-secondary); font-size: 11.5px; font-weight: 550; line-height: 1.55; font-variant-numeric: tabular-nums; }
+.cr-quote { color: var(--ink); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; text-wrap: pretty; }
+.cr-note, .cr-message { color: var(--ink-secondary); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; text-wrap: pretty; }
+.cr-source { display: grid; gap: 1px; padding-inline-start: 10px; border-inline-start: 2px solid var(--border); color: var(--ink-secondary); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.cr-source > span { color: var(--text-secondary); font-size: 11.5px; font-weight: 550; }
+.cr-suggest { display: grid; justify-items: start; gap: 6px; margin-block-start: 2px; padding: 10px 12px; border-radius: 10px; background: var(--background); box-shadow: inset 0 0 0 1px var(--border); }
+.cr-suggest-label { color: var(--text-secondary); font-size: 11.5px; font-weight: 550; }
+.cr-suggest > p:not(.cr-applied) { color: var(--ink); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+/* The confirmation takes the button's place at the button's height, so nothing below moves. */
+.cr-applied { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-block-size: 32px; color: var(--positive-ink); font-size: 12.5px; line-height: 1.4; }
+.editor-details .cr-applied .text-button { min-block-size: 28px; padding: 0; color: var(--ink); font-size: 12.5px; font-weight: 550; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+.cr-checked { display: grid; gap: 6px; padding-block-start: 14px; border-block-start: 1px solid var(--border); }
+.cr-checked ul { display: grid; gap: 3px; padding: 0; list-style: none; }
+.cr-checked li { display: grid; grid-template-columns: 13px minmax(0, 1fr); gap: 7px; color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; }
+.cr-checked li[data-checked] { color: var(--ink-secondary); }
+.cr-checked li > svg { margin-block-start: calc((1lh - 13px) / 2); }
+.cr-checked p { color: var(--text-secondary); font-size: 12px; line-height: 1.5; text-wrap: pretty; }
+.cr-approve { display: grid; gap: 8px; padding-block-start: 14px; border-block-start: 1px solid var(--border); }
+.cr-approve-lead { color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
+.cr-form { display: grid; gap: 12px; margin-block-start: 4px; }
+.editor-details .cr-form :is(input, textarea)[aria-invalid="true"] { border-color: var(--danger); }
+.editor-details .field .cr-error { color: var(--danger); }
+.editor-details .cr .cr-approve-button { justify-self: start; min-block-size: 36px; padding-inline: 14px; font-size: 13px; }
+.cr-approved { display: flex; align-items: flex-start; gap: 8px; color: var(--ink); font-size: 13px; font-weight: 500; line-height: 1.5; }
+.cr-approved-mark { display: grid; place-items: center; flex: 0 0 auto; inline-size: 20px; block-size: 20px; margin-block-start: calc((1lh - 20px) / 2); border-radius: 50%; background: var(--positive-surface); color: var(--positive-ink); }
+.cr-approved-note { padding-inline-start: 28px; color: var(--ink-secondary); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
 
 /* Switches and small inline controls */
 .editor-details .toggle-field { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-block-size: 30px; }
@@ -330,6 +388,13 @@
   .editor-details .channel-tabs button { min-block-size: 40px; font-size: 14px; }
   .editor-details .editor-recovery-actions .button, .editor-handoff > .button { min-block-size: 44px; font-size: 14px; }
   .editor-details .brand-warning .text-button, .editor-recovery summary, .editor-handoff summary { min-block-size: 44px; }
+  .editor-details .cr .button, .editor-details .cr .cr-approve-button { min-block-size: 44px; padding-inline: 16px; font-size: 14px; }
+  .editor-details .cr-applied { min-block-size: 44px; font-size: 14px; }
+  .editor-details .cr-applied .text-button { min-block-size: 44px; font-size: 14px; }
+  .cr-quote, .cr-suggest > p:not(.cr-applied) { font-size: 15px; }
+  .cr-note, .cr-message, .cr-source, .cr-lead, .cr-meta, .cr-stale, .cr-checked li, .cr-approve-lead, .cr-none { font-size: 14px; }
+  .cr-group h4, .cr-checked h4, .cr-approve h4 { font-size: 15px; }
+  .cr-checked p { font-size: 13px; }
   .editor-details .editor-footer { padding: 10px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
   .editor-details .save-state, .editor-hint, .editor-details .editor-offline { font-size: 13px; }
   .editor-details .editor-actions .button { min-block-size: 46px; font-size: 15px; }
