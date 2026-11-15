@@ -85,7 +85,28 @@ function readable(value:unknown,key=''):string {
   if(typeof value==='string')return value===''?'Empty':key==='captionPosition'?positionLabel[value]??value:value;
   return JSON.stringify(value,null,2);
 }
-type Change={field:string;before:string;after:string};
+type PostingTime={platform:string;accountId:string|null;scheduledAt:string;timezone:string};
+export type PostingChange={platform:string;state:'added'|'removed'|'moved'|'account'|'same';before?:PostingTime;after?:PostingTime};
+/**
+ * Posting times paired per channel in time order, so a proposal reads as "Instagram moves from
+ * Mon 09:00 to Mon 18:00" rather than two lists of objects. Sorted by when each post goes out.
+ */
+export function postingChanges(before:PostingTime[],after:PostingTime[]):PostingChange[]{
+  const at=(t:PostingTime)=>Date.parse(t.scheduledAt);
+  const platforms=[...new Set([...after,...before].map(t=>t.platform))];
+  return platforms.flatMap(platform=>{
+    const old=before.filter(t=>t.platform===platform).sort((a,b)=>at(a)-at(b));
+    const next=after.filter(t=>t.platform===platform).sort((a,b)=>at(a)-at(b));
+    return Array.from({length:Math.max(old.length,next.length)},(_,i):PostingChange=>{
+      const b=old[i],a=next[i];
+      if(!b)return {platform,state:'added',after:a};
+      if(!a)return {platform,state:'removed',before:b};
+      if(at(a)!==at(b))return {platform,state:'moved',before:b,after:a};
+      return {platform,state:(a.accountId??null)===(b.accountId??null)?'same':'account',before:b,after:a};
+    });
+  }).sort((x,y)=>at((x.after??x.before)!)-at((y.after??y.before)!));
+}
+type Change={field:string;before:string;after:string;postings?:PostingChange[]};
 /**
  * What a proposal changes, as plain before/after text. Channel copy and style are broken down to
  * the parts that actually differ ("Instagram caption"), so a diff never shows a wall of JSON.
@@ -100,6 +121,7 @@ export function changedFields(item: ContentItem, patch: z.infer<typeof patchSche
       });
       if(parts.length)return parts;
     }
+    if(field==='targets'&&Array.isArray(after)&&Array.isArray(prior))return [{field,before:readable(prior),after:readable(after),postings:postingChanges(prior as PostingTime[],after as PostingTime[])}];
     if(field==='style'&&after&&prior&&typeof after==='object'&&typeof prior==='object'){
       const next=after as Record<string,unknown>,old=prior as Record<string,unknown>;
       const parts=Object.keys(next).filter(key=>next[key]!==old[key]).map(key=>({field:partLabel[key]??key,before:readable(old[key],key),after:readable(next[key],key)}));

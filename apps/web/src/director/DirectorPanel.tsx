@@ -6,6 +6,7 @@ import { Mark, Notice } from '../components/ui';
 import { useAutoGrow } from '../lib/use-auto-grow';
 import { agentSeenRecently, changedFields, handoffPrompt, withPreferences, writingDeclined, type DirectorAction, type DirectorEntry, type DirectorScope, type PromptPreferences } from './model';
 import { AgentHandoff } from './AgentHandoff';
+import { PostingDiff } from './PostingDiff';
 import { PromptCycle, PromptTokens } from './HomeComposer';
 import { routeHomeRequest } from './home-route';
 import type { ProjectStart } from '../create/settings';
@@ -149,6 +150,8 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
     :limit?['Change the title',...(captionOf?['Change the caption']:[]),item.style.captions?'Hide burned-in captions':'Show burned-in captions']
     :['Rewrite the opening','Create a 15-second Instagram Reel','Change the avatar'];
   const brand=campaign.companyContext?.name??context.brand.name;
+  // A presenter change names the presenter, not its id.
+  const readableValue=(field:string,value:string)=>field==='avatarId'?context.avatars.find(a=>a.id===value)?.name??value:value;
   const storage=context.capabilities.mode==='fixture'?{short:'Saved on this device',detail:'This conversation is saved on this device only.'}:{short:'Private to you',detail:'This conversation is private to you and this workspace.'};
   return <section className={`director-panel ${home?'is-home':'is-docked'}`} aria-label="AI Creative Director">
     <div ref={conversation} onScroll={()=>{const el=conversation.current;if(!el)return;pinned.current=el.scrollHeight-el.clientHeight-el.scrollTop<60;if(pinned.current)setAway(false);}} className="director-conversation" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions text">
@@ -186,7 +189,7 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
               {/* The item is named only when it is not the one already in the panel heading. */}
               <div className="plan-head"><span className="plan-icon" aria-hidden="true"><Icon size={14}/></span><strong>{actionTitle[action.kind]}{target&&(actions.length>1||target.id!==item.id)?` · ${target.title}`:''}</strong></div>
               {/* A single proposal shows its diff straight away; once applied, or in a batch, it folds. */}
-              {action.kind==='revise'&&target&&<details open={actions.length===1&&!complete} onToggle={event=>{if(event.currentTarget.open)event.currentTarget.closest('.director-plan')?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}}><summary>Review changes <ChevronDown size={12}/></summary>{changedFields(target,action.patch,result?.before).map(change=><div className="director-diff" key={change.field}><small>{fieldLabel[change.field]??change.field}</small><del>{change.before}</del><ins>{change.after}</ins></div>)}</details>}
+              {action.kind==='revise'&&target&&<details open={actions.length===1&&!complete} onToggle={event=>{if(event.currentTarget.open)event.currentTarget.closest('.director-plan')?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}}><summary>Review changes <ChevronDown size={12}/></summary>{changedFields(target,action.patch,result?.before).map(change=><div className="director-diff" key={change.field}><small>{fieldLabel[change.field]??change.field}</small>{change.postings?<PostingDiff rows={change.postings} channels={context.channels}/>:<><del>{readableValue(change.field,change.before)}</del><ins>{readableValue(change.field,change.after)}</ins></>}</div>)}</details>}
               {action.kind==='render'&&<small>Uses generation units. Completion will be shown by the job status.</small>}
               {action.kind==='review_schedule'&&<small>Opens exact-manifest review. Publishing needs separate authorization.</small>}
               {action.kind==='checkout'&&<small>Opens Stripe’s hosted test page. Card details are never entered in Faceful, and your plan changes only after Stripe confirms.</small>}
