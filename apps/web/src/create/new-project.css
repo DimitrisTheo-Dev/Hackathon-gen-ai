@@ -84,6 +84,7 @@ html:has(.np) { overflow: hidden; }
 
 /* Dropdowns */
 .np-menu-wrap { position: relative; }
+.np-menu-wrap:has(> .np-menu) { z-index: 90; }
 .np-select {
   display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 14px;
   border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink);
@@ -100,7 +101,7 @@ html:has(.np) { overflow: hidden; }
 .np-flag { font-size: 16px; line-height: 1; }
 .np-flags { display: inline-flex; gap: 3px; }
 .np-menu {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 90;
   width: max-content; min-width: 240px; max-width: min(330px, calc(100vw - 32px)); padding: 6px;
   border-radius: 16px; background: var(--surface); box-shadow: var(--elev-3);
   animation: np-menu var(--dur-base) var(--ease-out); transform-origin: top left;

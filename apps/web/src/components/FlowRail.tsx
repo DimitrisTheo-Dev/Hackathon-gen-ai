@@ -8,7 +8,7 @@ type Step = { id: "write" | "video" | "schedule" | "approve"; label: string; det
  * channels, then approve. Each step says where the project stands, worded only from what the server reports, and
  * one click goes to where that step is done. It is a map, not a gate: every step stays reachable.
  */
-export function FlowRail({ campaign, view, canRender, renderBlocker, onCanvas, onVideo, onSchedule, onReview }: {
+export function FlowRail({ campaign, view, renderBlocker, onCanvas, onVideo, onSchedule, onReview }: {
   campaign: Campaign;
   view: string;
   canRender: boolean;
@@ -30,9 +30,9 @@ export function FlowRail({ campaign, view, canRender, renderBlocker, onCanvas, o
     {
       id: "video",
       label: "Video",
-      detail: !canRender && rendered === 0 ? "Not connected yet" : `${rendered} of ${total} rendered`,
+      detail: rendered === 0 ? "Edit, then render the MP4" : `${rendered} of ${total} rendered`,
       done: total > 0 && rendered === total,
-      blocked: !canRender && rendered < total,
+      blocked: false,
       go: onVideo,
     },
     { id: "schedule", label: "Schedule", detail: `${timed} of ${total} have a time`, done: total > 0 && timed === total, go: onSchedule },
