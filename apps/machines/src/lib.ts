@@ -63,6 +63,67 @@ export async function identify(authorization: string | null, deps: { signingKey?
   return uid ? { uid, via: "session" } : null;
 }
 
+/** MACHINE_ALLOWED_USERS: the user ids (Supabase UUIDs or personal-token slugs) that may have a machine. Empty lets nobody in. */
+export const parseAllowlist = (value: string | undefined) => new Set((value ?? "").split(",").map((id) => id.trim().toLowerCase()).filter(isUserId));
+export const NOT_ENABLED = "Cloud machines are invite-only for now. Ask the Faceful team to turn one on for your account.";
+
+// ---------- per-user limits (D1 machine_wakes: one row per wake) ----------
+
+export type MachineLimits = { wakesPerHour: number; awakeMinutesPerDay: number };
+const whole = (value: string | undefined, fallback: number, max: number) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= max ? parsed : fallback;
+};
+export const limitsFrom = (env: { MACHINE_WAKES_PER_HOUR?: string; MACHINE_AWAKE_MINUTES_PER_DAY?: string }): MachineLimits => ({
+  wakesPerHour: whole(env.MACHINE_WAKES_PER_HOUR, 6, 1000),
+  awakeMinutesPerDay: whole(env.MACHINE_AWAKE_MINUTES_PER_DAY, 240, 1440),
+});
+
+export type Wake = { started_at: string; stopped_at: string | null };
+const HOUR = 3_600_000;
+const startOfDay = (now: number) => { const day = new Date(now); return Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()); };
+/** The oldest moment a wake row can matter to `machineUsage`: rows that stopped before it are left out of the query. */
+export const usageSince = (now: number) => new Date(Math.min(startOfDay(now), now - HOUR)).toISOString();
+/** The statements behind the limits, here so the tests run them against schema.sql. */
+export const WAKE_SQL = {
+  usage: "select started_at, stopped_at from machine_wakes where user_id = ? and (stopped_at is null or stopped_at > ?) order by started_at desc limit 500",
+  close: "update machine_wakes set stopped_at = ? where user_id = ? and stopped_at is null",
+  open: "insert into machine_wakes (user_id, started_at) values (?, ?)",
+  prune: "delete from machine_wakes where user_id = ? and stopped_at < ?",
+};
+/** Wakes in the last hour, and minutes awake since 00:00 UTC. An open row (still awake) counts until now. */
+export function machineUsage(wakes: Wake[], now: number) {
+  const today = startOfDay(now);
+  let wakesLastHour = 0;
+  let oldestWake = now;
+  let awakeMs = 0;
+  for (const wake of wakes) {
+    const started = Date.parse(wake.started_at);
+    if (!Number.isFinite(started)) continue;
+    const stopped = wake.stopped_at ? Math.min(Date.parse(wake.stopped_at), now) : now;
+    if (started > now - HOUR) { wakesLastHour++; oldestWake = Math.min(oldestWake, started); }
+    awakeMs += Math.max(0, stopped - Math.max(started, today));
+  }
+  return { wakesLastHour, oldestWake, awakeMinutesToday: awakeMs / 60_000, resetsAt: today + 24 * HOUR };
+}
+export type LimitProblem = { code: "wake_limit" | "daily_limit"; message: string; retryAfterSeconds: number };
+const inWords = (seconds: number) => {
+  const minutes = Math.max(1, Math.ceil(seconds / 60));
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+};
+/** Why this user's machine may not wake (`waking`) or keep working, or null. */
+export function limitProblem(usage: ReturnType<typeof machineUsage>, limits: MachineLimits, now: number, { waking }: { waking: boolean }): LimitProblem | null {
+  if (usage.awakeMinutesToday >= limits.awakeMinutesPerDay) {
+    const retryAfterSeconds = Math.ceil((usage.resetsAt - now) / 1000);
+    return { code: "daily_limit", retryAfterSeconds, message: `Your machine has been awake for ${limits.awakeMinutesPerDay} minutes today, the daily limit. It can wake again at 00:00 UTC, in ${inWords(retryAfterSeconds)}.` };
+  }
+  if (waking && usage.wakesLastHour >= limits.wakesPerHour) {
+    const retryAfterSeconds = Math.ceil((usage.oldestWake + HOUR - now) / 1000);
+    return { code: "wake_limit", retryAfterSeconds, message: `Your machine has woken ${limits.wakesPerHour} times in the last hour, the most it can. It can wake again in ${inWords(retryAfterSeconds)}.` };
+  }
+  return null;
+}
+
 export const parseOrigins = (value: string | undefined) => (value ?? "").split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
 export function corsFor(origin: string | null, allowed: string[]): Record<string, string> | null {
   if (!origin || !allowed.includes(origin)) return null;

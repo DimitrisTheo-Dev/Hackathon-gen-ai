@@ -100,7 +100,8 @@ export default function ClaudeVpsPage() {
       if (info) setMachine(await target.machine());
     } catch (error) {
       setServerError(problem(error));
-      if (error instanceof RunnerError && error.status === 401) {
+      // 403: this account has no cloud machine (yet). The page says why and offers your own server instead.
+      if (error instanceof RunnerError && (error.status === 401 || (connection?.session && error.status === 403))) {
         if (connection?.session) setSessionRefused(true);
         saveConnection(null); setConnection(null); setStatus(null); setMachine(null); setProjects(null);
       }

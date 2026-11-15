@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { asSaveRecord, corsFor, createLineScanner, createSessionVerifier, identify, mintGatewayToken, parseOrigins, parseRunEvent, slugify, verifyGatewayToken } from "../apps/machines/src/lib";
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import { asSaveRecord, corsFor, createLineScanner, createSessionVerifier, identify, limitProblem, limitsFrom, machineUsage, mintGatewayToken, parseAllowlist, parseOrigins, parseRunEvent, slugify, usageSince, verifyGatewayToken, WAKE_SQL } from "../apps/machines/src/lib";
 
 const SECRET = "g".repeat(64);
 const SUPABASE = "https://project.supabase.co";
@@ -94,4 +96,58 @@ test("the stream scanner passes bytes through and sees every line once", async (
 test("project ids come from titles", () => {
   assert.equal(slugify("BeWell — Launch Reel #2"), "bewell-launch-reel-2");
   assert.equal(slugify("Ελληνικά"), "");
+});
+
+test("only listed accounts get a machine; nothing listed means nobody", () => {
+  const allowed = parseAllowlist(` ${USER.toUpperCase()}, live-test ,, Not An Id, `);
+  assert.deepEqual([...allowed], [USER, "live-test"]);
+  assert.equal(parseAllowlist(undefined).size, 0);
+  assert.equal(parseAllowlist("").has(""), false);
+});
+
+test("wakes per hour and awake minutes per UTC day are counted from the wake rows", () => {
+  const at = (time: string) => `2026-11-15T${time}:00.000Z`;
+  const now = Date.parse(at("10:30"));
+  const limits = limitsFrom({ MACHINE_WAKES_PER_HOUR: "3", MACHINE_AWAKE_MINUTES_PER_DAY: "60" });
+  assert.deepEqual(limits, { wakesPerHour: 3, awakeMinutesPerDay: 60 });
+  assert.deepEqual(limitsFrom({ MACHINE_WAKES_PER_HOUR: "0", MACHINE_AWAKE_MINUTES_PER_DAY: "lots" }), { wakesPerHour: 6, awakeMinutesPerDay: 240 });
+
+  // Yesterday's late wake counts only from midnight; an open wake counts until now.
+  const usage = machineUsage([
+    { started_at: "2026-11-14T23:50:00.000Z", stopped_at: at("00:10") },
+    { started_at: at("09:40"), stopped_at: at("09:50") },
+    { started_at: at("10:00"), stopped_at: at("10:05") },
+    { started_at: at("10:20"), stopped_at: null },
+  ], now);
+  assert.equal(usage.wakesLastHour, 3);
+  assert.equal(usage.awakeMinutesToday, 10 + 10 + 5 + 10);
+  assert.equal(limitProblem(usage, limits, now, { waking: false }), null, "an awake machine is not stopped by its wake count");
+  const tooOften = limitProblem(usage, limits, now, { waking: true });
+  assert.equal(tooOften?.code, "wake_limit");
+  assert.equal(tooOften?.retryAfterSeconds, 10 * 60, "the 09:40 wake leaves the hour at 10:40");
+  assert.match(tooOften!.message, /3 times in the last hour.*10 min/);
+
+  const spent = machineUsage([{ started_at: at("08:00"), stopped_at: null }], now);
+  const daily = limitProblem(spent, limits, now, { waking: false });
+  assert.equal(daily?.code, "daily_limit");
+  assert.equal(daily?.retryAfterSeconds, 13.5 * 3600);
+  assert.match(daily!.message, /60 minutes today.*00:00 UTC, in 13 h 30 min/);
+});
+
+test("the wake statements run against schema.sql", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(readFileSync("apps/machines/schema.sql", "utf8"));
+  const now = Date.parse("2026-11-15T10:30:00.000Z");
+  const iso = (offsetMinutes: number) => new Date(now + offsetMinutes * 60_000).toISOString();
+  db.prepare(WAKE_SQL.open).run(USER, iso(-60 * 24 * 9));
+  db.prepare(WAKE_SQL.close).run(iso(-60 * 24 * 9 + 30), USER);
+  db.prepare(WAKE_SQL.open).run(USER, iso(-50));
+  db.prepare(WAKE_SQL.close).run(iso(-40), USER);
+  db.prepare(WAKE_SQL.open).run(USER, iso(-5));
+  db.prepare(WAKE_SQL.open).run("someone-else", iso(-5));
+  db.prepare(WAKE_SQL.prune).run(USER, iso(-60 * 24 * 7));
+  const rows = db.prepare(WAKE_SQL.usage).all(USER, usageSince(now)) as { started_at: string; stopped_at: string | null }[];
+  assert.deepEqual(rows.map((row) => [row.started_at, row.stopped_at]), [[iso(-5), null], [iso(-50), iso(-40)]]);
+  assert.deepEqual(machineUsage(rows, now), { wakesLastHour: 2, oldestWake: now - 50 * 60_000, awakeMinutesToday: 15, resetsAt: Date.parse("2026-11-16T00:00:00.000Z") });
+  assert.equal((db.prepare("select count(*) as n from machine_wakes").get() as { n: number }).n, 3, "the week-old wake was pruned");
 });
