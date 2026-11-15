@@ -24,6 +24,8 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   stripe_events: [{ columns: ["event_id"] }],
   credit_ledger: [{ columns: ["org_id", "ref"] }],
   castroom_director_access: [{ columns: ["user_id", "workspace_id", "campaign_id"] }],
+  // supabase/migrations/20261115130500_clone_jobs.sql
+  clone_jobs: [{ columns: ["id"] }, { columns: ["org_id", "idempotency_key"] }],
 };
 
 function matches(row: Row, filter: Filter): boolean {

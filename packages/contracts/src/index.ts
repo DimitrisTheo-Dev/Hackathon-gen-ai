@@ -507,3 +507,172 @@ export const templateInputSchema = z
   .object({ templateId: idSchema, language: z.string().min(2).max(12), inputs: z.record(z.string(), z.string().max(400)), operationKey: z.uuid() })
   .strict();
 export type TemplateInput = z.infer<typeof templateInputSchema>;
+
+// ── Clone a video: a short video posted on YouTube, TikTok or Instagram becomes the model for a new one. ──
+/** What a clone may borrow from the source video. Only what the person ticks is carried over. */
+export const CLONE_TRAITS = ["structure", "pacing", "transitions", "captions", "graphics", "sound", "music", "voice", "colours"] as const;
+export const cloneTraitSchema = z.enum(CLONE_TRAITS);
+export type CloneTrait = z.infer<typeof cloneTraitSchema>;
+export const CLONE_BRIEF_MAX = 4000;
+
+/**
+ * A source link, understood without any network call. `embedUrl` is the platform's own player for the video;
+ * a TikTok short link (vm.tiktok.com) has none until the engine has followed it to the video it leads to.
+ */
+export interface CloneLink {
+  platform: Platform;
+  kind: "video" | "short" | "reel" | "post" | "short_link";
+  /** The platform's ID for the video (or the short link's code). */
+  sourceId: string;
+  /** Canonical address, without tracking parameters. */
+  url: string;
+  embedUrl: string | null;
+  orientation: "portrait" | "landscape";
+}
+export type CloneLinkResult = { ok: true; link: CloneLink } | { ok: false; reason: string };
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const TIKTOK_ID = /^\d{8,25}$/;
+const TIKTOK_CODE = /^[A-Za-z0-9]{5,20}$/;
+const TIKTOK_USER = /^@[A-Za-z0-9._]{1,40}$/;
+const INSTAGRAM_CODE = /^[A-Za-z0-9_-]{5,40}$/;
+
+function youtubeLink(id: string | null | undefined, short: boolean): CloneLinkResult {
+  if (!id || !YOUTUBE_ID.test(id)) return { ok: false, reason: "That YouTube link does not point to a video. Copy the link from the video's Share button." };
+  return {
+    ok: true,
+    link: {
+      platform: "youtube",
+      kind: short ? "short" : "video",
+      sourceId: id,
+      url: short ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}`,
+      // Privacy-enhanced mode: YouTube sets no cookies until the person plays the video.
+      embedUrl: `https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1`,
+      orientation: short ? "portrait" : "landscape",
+    },
+  };
+}
+/** A TikTok video by ID, through TikTok's embed player. */
+export function tiktokVideoLink(id: string, user?: string | null): CloneLink {
+  return {
+    platform: "tiktok",
+    kind: "video",
+    sourceId: id,
+    url: `https://www.tiktok.com/${user && TIKTOK_USER.test(user) ? user : "@"}/video/${id}`,
+    embedUrl: `https://www.tiktok.com/player/v1/${id}?music_info=1&description=1&rel=0`,
+    orientation: "portrait",
+  };
+}
+
+/**
+ * Reads a YouTube (videos and Shorts), TikTok (videos and short links) or Instagram (reels and posts) link.
+ * Shared by the studio, for an instant preview, and the engine, which never trusts the browser's reading.
+ */
+export function parseCloneLink(raw: string): CloneLinkResult {
+  const text = raw.trim();
+  if (!text) return { ok: false, reason: "Paste a link to a YouTube, TikTok or Instagram video." };
+  if (text.length > 2048) return { ok: false, reason: "That link is too long to be a video link." };
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`);
+  } catch {
+    return { ok: false, reason: "That does not look like a link. Paste the video's address." };
+  }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password || url.port)
+    return { ok: false, reason: "That does not look like a video link. Paste the address from the platform's Share button." };
+  const host = url.hostname.toLowerCase().replace(/\.$/, "").replace(/^(www|m)\./, "");
+  const parts = url.pathname.split("/").filter(Boolean);
+  const unsupported = { ok: false as const, reason: "Faceful can clone videos from YouTube, TikTok and Instagram. Paste a link from one of those." };
+
+  if (host === "youtu.be") return youtubeLink(parts[0], false);
+  if (host === "youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+    if (parts[0] === "watch") return youtubeLink(url.searchParams.get("v"), false);
+    if (parts[0] === "shorts") return youtubeLink(parts[1], true);
+    if (["live", "embed", "v"].includes(parts[0] ?? "")) return youtubeLink(parts[1], false);
+    return { ok: false, reason: "That YouTube link is not a single video. Open the video or Short and copy its link." };
+  }
+
+  if (host === "vm.tiktok.com" || host === "vt.tiktok.com" || (host === "tiktok.com" && parts[0] === "t")) {
+    const code = host === "tiktok.com" ? parts[1] : parts[0];
+    if (!code || !TIKTOK_CODE.test(code)) return { ok: false, reason: "That TikTok link looks cut short. Copy it again from the Share button." };
+    const base = host === "tiktok.com" ? "https://www.tiktok.com/t" : `https://${host}`;
+    return { ok: true, link: { platform: "tiktok", kind: "short_link", sourceId: code, url: `${base}/${code}/`, embedUrl: null, orientation: "portrait" } };
+  }
+  if (host === "tiktok.com") {
+    if (parts[1] === "photo") return { ok: false, reason: "That is a TikTok photo post. Paste a link to a video." };
+    if (parts[1] === "live") return { ok: false, reason: "Live streams cannot be cloned. Paste a link to a TikTok video." };
+    let id: string | undefined;
+    let user: string | null = null;
+    if (parts[0]?.startsWith("@") && parts[1] === "video") [user, id] = [parts[0], parts[2]];
+    else if (parts[0] === "embed") id = parts[1] === "v2" ? parts[2] : parts[1];
+    else if (parts[0] === "player" && parts[1] === "v1") id = parts[2];
+    else if (parts[0] === "v") id = parts[1]?.replace(/\.html$/, "");
+    else if (parts[0] === "video") id = parts[1];
+    if (id && TIKTOK_ID.test(id)) return { ok: true, link: tiktokVideoLink(id, user) };
+    if (parts[0]?.startsWith("@") && parts.length === 1) return { ok: false, reason: "That is a TikTok profile. Paste a link to one of its videos." };
+    return { ok: false, reason: "That TikTok link does not point to a video. Copy the link from the video's Share button." };
+  }
+
+  if (host === "instagram.com" || host === "instagr.am") {
+    if (parts[0] === "stories") return { ok: false, reason: "Stories cannot be cloned. Paste a link to a reel or a post." };
+    // Share links can start with the account name: instagram.com/<account>/reel/<code>/.
+    const at = ["p", "reel", "reels", "tv"].includes(parts[0] ?? "") ? 0 : ["p", "reel", "reels", "tv"].includes(parts[1] ?? "") ? 1 : -1;
+    const code = at >= 0 ? parts[at + 1] : undefined;
+    if (!code || !INSTAGRAM_CODE.test(code))
+      return { ok: false, reason: parts.length === 1 ? "That is an Instagram profile. Paste a link to one reel or post." : "That Instagram link does not point to a reel or a post." };
+    const reel = parts[at] !== "p";
+    const path = `${reel ? "reel" : "p"}/${code}`;
+    return { ok: true, link: { platform: "instagram", kind: reel ? "reel" : "post", sourceId: code, url: `https://www.instagram.com/${path}/`, embedUrl: `https://www.instagram.com/${path}/embed/`, orientation: "portrait" } };
+  }
+  return unsupported;
+}
+
+/** A source video as the engine resolved it. Title and author come from the platform's oEmbed when it gives them. */
+export const cloneSourceSchema = z.object({
+  platform: platformSchema,
+  kind: z.enum(["video", "short", "reel", "post"]),
+  sourceId: z.string().min(1).max(64),
+  url: httpUrlSchema,
+  embedUrl: httpUrlSchema,
+  orientation: z.enum(["portrait", "landscape"]),
+  title: z.string().max(300).nullable(),
+  author: z.string().max(200).nullable(),
+  authorUrl: httpUrlSchema.nullable(),
+  thumbnailUrl: httpUrlSchema.nullable(),
+});
+export type CloneSource = z.infer<typeof cloneSourceSchema>;
+
+export const cloneJobInputSchema = z
+  .object({
+    url: z.string().min(1).max(2048),
+    brief: z.string().trim().min(1).max(CLONE_BRIEF_MAX),
+    clone: z
+      .array(cloneTraitSchema)
+      .min(1)
+      .max(CLONE_TRAITS.length)
+      .refine((traits) => new Set(traits).size === traits.length, "Each trait once"),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export type CloneJobInput = z.infer<typeof cloneJobInputSchema>;
+
+/**
+ * One clone job. It is a request for work: a worker turns it into a project and a video later. Until then it
+ * stays `queued`; nothing is made, charged or published by creating it.
+ */
+export const cloneJobSchema = z.object({
+  id: idSchema,
+  source: cloneSourceSchema,
+  brief: z.string(),
+  clone: z.array(cloneTraitSchema),
+  state: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
+  /** Why a job failed, in words for people; null otherwise. */
+  error: z.string().nullable(),
+  /** The project the result lives in, once a worker has made one. */
+  projectId: idSchema.nullable(),
+  /** The finished video as a short-lived signed link; null until there is one. */
+  resultUrl: httpUrlSchema.nullable(),
+  createdAt: instantSchema,
+  updatedAt: instantSchema,
+});
+export type CloneJob = z.infer<typeof cloneJobSchema>;

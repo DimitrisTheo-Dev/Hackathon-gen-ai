@@ -18,6 +18,9 @@ import {
   versionSchema,
   addSourceInputSchema,
   brandSchema,
+  cloneJobInputSchema,
+  cloneJobSchema,
+  cloneSourceSchema,
   removeSourceInputSchema,
   updateBrandInputSchema,
 } from "@castroom/contracts";
@@ -247,6 +250,11 @@ export function createLiveClient(
         { timeoutMs: 110_000 },
       ),
     listTemplates: () => request("/templates", z.array(templateSchema)),
+    // The engine asks the platform's oEmbed (and may follow a TikTok short link), so this can take a few seconds.
+    lookupCloneSource: (url) => request(`/clone/source?url=${encodeURIComponent(url)}`, cloneSourceSchema, undefined, { timeoutMs: 20_000 }),
+    listCloneJobs: () => request("/clone/jobs", z.array(cloneJobSchema)),
+    createCloneJob: (input) =>
+      request("/operations/create_clone_job", cloneJobSchema, validate(cloneJobInputSchema, input), { timeoutMs: 30_000 }),
     createFromTemplate: (input) =>
       request(
         "/operations/create_from_template",

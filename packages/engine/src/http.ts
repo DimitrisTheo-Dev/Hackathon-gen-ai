@@ -12,6 +12,7 @@ import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRe
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
 import { addDraft, addSource, agentScopesFrom, createConnectionInputSchema, getCampaign, getContext, listCampaigns, listVersions, parse, removeSource, restoreVersion, reviseContent, revokeConnectionInputSchema, startCampaign, updateBrand } from "./studio.js";
 import { createFromTemplate, createSampleProject, listTemplates } from "./templates.js";
+import { createCloneJob, listCloneJobs, lookupCloneSource } from "./clone.js";
 
 export interface HttpDeps extends EngineDeps {
   planner: Planner | null;
@@ -91,6 +92,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   revoke_agent_connection: revokeConnection,
   create_from_template: createFromTemplate,
   create_sample_project: createSampleProject,
+  create_clone_job: createCloneJob,
   create_checkout: createCheckout,
   create_portal: createPortal,
   connect_channel: connectChannel,
@@ -100,7 +102,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   },
 } satisfies Record<string, OperationHandler>));
 /** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
-export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel"]);
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job"]);
 
 async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
   const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
@@ -127,6 +129,12 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
   if (read && (match = path.match(/^\/jobs\/([^/]+)$/))) return json(await getRenderStatus(deps, ctx, decodeURIComponent(match[1])));
   if (read && path === "/templates") return json(listTemplates());
   if (read && path === "/billing") return json(await getBillingStatus(deps, ctx));
+  if (read && path === "/clone/jobs") return json(await listCloneJobs(deps, ctx));
+  if (read && path === "/clone/source") {
+    // Asks the platform's oEmbed endpoint (or follows a TikTok short link), so it counts as a costly call.
+    await limits.enforce(policies.costly, subject);
+    return json(await lookupCloneSource(deps, ctx, new URL(request.url).searchParams.get("url")));
+  }
   if (read && path === "/channels") return json(await getChannelStatus(deps, ctx));
   if (post && path === "/workspace/select") {
     // resolveContext has already proven membership of the requested workspace.

@@ -538,6 +538,10 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     // The fixture never drafts, bills or switches workspaces. Exact local edits stay in the Director panel.
     directorTurn: unavailable,
     listTemplates: async () => [],
+    // Cloning needs the engine (it asks the platforms about the link and stores the job); the tab is hidden here.
+    lookupCloneSource: unavailable,
+    listCloneJobs: async () => [],
+    createCloneJob: unavailable,
     createFromTemplate: unavailable,
     createSampleProject: unavailable,
     listVersions: unavailable,

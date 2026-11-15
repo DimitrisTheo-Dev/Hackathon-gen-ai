@@ -73,6 +73,8 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | `GET /v1/studio/jobs/:id` | Render job status and event trail |
 | `GET /v1/studio/templates` | Curated templates |
 | `GET /v1/studio/billing` | Plan status and credit balance from server truth |
+| `GET /v1/studio/clone/source?url=` | What a YouTube, TikTok or Instagram link points to: canonical link, the platform's embed player, title and author from its oEmbed (Instagram: embed only). Follows TikTok short links. Counts against the `costly` limit; stores nothing |
+| `GET /v1/studio/clone/jobs` | The workspace's latest clone jobs with state; `resultUrl` is a signed link once a worker has made the video |
 | `POST /v1/studio/director/turn` | AI Creative Director turn (see §8) |
 | `POST /v1/studio/workspace/select` | Remember the active organization |
 | `POST /v1/studio/operations/:name` | Typed side-effecting operations (below) |
@@ -80,7 +82,7 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | `POST /v1/worker/render/*` | Render worker protocol (§7) |
 | `GET /v1/cron/tick` | Sweep stuck renders; process due publish jobs |
 
-Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
+Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_clone_job`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
 
 **Limits.** JSON bodies on `/v1` and `/mcp` are capped at 256 KB (`413 validation_error`; a declared `Content-Length` over the cap is refused before reading). Requests are rate limited in fixed one-minute windows counted in Postgres (`engine_rate_limit_hit`), so limits hold across function instances:
 

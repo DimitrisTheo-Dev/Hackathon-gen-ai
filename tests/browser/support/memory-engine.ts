@@ -7,7 +7,9 @@
  *   • sessions: tokens whose payload says `iss: "faceful-e2e"` are accepted without a signature;
  *   • the model: a scripted planner returns fixed proposals (or is switched off per user);
  *   • the renderer: `/__e2e/complete-renders` finishes queued jobs through the real worker protocol
- *     with a one-second silent audio clip standing in for a rendered file.
+ *     with a one-second silent audio clip standing in for a rendered file;
+ *   • the video platforms: YouTube's oEmbed answers with a fixed title and author (video ID AAAAAAAAAAA is
+ *     "not found"); every other outside call fails, as if the network were down.
  * Nothing here is imported by application code or by the deployed functions.
  */
 import { loadConfig } from "../../../packages/engine/src/config";
@@ -84,7 +86,14 @@ export function createMemoryEngine(origin: string) {
     config: { ...loadConfig({ SUPABASE_URL: "https://e2e.invalid", APP_BASE_URL: origin, RENDER_WORKER_TOKEN: WORKER_TOKEN, RENDER_AVATARS: AVATARS }), llm: { provider: "anthropic", apiKey: "e2e-not-a-key", model: "scripted" } },
     now: () => new Date(),
     verifyAccessToken: async (token) => claims(token),
-    fetch: async () => new Response("{}", { status: 503 }),
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      if (url.origin === "https://www.youtube.com" && url.pathname === "/oembed") {
+        if (url.searchParams.get("url")?.includes("AAAAAAAAAAA")) return new Response("Not Found", { status: 404 });
+        return Response.json({ title: "Stand-in video: five tips in thirty seconds", author_name: "Stand-in Channel", author_url: "https://www.youtube.com/@standin", type: "video" });
+      }
+      return new Response("{}", { status: 503 });
+    },
     planner: scripted,
   };
   const plannerOff = new Set<string>();

@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
+  CopyPlus,
   CreditCard,
   Clock3,
   FileText,
@@ -73,6 +74,8 @@ const loadChannels = () => import("./Channels");
 const Channels = lazy(() => loadChannels().then((m) => ({ default: m.Channels })));
 const loadBrand = () => import("./Brand");
 const Brand = lazy(() => loadBrand().then((m) => ({ default: m.Brand })));
+const loadClone = () => import("./CloneVideo");
+const CloneVideo = lazy(() => loadClone().then((m) => ({ default: m.CloneVideo })));
 const SIDEBAR_KEY = "faceful:sidebar";
 function ViewSkeleton() {
   return <div className="view-skeleton" role="status" aria-label="Loading"><span className="skeleton skeleton-title" /><span className="skeleton skeleton-line" /><span className="skeleton skeleton-line short" /><span className="skeleton skeleton-block" /></div>;
@@ -80,7 +83,7 @@ function ViewSkeleton() {
 
 import { useDirectorHistory } from '../director/use-history';
 import { validateDirectorPlan, restorePatch, directorOperationKey, type DirectorAction, type DirectorEntry } from '../director/model';
-type View = "home" | "canvas" | "schedule" | "connect" | "brand" | "billing";
+type View = "home" | "clone" | "canvas" | "schedule" | "connect" | "brand" | "billing";
 /** Search, filter and sort only earn their place once a project is too long to take in at a glance. */
 const TOOLS_FROM = 7;
 type Target = ContentItem["targets"][number];
@@ -123,7 +126,7 @@ function shownTitle(campaign: Pick<Campaign, "title" | "origin">) {
 function listNames(names: string[]) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
-const VIEWS = ["home", "canvas", "schedule", "connect", "brand", "billing"];
+const VIEWS = ["home", "clone", "canvas", "schedule", "connect", "brand", "billing"];
 export function Studio({
   client,
   onSignOut,
@@ -273,13 +276,13 @@ export function Studio({
     let live = true;
     // The skeleton lifts only when nothing is left to pop in: this view's own code and the typeface are in.
     const mode = context?.capabilities.mode;
-    const code = view === "connect" ? loadConnect() : view === "billing" ? loadBilling() : view === "schedule" && mode === "live" ? loadChannels() : null;
+    const code = view === "connect" ? loadConnect() : view === "billing" ? loadBilling() : view === "clone" && mode === "live" ? loadClone() : view === "schedule" && mode === "live" ? loadChannels() : null;
     const type = document.fonts?.load ? Promise.race([document.fonts.load("500 14px InterVariable"), new Promise((resolve) => window.setTimeout(resolve, 1500))]) : null;
     void Promise.allSettled([code, type]).then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!live) return;
       ready.current?.();
       // Everything else a person can open from here is fetched now, while the browser is idle.
-      const warm = () => { void loadCreate(); void loadReview(); void loadConnect(); void loadTemplates(); if (mode === "live") { void loadBilling(); void loadChannels(); } };
+      const warm = () => { void loadCreate(); void loadReview(); void loadConnect(); void loadTemplates(); if (mode === "live") { void loadBilling(); void loadChannels(); void loadClone(); } };
       if (window.requestIdleCallback) window.requestIdleCallback(warm, { timeout: 1500 }); else window.setTimeout(warm, 300);
     })));
     return () => { live = false; };
@@ -385,7 +388,7 @@ export function Studio({
     if (!url.hash) url.hash = "";
     // Nothing is written when the address already says this: a refresh causes no history change at all.
     if (url.href !== location.href) history.replaceState(history.state, "", url);
-    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "billing" ? "Billing" : (campaign?.title ?? "Studio")} · Faceful`;
+    document.title = `${view === "connect" ? "Connect your agent" : view === "schedule" ? "Schedule" : view === "billing" ? "Billing" : view === "clone" ? "Clone a video" : (campaign?.title ?? "Studio")} · Faceful`;
   }, [view, selected, campaign?.id, campaign?.title, loading]);
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
@@ -792,6 +795,7 @@ export function Studio({
           </button>
           <nav aria-label="Studio" className="sidebar-nav">
             <button className={view==="home"?"active":""} aria-current={view==="home"?"page":undefined} title="Create" onClick={()=>go("home")}><Sparkles size={16}/><span>Create</span></button>
+            {!fixture && <button className={view === "clone" ? "active" : ""} aria-current={view==="clone"?"page":undefined} title="Clone a video" onClick={() => go("clone")}><CopyPlus size={16} /><span>Clone a video</span></button>}
             <button className={view === "schedule" ? "active" : ""} aria-current={view==="schedule"?"page":undefined} title="Schedule" onClick={() => go("schedule")}><CalendarDays size={16} /><span>Schedule</span></button>
             <button className={view === "brand" ? "active" : ""} aria-current={view==="brand"?"page":undefined} title="Brand kit" onClick={() => go("brand")}><FileText size={16} /><span>Brand kit</span></button>
             {!fixture && <button className={view === "billing" ? "active" : ""} aria-current={view==="billing"?"page":undefined} title="Billing" onClick={() => go("billing")}><CreditCard size={16} /><span>Billing</span></button>}
@@ -845,7 +849,7 @@ export function Studio({
               <button className="icon-button mobile-menu" aria-label="Toggle navigation" aria-expanded={sidebar} onClick={() => setSidebar(!sidebar)}><Menu size={18} /></button>
               <button className="mobile-project-switch" onClick={() => setSidebar(true)} aria-haspopup="dialog"><span>{campaign ? shownTitle(campaign) : "Your projects"}</span><span className="sr-only">, switch project</span><ChevronDown size={15} aria-hidden="true"/></button>
               {/* A project's title lives once, in its own header below; other pages are named here. */}
-              {!inProject && <strong>{view === "connect" ? "Agents" : view === "brand" ? "Brand kit" : view === "billing" ? "Billing" : view === "schedule" ? "Schedule" : view === "home" ? "Create" : "Projects"}</strong>}
+              {!inProject && <strong>{view === "connect" ? "Agents" : view === "clone" ? "Clone a video" : view === "brand" ? "Brand kit" : view === "billing" ? "Billing" : view === "schedule" ? "Schedule" : view === "home" ? "Create" : "Projects"}</strong>}
             </div>
             {inProject && (
               <div className="segmented topbar-views" role="group" aria-label="Project view">
@@ -911,7 +915,9 @@ export function Studio({
                 <button className="text-button" onClick={()=>setCreating(true)}><PenLine size={13} aria-hidden="true"/>Create with my own script</button>
                 <button className="text-button" onClick={()=>go("connect")}><Plug size={13} aria-hidden="true"/>Connect your agent</button>
               </div>
-            </div>) : view === "home" ? null : view === "billing" ? (
+            </div>) : view === "home" ? null : view === "clone" ? (
+              fixture ? null : <Suspense fallback={<ViewSkeleton />}><CloneVideo client={client} context={context} /></Suspense>
+            ) : view === "billing" ? (
               <Suspense fallback={<ViewSkeleton />}><Billing
                 client={client}
                 context={context}
@@ -1251,6 +1257,7 @@ export function Studio({
         </nav>
         <button className="button primary project-create" onClick={() => { setSidebar(false); setCreating(true); }}><Plus size={17}/>New campaign</button>
         <nav className="project-quick-links" aria-label="Workspace">
+          {!fixture && <button onClick={() => go("clone")}><CopyPlus size={18}/>Clone a video<ChevronRight size={16}/></button>}
           <button onClick={() => go("brand")}><FileText size={18}/>Brand kit<ChevronRight size={16}/></button>
           {!fixture && <button onClick={() => go("billing")}><CreditCard size={18}/>Billing<ChevronRight size={16}/></button>}
           <button onClick={() => go("connect")}><Plug size={18}/>{activeConnections.length ? "Agent connections" : "Connect your agent"}<ChevronRight size={16}/></button>
