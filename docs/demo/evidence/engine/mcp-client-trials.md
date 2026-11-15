@@ -40,7 +40,7 @@ Client's own report: "Called Faceful tools in order: `list_projects` → `create
 
 ## Deployed preview check (same day)
 
-A backend-only snapshot of this change was deployed as a Vercel **preview** (`hackathon-gen-r5ubb6olk-my-team-29ecd279.vercel.app`, behind Vercel deployment protection, reached with `vercel curl`). Against that deployment, with the real Supabase project:
+A backend-only snapshot of this change was deployed as a Vercel **preview** (`hackathon-gen-r5ubb6olk-<team>.vercel.app`, behind Vercel deployment protection, reached with `vercel curl`). Against that deployment, with the real Supabase project:
 
 - `GET /v1/health` → `engine: true, database: true, director: "basic", rendering.connected: false, billing.mode: "not_configured"`.
 - `GET /v1/studio/context` without a credential → 401 contract error; with the smoke account's Supabase session → workspace, role `owner`, `mode: live`.

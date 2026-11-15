@@ -19,7 +19,7 @@ Origin: <https://faceful.vercel.app>. Pitch surface: <https://faceful.vercel.app
 4. **Agent connection** (for Journeys B and C): in the studio open "Connect your agent", create a workspace token, and export it as `FACEFUL_TOKEN` in the terminal you will demo from. The token is shown once.
 5. **Use a fresh email** instead when you want to show first-run sign-in and onboarding.
 
-Test accounts used for automated checks (not for the demo): `engine-smoke@faceful.dtheo.dev`, `engine-smoke-b@faceful.dtheo.dev`. Their passwords live only in the maintainer's local `.env.local`.
+Two dedicated test accounts are used for automated checks (not for the demo). Their addresses and passwords live only in the maintainer's local `.env.local`.
 
 ## Journey A — studio (90–120 seconds)
 

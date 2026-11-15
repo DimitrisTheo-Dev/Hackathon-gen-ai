@@ -10,7 +10,7 @@
   },
   "studioPreview": {
     "id": "dpl_3fx5P7KWbpYeU2DeB5BJxnjchQ2o",
-    "url": "https://hackathon-gen-98b7cqknx-my-team-29ecd279.vercel.app/dev/studio/",
+    "url": "https://hackathon-gen-98b7cqknx-<team>.vercel.app/dev/studio/",
     "state": "READY",
     "access": "Vercel team access; labeled fixtures, same UI source"
   },

@@ -17,12 +17,9 @@ cd "$(dirname "$0")"
 IMAGE=claude-vps-auth-test
 SECRET=/run/secrets/anthropic_api_key
 HELPER="{\"apiKeyHelper\":\"cat $SECRET\"}"
-TOK="$HOME/.claude/skills/access-tokens/bin/tok"
-# Option 2 key: KEY_FILE stands in for your secrets vault (must be under $HOME with Colima).
-# Unset: the key from Humanlike-node/.env.local is written to a 0600 temp file for this run only.
-# (Humanlike-next's ANTHROPIC_API_KEY is not a real key; Claude Code just hangs on it.)
+# Option 2 key: KEY_FILE is a file holding an Anthropic API key, standing in for your secrets vault
+# (must be under $HOME with Colima; keep it mode 0600).
 KEY_FILE="${KEY_FILE:-}"
-KEY_FROM="${KEY_FROM:-Humanlike-node}"
 
 usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
@@ -32,15 +29,11 @@ need_option() {
 
 KEY_PATH=""
 prepare_key() {
-  if [[ -n "$KEY_FILE" ]]; then
-    KEY_PATH="$KEY_FILE"
-  else
-    mkdir -p "$HOME/.cache"
-    TMPD="$(mktemp -d "$HOME/.cache/claude-vps-key.XXXXXX")"
-    trap 'rm -rf "$TMPD"' EXIT
-    KEY_PATH="$TMPD/anthropic_api_key"
-    (umask 077; printf '%s' "$("$TOK" get ANTHROPIC_API_KEY --from "$KEY_FROM")" > "$KEY_PATH")
+  if [[ -z "$KEY_FILE" ]]; then
+    echo "Set KEY_FILE to a file holding an Anthropic API key, e.g. KEY_FILE=~/path/to/keyfile ./test.sh apikey" >&2
+    exit 1
   fi
+  KEY_PATH="$KEY_FILE"
   # Fail fast: a key that isn't an Anthropic key makes Claude Code hang instead of erroring.
   if [[ "$(head -c 7 "$KEY_PATH")" != "sk-ant-" ]]; then
     echo "The key in $KEY_PATH is not an Anthropic API key (should start with sk-ant-)." >&2

@@ -3,7 +3,7 @@
 **The video studio you and your AI agent share.**
 
 - Live: <https://faceful.vercel.app> (studio at `/studio/`, agent docs at `/docs/mcp/`)
-- Repository: <https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai> (private; access on request)
+- Repository: <https://github.com/DimitrisTheo-Dev/Hackathon-gen-ai>
 - Demo video: _link added at submission_ · one-minute pitch surface: <https://faceful.vercel.app/pitch> (press F, then R)
 - Status, evidence and limits: [`DEMO_READINESS.md`](../../DEMO_READINESS.md) · how it works: [`INTEGRATION_CONTRACTS.md`](../../INTEGRATION_CONTRACTS.md) · security: [`SECURITY.md`](../../SECURITY.md)
 
