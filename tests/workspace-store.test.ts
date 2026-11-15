@@ -31,7 +31,8 @@ test("the CLI mints tokens the Worker accepts, for a set time", async () => {
   const mint = (...args: string[]) => execFileSync(process.execPath, ["apps/workspace-store/mint-token.mjs", ...args], { env: { ...process.env, FACEFUL_STORE_SIGNING_KEY: SECRET }, stdio: "pipe" }).toString();
   const cli = await verifyToken(SECRET, `Bearer ${mint("alice")}`);
   assert.deepEqual([cli?.uid, cli!.expiresAt - cli!.issuedAt], ["alice", 30 * 86_400]);
-  assert.equal((await verifyToken(SECRET, `Bearer ${mint("alice", "12h")}`))?.expiresAt! - Math.floor(Date.now() / 1000) <= 12 * 3600, true);
+  const short = await verifyToken(SECRET, `Bearer ${mint("alice", "12h")}`);
+  assert.ok(short && short.expiresAt - Math.floor(Date.now() / 1000) <= 12 * 3600);
   assert.throws(() => mint("alice", "120d"), /at most 90d/);
 });
 
