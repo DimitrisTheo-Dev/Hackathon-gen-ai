@@ -961,6 +961,7 @@ export function Studio({
                 campaign={campaign}
                 campaigns={campaigns}
                 onBrand={(brand) => setContext((current) => (current ? { ...current, brand } : current))}
+                onProducts={(products) => setContext((current) => (current ? { ...current, products } : current))}
                 onCampaign={(next) => {
                   setCampaign((current) => (current?.id === next.id ? next : current));
                   setCampaigns((all) => all.map((c) => (c.id === next.id ? next : c)));

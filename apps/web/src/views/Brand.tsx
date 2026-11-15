@@ -1,16 +1,23 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type RefObject } from "react";
-import { ArrowUpRight, Check, ChevronDown, FileText, Link2, Lock, Palette, PenLine, Plus, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, FileText, HeartPulse, ImagePlus, Landmark, Link2, Lock, Package, Palette, PenLine, Plus, Tag, X } from "lucide-react";
 import {
   BRAND_LIMITS,
+  PRODUCT_IMAGE_TYPES,
+  PRODUCT_LIMITS,
+  PRODUCT_MAX_IMAGE_BYTES,
   SOURCE_LIMITS,
   type Brand as BrandKit,
   type Campaign,
+  type Product,
+  type RegulatedDomain,
   type Source,
   type StudioContext,
   type UpdateBrandInput,
+  type UpdateProductInput,
 } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
 import { Modal, Notice } from "../components/ui";
+import { DOMAIN_LABEL, DomainChip } from "../review/vocabulary";
 import "../brand.css";
 
 /* ───────────── vocabulary ───────────── */
@@ -1039,6 +1046,554 @@ function Sources({
   );
 }
 
+/* ───────────── products ───────────── */
+
+const DOMAINS: Array<{ id: RegulatedDomain; icon: typeof Tag }> = [
+  { id: "general", icon: Tag },
+  { id: "health", icon: HeartPulse },
+  { id: "finance", icon: Landmark },
+];
+const DOMAIN_HELP: Record<RegulatedDomain, string> = {
+  general: "Scripts that name it are checked against its approved facts.",
+  health: "Scripts that name it need a qualified person’s approval before they can be scheduled.",
+  finance: "Scripts that name it need a qualified adviser’s approval before they can be scheduled.",
+};
+const SHOWN_FACTS = 3;
+const factCount = (n: number) => `${n} approved ${plural.select(n) === "one" ? "fact" : "facts"}`;
+
+function ProductCard({
+  product,
+  editable,
+  fresh,
+  onEdit,
+  onRemove,
+}: {
+  product: Product;
+  editable: boolean;
+  fresh: boolean;
+  onEdit: (product: Product) => void;
+  onRemove: (product: Product) => Promise<void>;
+}) {
+  const id = useId();
+  const [expanded, setExpanded] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [broken, setBroken] = useState(false);
+  const keepButton = useRef<HTMLButtonElement>(null);
+  const removeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => setBroken(false), [product.imageUrl]);
+  useEffect(() => {
+    if (confirm) keepButton.current?.focus({ preventScroll: true });
+  }, [confirm]);
+  const facts = expanded ? product.facts : product.facts.slice(0, SHOWN_FACTS);
+  const hidden = product.facts.length - SHOWN_FACTS;
+  function keep() {
+    setConfirm(false);
+    setError("");
+    requestAnimationFrame(() => removeButton.current?.focus({ preventScroll: true }));
+  }
+  async function remove() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onRemove(product);
+    } catch (failure) {
+      setError(messageOf(failure));
+      setBusy(false);
+    }
+  }
+  return (
+    <article className="bk-product" aria-labelledby={`${id}-name`} data-new={fresh || undefined}>
+      <span className="bk-product-photo">
+        {product.imageUrl && !broken ? (
+          <img src={product.imageUrl} alt={`Photo of ${product.name}`} decoding="async" onError={() => setBroken(true)} />
+        ) : (
+          <>
+            <Package size={20} aria-hidden="true" />
+            <span className="sr-only">No photo</span>
+          </>
+        )}
+      </span>
+      <div className="bk-product-body">
+        <div className="bk-product-head">
+          <h3 id={`${id}-name`}>{product.name}</h3>
+          <DomainChip domain={product.domain} />
+        </div>
+        {product.facts.length > 0 ? (
+          <>
+            <ul className="bk-facts" id={`${id}-facts`} aria-label={factCount(product.facts.length)}>
+              {facts.map((fact) => (
+                <li key={fact}>
+                  <Check size={12} strokeWidth={2.25} aria-hidden="true" />
+                  <span>{fact}</span>
+                </li>
+              ))}
+            </ul>
+            {hidden > 0 && (
+              <button type="button" className="bk-more" aria-expanded={expanded} aria-controls={`${id}-facts`} onClick={() => setExpanded(!expanded)}>
+                {expanded ? "Show fewer" : `Show all ${product.facts.length}`}
+                <ChevronDown size={13} aria-hidden="true" />
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="bk-product-none">No approved facts yet</p>
+        )}
+      </div>
+      {editable && (
+        <footer className="bk-product-foot">
+          {confirm ? (
+            <div className="bk-confirm" role="group" aria-label={`Remove ${product.name}`}>
+              <p>Remove {product.name}? Scripts that name it lose its approved facts. Videos that already show its photo keep it.</p>
+              <div>
+                <button type="button" ref={keepButton} className="button secondary" disabled={busy} onClick={keep}>
+                  Keep product
+                </button>
+                <button type="button" className="button bk-danger" disabled={busy} onClick={() => void remove()}>
+                  {busy ? "Removing…" : "Remove product"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <span className="bk-source-actions">
+              <button type="button" className="button secondary bk-small" onClick={() => onEdit(product)}>
+                Edit<span className="sr-only"> {product.name}</span>
+              </button>
+              <button type="button" ref={removeButton} className="button bk-small bk-quiet" onClick={() => setConfirm(true)}>
+                Remove<span className="sr-only"> {product.name}</span>
+              </button>
+            </span>
+          )}
+          {error && (
+            <p className="bk-error" role="alert">
+              {error}
+            </p>
+          )}
+        </footer>
+      )}
+    </article>
+  );
+}
+
+/** The approved-facts list inside the product sheet: the Guardrails pattern, kept in the form until it is saved. */
+function FactsEditor({ facts, onChange, labelledBy }: { facts: string[]; onChange: (next: string[]) => void; labelledBy: string }) {
+  const [adding, setAdding] = useState(facts.length === 0);
+  const [draft, setDraft] = useState("");
+  const [problem, setProblem] = useState("");
+  const addInput = useRef<HTMLTextAreaElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  useGrow(addInput, draft, 200);
+  const duplicate = (next: string, except = -1) => facts.some((fact, index) => index !== except && same(fact, next));
+  const full = facts.length >= PRODUCT_LIMITS.facts;
+  function add() {
+    const next = draft.replace(/\s+/g, " ").trim();
+    if (!next) return closeAdd(true);
+    if (duplicate(next)) return setProblem("That fact is already on the list.");
+    setDraft("");
+    setProblem("");
+    onChange([...facts, next]);
+    if (facts.length + 1 >= PRODUCT_LIMITS.facts) closeAdd(false);
+  }
+  function closeAdd(restoreFocus: boolean) {
+    setAdding(false);
+    setDraft("");
+    setProblem("");
+    if (restoreFocus) requestAnimationFrame(() => addButton.current?.focus());
+  }
+  return (
+    <ul className="bk-rules bk-fact-list" aria-labelledby={labelledBy}>
+      {facts.map((fact, index) => (
+        <li key={index}>
+          <span className="bk-rule-mark" aria-hidden="true"><Check size={12} strokeWidth={2.25} /></span>
+          <InlineText
+            label="Approved fact"
+            value={fact}
+            placeholder=""
+            editable
+            maxLength={PRODUCT_LIMITS.fact}
+            className="bk-rule-text"
+            validate={(next) => (!next ? "A fact can’t be empty. Use Remove to delete it." : duplicate(next, index) ? "That fact is already on the list." : null)}
+            onSave={(next) => onChange(facts.map((entry, position) => (position === index ? next : entry)))}
+          />
+          <button
+            type="button"
+            className="icon-button bk-rule-remove"
+            aria-label={`Remove fact: ${fact}`}
+            title="Remove"
+            onClick={() => {
+              onChange(facts.filter((_, position) => position !== index));
+              requestAnimationFrame(() => addButton.current?.focus());
+            }}
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        </li>
+      ))}
+      {adding ? (
+        <li className="bk-rule-new">
+          <span className="bk-rule-mark is-new" aria-hidden="true"><Plus size={12} strokeWidth={2.25} /></span>
+          <span className="bk-inline-wrap bk-rule-text-wrap">
+            <label className="sr-only" htmlFor="bk-fact-new">New approved fact</label>
+            <textarea
+              id="bk-fact-new"
+              ref={addInput}
+              className="bk-inline-input bk-rule-text"
+              rows={1}
+              value={draft}
+              maxLength={PRODUCT_LIMITS.fact}
+              placeholder="Each bottle holds 60 capsules."
+              enterKeyHint="done"
+              aria-invalid={problem ? true : undefined}
+              aria-describedby={problem ? "bk-fact-new-error bk-fact-new-hint" : "bk-fact-new-hint"}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setProblem("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  add();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  closeAdd(true);
+                }
+              }}
+              onBlur={() => {
+                if (draft.trim() && !problem) add();
+                if (!draft.trim() && facts.length > 0) closeAdd(false);
+              }}
+            />
+            <span className="bk-hint" id="bk-fact-new-hint">
+              <kbd>Enter</kbd> to add · <kbd>Esc</kbd> to close
+            </span>
+            {problem && (
+              <span className="bk-error" id="bk-fact-new-error" role="alert">
+                {problem}
+              </span>
+            )}
+          </span>
+        </li>
+      ) : full ? (
+        <li className="bk-rule-full">That’s the most a product holds. Remove one to add another.</li>
+      ) : (
+        <li className="bk-rule-add">
+          <button type="button" ref={addButton} onClick={() => setAdding(true)}>
+            <Plus size={15} aria-hidden="true" />
+            Add a fact
+          </button>
+        </li>
+      )}
+    </ul>
+  );
+}
+
+function ProductSheet({
+  client,
+  product,
+  products,
+  onClose,
+  onSaved,
+}: {
+  client: StudioClient;
+  /** The product being edited; absent when adding one. */
+  product: Product | null;
+  products: Product[];
+  onClose: () => void;
+  onSaved: (product: Product) => void;
+}) {
+  const [name, setName] = useState(product?.name ?? "");
+  const [description, setDescription] = useState(product?.description ?? "");
+  const [domain, setDomain] = useState<RegulatedDomain>(product?.domain ?? "general");
+  const [facts, setFacts] = useState<string[]>(product?.facts ?? []);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  // Dragging a file in needs a mouse or trackpad; on touch the hint only offers the button.
+  const [canDrag] = useState(() => matchMedia("(hover: hover) and (pointer: fine)").matches);
+  const [problems, setProblems] = useState<{ name?: string; photo?: string }>({});
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const attempt = useRef<{ payload: string; key: string } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // On a phone the keyboard would cover the sheet as it opens, so only a fine pointer gets focus here.
+    if (!product && matchMedia("(pointer: fine)").matches) nameInput.current?.focus({ preventScroll: true });
+  }, []);
+  useEffect(() => {
+    if (!photo) return setPreview(null);
+    const url = URL.createObjectURL(photo);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+  function pick(file: File | null | undefined) {
+    if (!file) return;
+    if (!(PRODUCT_IMAGE_TYPES as readonly string[]).includes(file.type))
+      return setProblems((current) => ({ ...current, photo: "Use a JPEG, PNG or WebP photo." }));
+    if (file.size > PRODUCT_MAX_IMAGE_BYTES) return setProblems((current) => ({ ...current, photo: "Use a photo under 15 MB." }));
+    setProblems((current) => ({ ...current, photo: undefined }));
+    setPhoto(file);
+    setRemovePhoto(false);
+  }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    const cleanName = name.replace(/\s+/g, " ").trim();
+    const nameProblem = !cleanName
+      ? "Give the product a name, like “BeWell Omega”."
+      : products.some((entry) => entry.id !== product?.id && same(entry.name, cleanName))
+        ? "A product with this name is already in the brand kit."
+        : undefined;
+    setProblems((current) => ({ ...current, name: nameProblem }));
+    if (nameProblem) return nameInput.current?.focus();
+    setError("");
+    try {
+      let imageKey: string | null | undefined = product ? undefined : null;
+      if (photo) {
+        setBusy("Uploading photo…");
+        imageKey = await client.uploadProductImage(photo);
+      } else if (removePhoto) imageKey = null;
+      setBusy("Saving…");
+      const fields = { name: cleanName, description: description.trim(), domain, facts };
+      if (product) {
+        // Only what changed is sent.
+        const patch: UpdateProductInput = { productId: product.id };
+        if (fields.name !== product.name) patch.name = fields.name;
+        if (fields.description !== product.description) patch.description = fields.description;
+        if (fields.domain !== product.domain) patch.domain = fields.domain;
+        if (JSON.stringify(fields.facts) !== JSON.stringify(product.facts)) patch.facts = fields.facts;
+        if (imageKey !== undefined) patch.imageKey = imageKey;
+        onSaved(Object.keys(patch).length > 1 ? await client.updateProduct(patch) : product);
+      } else {
+        // One key per distinct attempt: retrying after an interrupted response cannot add the product twice.
+        const payload = JSON.stringify({ ...fields, imageKey });
+        if (attempt.current?.payload !== payload) attempt.current = { payload, key: crypto.randomUUID() };
+        onSaved(await client.createProduct({ ...fields, imageKey, operationKey: attempt.current.key }));
+      }
+    } catch (failure) {
+      setError(messageOf(failure));
+      setBusy(null);
+    }
+  }
+  const shown = preview ?? (removePhoto ? null : (product?.imageUrl ?? null));
+  const lock = busy !== null;
+  return (
+    <Modal title={product ? "Edit product" : "Add a product"} onClose={onClose}>
+      <form className="bk-sheet bk-product-sheet" onSubmit={(event) => void submit(event)} noValidate aria-busy={lock || undefined}>
+        <div
+          className="bk-photo"
+          data-drag={dragging || undefined}
+          onDragEnter={(event) => {
+            if (!lock && event.dataTransfer.types.includes("Files")) setDragging(true);
+          }}
+          onDragOver={(event) => {
+            if (lock) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            if (!lock) pick(event.dataTransfer.files[0]);
+          }}
+        >
+          <span className="bk-photo-preview">{shown ? <img src={shown} alt="" /> : <ImagePlus size={22} aria-hidden="true" />}</span>
+          <div className="bk-photo-text">
+            <strong id="bk-photo-label">Photo</strong>
+            <p id="bk-photo-hint">{dragging ? "Drop it to use it." : `${canDrag ? "Drag a photo here, or choose one." : "Choose a square photo if you have one."} JPEG, PNG or WebP, up to 15 MB.`}</p>
+            <div className="bk-photo-actions">
+              <button type="button" className="button secondary bk-small" disabled={lock} aria-describedby="bk-photo-hint" onClick={() => fileInput.current?.click()}>
+                {shown ? "Replace photo" : "Choose photo"}
+              </button>
+              {shown && (
+                <button
+                  type="button"
+                  className="button bk-small bk-quiet"
+                  disabled={lock}
+                  onClick={() => {
+                    setPhoto(null);
+                    setRemovePhoto(Boolean(product?.hasImage));
+                  }}
+                >
+                  Remove photo
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInput}
+              type="file"
+              accept={PRODUCT_IMAGE_TYPES.join(",")}
+              hidden
+              aria-labelledby="bk-photo-label"
+              onChange={(event) => {
+                pick(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            {problems.photo && <small className="bk-error" role="alert">{problems.photo}</small>}
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="bk-product-name">Name</label>
+          <input
+            id="bk-product-name"
+            ref={nameInput}
+            value={name}
+            maxLength={PRODUCT_LIMITS.name}
+            placeholder="BeWell Omega"
+            autoComplete="off"
+            disabled={lock}
+            aria-invalid={problems.name ? true : undefined}
+            aria-describedby={problems.name ? "bk-product-name-error" : undefined}
+            onChange={(event) => {
+              setName(event.target.value);
+              setProblems((current) => ({ ...current, name: undefined }));
+            }}
+          />
+          {problems.name && <small className="bk-error" id="bk-product-name-error">{problems.name}</small>}
+        </div>
+        <div className="field">
+          <label htmlFor="bk-product-description">
+            Description <span>Optional</span>
+          </label>
+          <textarea
+            id="bk-product-description"
+            className="bk-product-description"
+            rows={2}
+            value={description}
+            maxLength={PRODUCT_LIMITS.description}
+            placeholder="Fish-oil capsules for everyday use."
+            disabled={lock}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </div>
+        <fieldset className="bk-domain" disabled={lock} aria-describedby="bk-domain-help">
+          <legend>Kind of product</legend>
+          <div className="bk-segmented">
+            {DOMAINS.map(({ id, icon: Icon }) => (
+              <label key={id} data-checked={domain === id || undefined}>
+                <input type="radio" name="bk-product-domain" value={id} checked={domain === id} onChange={() => setDomain(id)} />
+                <span>
+                  <Icon size={14} aria-hidden="true" />
+                  {DOMAIN_LABEL[id]}
+                </span>
+              </label>
+            ))}
+          </div>
+          <p id="bk-domain-help">{DOMAIN_HELP[domain]}</p>
+        </fieldset>
+        <div className="bk-sheet-facts">
+          <div className="bk-sheet-facts-head">
+            <strong id="bk-facts-label">Approved facts</strong>
+            {facts.length > 0 && (
+              <span className="bk-count">
+                {facts.length} of {PRODUCT_LIMITS.facts}
+              </span>
+            )}
+          </div>
+          <p className="bk-sheet-facts-help" id="bk-facts-help">The only product claims a script can make without a source. Write each one the way the brand would say it.</p>
+          <FactsEditor facts={facts} onChange={setFacts} labelledBy="bk-facts-label" />
+        </div>
+        {error && <Notice error>{error}</Notice>}
+        <footer className="modal-actions bk-sheet-actions">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="button primary" disabled={lock}>
+            {busy ?? (product ? "Save product" : "Add product")}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  );
+}
+
+function Products({
+  context,
+  client,
+  editable,
+  onProducts,
+  announce,
+}: {
+  context: StudioContext;
+  client: StudioClient;
+  editable: boolean;
+  onProducts: (products: Product[]) => void;
+  announce: (message: string) => void;
+}) {
+  const [editing, setEditing] = useState<Product | "new" | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const emptyAddButton = useRef<HTMLButtonElement>(null);
+  const products = [...context.products].sort((a, b) => a.position - b.position);
+  const canAdd = editable && products.length < PRODUCT_LIMITS.products;
+  async function remove(product: Product) {
+    await client.deleteProduct(product.id);
+    onProducts(products.filter((entry) => entry.id !== product.id));
+    announce(`Removed ${product.name}.`);
+    requestAnimationFrame(() => (addButton.current ?? emptyAddButton.current)?.focus({ preventScroll: true }));
+  }
+  const addAction = (ref: typeof addButton, className: string, label: string) =>
+    canAdd ? (
+      <button type="button" ref={ref} className={className} onClick={() => setEditing("new")}>
+        <Plus size={14} aria-hidden="true" />
+        {label}
+      </button>
+    ) : null;
+  return (
+    <section className="bk-section" aria-labelledby="bk-products-title">
+      <div className="bk-section-head">
+        <div>
+          <h2 id="bk-products-title">Products</h2>
+          {products.length > 0 && <p>Approved facts are the only product claims a script can make without a source.</p>}
+        </div>
+        {products.length > 0 && addAction(addButton, "button secondary bk-add", "Add product")}
+      </div>
+      {products.length === 0 ? (
+        <div className="bk-empty">
+          <span className="bk-empty-mark" aria-hidden="true"><Package size={16} /></span>
+          <div>
+            <strong>No products yet</strong>
+            <p>Add the products your videos talk about. Approved facts are the only product claims a script can make without a source.</p>
+          </div>
+          {addAction(emptyAddButton, "button secondary", "Add a product")}
+        </div>
+      ) : (
+        <div className="bk-products">
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} editable={editable} fresh={product.id === fresh} onEdit={setEditing} onRemove={remove} />
+          ))}
+        </div>
+      )}
+      {editable && products.length >= PRODUCT_LIMITS.products && (
+        <p className="bk-limit">A brand kit holds up to {PRODUCT_LIMITS.products} products. Remove one to add another.</p>
+      )}
+      {editing && (
+        <ProductSheet
+          client={client}
+          product={editing === "new" ? null : editing}
+          products={products}
+          onClose={() => setEditing(null)}
+          onSaved={(saved) => {
+            const exists = products.some((entry) => entry.id === saved.id);
+            onProducts(exists ? products.map((entry) => (entry.id === saved.id ? saved : entry)) : [...products, saved]);
+            setFresh(exists ? null : saved.id);
+            setEditing(null);
+            announce(exists ? `${saved.name} saved.` : `${saved.name} added.`);
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
 /* ───────────── page ───────────── */
 
 export function Brand({
@@ -1047,6 +1602,7 @@ export function Brand({
   campaign,
   campaigns,
   onBrand,
+  onProducts,
   onCampaign,
   onSelectProject,
   onStartProject,
@@ -1058,6 +1614,8 @@ export function Brand({
   campaigns: Campaign[];
   /** The server's brand kit after a save; the studio keeps its context in step. */
   onBrand: (brand: BrandKit) => void;
+  /** The brand kit's products after one was added, edited or removed. */
+  onProducts: (products: Product[]) => void;
   /** The server's project after a source was added or removed. */
   onCampaign: (campaign: Campaign) => void;
   onSelectProject: (id: string) => void;
@@ -1187,6 +1745,17 @@ export function Brand({
       </section>
 
       <Guardrails rules={brand.rules} editable={editable} saved={flash === "rules"} error={errors.rules} onSave={(next, done) => void save("rules", next, done)} />
+
+      <Products
+        context={context}
+        client={client}
+        editable={editable}
+        onProducts={onProducts}
+        announce={(message) => {
+          setSourceNote("");
+          requestAnimationFrame(() => setSourceNote(message));
+        }}
+      />
 
       <Sources
         context={context}
