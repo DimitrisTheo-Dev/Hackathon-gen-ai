@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Pause, Play, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Camera, Check, Copy, Lightbulb, Mic, Pause, Play, RotateCcw, ShieldCheck, TriangleAlert, Volume1, X } from "lucide-react";
 import { uploadLikenessFile, type LikenessApi } from "./api";
-import { createPhraseTracker, evaluateLiveness, voicedMs, type FaceFrame, type LivenessReport } from "./checks";
+import { createPhraseTracker, evaluateLiveness, meanLuma, voicedMs, type FaceFrame, type LivenessReport } from "./checks";
 import { createFaceTracker, type FaceReading, type FaceTracker } from "./faceTracker";
 import { boxOnScreen, faceFit } from "./fit";
-import { pickPhrases, type LikenessLanguage } from "./phrases";
+import { consentStatement, pickPhrases, type LikenessLanguage } from "./phrases";
 import { createHoldTimer, matchesPose, poseProgress, poseSequence, POSES, type HeadPose, type PoseId } from "./pose";
 import { createBrowserSpeechSource, createLiveSource, probeLive, type LiveHealth, type TranscriptSource } from "./source";
 import { createReadAlongSync, tokenizeScript, type ReadAlongSync } from "./sync";
@@ -52,8 +52,12 @@ interface Props {
   context?: string;
 }
 
-type Step = "intro" | "loading" | "scan" | "speech" | "review" | "saving" | "done";
-type Hint = "noFace" | "twoFaces" | "closer" | "back" | "center" | null;
+type Step = "intro" | "prime" | "loading" | "scan" | "speech" | "review" | "saving" | "done";
+type Hint = "noFace" | "twoFaces" | "closer" | "back" | "center" | "dark" | null;
+/** Mean brightness (0..1) of the camera picture below which the face is too dark to track well. */
+const DARK = 0.2;
+/** A new hint waits this long before it replaces the one shown, so the guide does not flicker. */
+const HINT_SETTLE_MS = 350;
 type Turn = Exclude<PoseId, "center">;
 /** Spoken this long with no text back from live transcription: it is not hearing, so switch recognizers. */
 const LIVE_DEAF_MS = 3000;
@@ -61,51 +65,173 @@ const LIVE_DEAF_MS = 3000;
 const COPY = {
   en: {
     title: "Scan your face",
-    name: "Full name",
+    name: "Your full name",
+    nameHint: "It goes into the consent you read aloud.",
     agree: "I consent to an avatar of my face and voice.",
-    start: "Start",
-    stepOf: (n: number) => `Step ${n} of 3`,
-    hints: { noFace: "No face", twoFaces: "One person only", closer: "Move closer", back: "Move back", center: "Center your face" },
-    finish: "Done",
+    youWillSay: "You’ll read this aloud at the end:",
+    continue: "Continue",
+    phases: ["Consent", "Face scan", "Your looks"],
+    phasesNoPersona: ["Consent", "Face scan", "Saved"],
+    stepOf: (n: number, label: string) => `Step ${n} of 3: ${label}`,
+    plan: [
+      { title: "Agree", time: "30 sec", body: "Confirm your name and tick the box." },
+      { title: "Turn and read", time: "about 1 min", body: "Turn your head slowly, then read three short lines aloud." },
+      { title: "Check and save", time: "30 sec", body: "See the result before anything is saved." },
+    ],
+    privacyTitle: "What happens to your face data",
+    privacy: [
+      "Face tracking runs on this device. The recordings stay here until you press Save.",
+      "While you read aloud, your voice is transcribed live so the words follow you.",
+      "Saved: the two recordings, five stills and the transcript, in private storage for this workspace.",
+      "Withdraw consent on the persona at any time and the recordings are deleted for good. A dated record that you withdrew is kept.",
+    ],
+    primeTitle: "Get ready",
+    primeBody: "Faceful needs your camera and microphone for about a minute.",
+    primeAsk: "Your browser will ask next. Choose Allow.",
+    tips: ["Face a window or a soft light", "Find a quiet spot", "Hold the camera at eye level"],
+    allowButton: "Allow camera and microphone",
+    startScan: "Start the scan",
+    back: "Back",
+    opening: "Opening the camera…",
+    hints: { noFace: "Looking for your face…", twoFaces: "Only one person in view, please", closer: "Move a little closer", back: "Move back a little", center: "Center your face in the oval", dark: "Find more light on your face" },
+    angleOf: (n: number, total: number) => `${n} of ${total}`,
+    scanned: "Scan done. Now read aloud.",
+    readHint: "Read each line at a normal pace. The words light up as you go.",
+    finish: "I’ve finished reading",
     fallback: "Browser speech",
     restart: "Start again from the top",
     noSpeech: "Speech not supported",
-    passedTitle: "Ready",
-    failedTitle: "Try again",
+    passedTitle: "Looks good",
+    passedBody: "Play it back if you like, then save. Nothing has left this device yet.",
+    failedTitle: "Let’s try that once more",
+    failedBody: "One check didn’t pass, so this capture can’t be saved. It only takes a minute.",
+    remedies: {
+      poses: "Hold each angle until the ring moves on.",
+      one_face: "Make sure only you are in view.",
+      smooth: "Turn your head slowly, without sudden jumps.",
+      phrases: "Read every line aloud, clearly.",
+      duration: "Read all three lines at a steady pace.",
+    } as Record<string, string>,
     advisory: "Advisory",
-    save: "Save",
-    retry: "Retry",
-    doneTitle: "Saved",
+    save: "Save consent",
+    saving: (n: number) => `Saving privately… ${n}%`,
+    retry: "Scan again",
+    saveAgain: "Try saving again",
+    doneTitle: "Consent saved",
+    doneBody: "Your face scan and spoken consent are stored privately in this workspace.",
+    doneNext: "Next, add a look: what you wear and where you are on camera.",
     close: "Close",
-    allow: "Allow camera and microphone",
+    doneClose: "Done",
     play: "Play",
     pause: "Pause",
     angles: { center: "Front", left: "Left", right: "Right", up: "Up", down: "Down" },
+    problems: {
+      denied: { title: "Camera access is off", body: "Allow the camera and microphone for this site. In most browsers that is the camera icon in the address bar. Then try again." },
+      missing: { title: "No camera found", body: "Connect a camera and try again, or open the scan link on your phone." },
+      busy: { title: "The camera is busy", body: "Another app or tab is using it. Close that, then try again." },
+      unsupported: { title: "This browser can’t open the camera here", body: "Open the scan in the latest Chrome, Edge or Safari." },
+      tracker: { title: "Face tracking couldn’t start", body: "Reload the page and try again. If it keeps happening, try the latest Chrome, Edge or Safari." },
+    },
+    tryAgain: "Try again",
+    copyLink: "Copy link for your phone",
+    copied: "Link copied",
   },
   el: {
     title: "Σάρωση προσώπου",
     name: "Ονοματεπώνυμο",
+    nameHint: "Μπαίνει στη συναίνεση που θα διαβάσετε φωναχτά.",
     agree: "Συναινώ σε avatar του προσώπου και της φωνής μου.",
-    start: "Έναρξη",
-    stepOf: (n: number) => `Βήμα ${n} από 3`,
-    hints: { noFace: "Δεν φαίνεται πρόσωπο", twoFaces: "Μόνο ένα άτομο", closer: "Πιο κοντά", back: "Πιο πίσω", center: "Στο κέντρο" },
-    finish: "Τέλος",
+    youWillSay: "Στο τέλος θα διαβάσετε φωναχτά:",
+    continue: "Συνέχεια",
+    phases: ["Συναίνεση", "Σάρωση", "Εμφανίσεις"],
+    phasesNoPersona: ["Συναίνεση", "Σάρωση", "Αποθήκευση"],
+    stepOf: (n: number, label: string) => `Βήμα ${n} από 3: ${label}`,
+    plan: [
+      { title: "Συμφωνία", time: "30 δευτ.", body: "Επιβεβαιώστε το όνομά σας και τσεκάρετε το κουτί." },
+      { title: "Στροφές και ανάγνωση", time: "περίπου 1 λεπτό", body: "Γυρίστε αργά το κεφάλι, μετά διαβάστε τρεις μικρές φράσεις." },
+      { title: "Έλεγχος και αποθήκευση", time: "30 δευτ.", body: "Βλέπετε το αποτέλεσμα πριν αποθηκευτεί οτιδήποτε." },
+    ],
+    privacyTitle: "Τι γίνεται με τα δεδομένα του προσώπου σας",
+    privacy: [
+      "Η παρακολούθηση του προσώπου γίνεται σε αυτή τη συσκευή. Οι εγγραφές μένουν εδώ μέχρι να πατήσετε Αποθήκευση.",
+      "Όσο διαβάζετε, η φωνή σας μεταγράφεται ζωντανά για να σας ακολουθούν οι λέξεις.",
+      "Αποθηκεύονται: οι δύο εγγραφές, πέντε στιγμιότυπα και η μεταγραφή, ιδιωτικά για αυτόν τον χώρο εργασίας.",
+      "Ανακαλέστε τη συναίνεση από την περσόνα όποτε θέλετε και οι εγγραφές διαγράφονται οριστικά. Μένει μια χρονολογημένη καταγραφή της ανάκλησης.",
+    ],
+    primeTitle: "Ετοιμαστείτε",
+    primeBody: "Η Faceful χρειάζεται κάμερα και μικρόφωνο για περίπου ένα λεπτό.",
+    primeAsk: "Ο browser θα σας ρωτήσει. Επιλέξτε Να επιτρέπεται.",
+    tips: ["Κοιτάξτε προς ένα παράθυρο ή απαλό φως", "Βρείτε ένα ήσυχο σημείο", "Κρατήστε την κάμερα στο ύψος των ματιών"],
+    allowButton: "Επιτρέψτε κάμερα και μικρόφωνο",
+    startScan: "Έναρξη σάρωσης",
+    back: "Πίσω",
+    opening: "Ανοίγει η κάμερα…",
+    hints: { noFace: "Αναζήτηση προσώπου…", twoFaces: "Μόνο ένα άτομο, παρακαλώ", closer: "Λίγο πιο κοντά", back: "Λίγο πιο πίσω", center: "Το πρόσωπο στο κέντρο", dark: "Χρειάζεται περισσότερο φως" },
+    angleOf: (n: number, total: number) => `${n} από ${total}`,
+    scanned: "Η σάρωση έγινε. Τώρα διαβάστε φωναχτά.",
+    readHint: "Διαβάστε κάθε φράση με κανονικό ρυθμό. Οι λέξεις φωτίζονται καθώς προχωράτε.",
+    finish: "Τελείωσα",
     fallback: "Αναγνώριση browser",
     restart: "Ξεκινήστε ξανά από την αρχή",
     noSpeech: "Δεν υποστηρίζεται ομιλία",
-    passedTitle: "Έτοιμο",
-    failedTitle: "Ξανά",
+    passedTitle: "Όλα καλά",
+    passedBody: "Δείτε την εγγραφή αν θέλετε και αποθηκεύστε. Τίποτα δεν έχει φύγει ακόμη από τη συσκευή.",
+    failedTitle: "Ας το ξαναδοκιμάσουμε",
+    failedBody: "Ένας έλεγχος δεν πέρασε, οπότε η εγγραφή δεν μπορεί να αποθηκευτεί. Παίρνει ένα λεπτό.",
+    remedies: {
+      poses: "Κρατήστε κάθε γωνία μέχρι να προχωρήσει ο δακτύλιος.",
+      one_face: "Μόνο εσείς στο κάδρο.",
+      smooth: "Γυρίστε το κεφάλι αργά, χωρίς απότομες κινήσεις.",
+      phrases: "Διαβάστε καθαρά κάθε φράση.",
+      duration: "Διαβάστε και τις τρεις φράσεις με σταθερό ρυθμό.",
+    } as Record<string, string>,
     advisory: "Ενδεικτικό",
-    save: "Αποθήκευση",
-    retry: "Ξανά",
-    doneTitle: "Αποθηκεύτηκε",
+    save: "Αποθήκευση συναίνεσης",
+    saving: (n: number) => `Ιδιωτική αποθήκευση… ${n}%`,
+    retry: "Νέα σάρωση",
+    saveAgain: "Δοκιμάστε ξανά την αποθήκευση",
+    doneTitle: "Η συναίνεση αποθηκεύτηκε",
+    doneBody: "Η σάρωση και η προφορική συναίνεση φυλάσσονται ιδιωτικά σε αυτόν τον χώρο εργασίας.",
+    doneNext: "Στη συνέχεια, προσθέστε μια εμφάνιση: τι φοράτε και πού βρίσκεστε στην κάμερα.",
     close: "Κλείσιμο",
-    allow: "Επιτρέψτε κάμερα και μικρόφωνο",
+    doneClose: "Τέλος",
     play: "Αναπαραγωγή",
     pause: "Παύση",
     angles: { center: "Μπροστά", left: "Αριστερά", right: "Δεξιά", up: "Πάνω", down: "Κάτω" },
+    problems: {
+      denied: { title: "Η κάμερα είναι απενεργοποιημένη", body: "Επιτρέψτε κάμερα και μικρόφωνο για αυτόν τον ιστότοπο, συνήθως από το εικονίδιο κάμερας στη γραμμή διεύθυνσης. Μετά δοκιμάστε ξανά." },
+      missing: { title: "Δεν βρέθηκε κάμερα", body: "Συνδέστε μια κάμερα και δοκιμάστε ξανά, ή ανοίξτε τον σύνδεσμο στο κινητό σας." },
+      busy: { title: "Η κάμερα χρησιμοποιείται", body: "Κάποια άλλη εφαρμογή ή καρτέλα τη χρησιμοποιεί. Κλείστε την και δοκιμάστε ξανά." },
+      unsupported: { title: "Αυτός ο browser δεν ανοίγει την κάμερα εδώ", body: "Ανοίξτε τη σάρωση στον πιο πρόσφατο Chrome, Edge ή Safari." },
+      tracker: { title: "Η παρακολούθηση προσώπου δεν ξεκίνησε", body: "Ανανεώστε τη σελίδα και δοκιμάστε ξανά, ή δοκιμάστε τον πιο πρόσφατο Chrome, Edge ή Safari." },
+    },
+    tryAgain: "Δοκιμάστε ξανά",
+    copyLink: "Αντιγραφή συνδέσμου για το κινητό",
+    copied: "Αντιγράφηκε",
   },
 } as const;
+
+type Problem = keyof (typeof COPY)["en"]["problems"];
+/** What went wrong opening the camera, from the browser's error name. */
+function problemOf(failure: unknown): Problem {
+  const name = (failure as Error)?.name;
+  const message = (failure as Error)?.message ?? "";
+  if (name === "NotAllowedError" || name === "SecurityError") return "denied";
+  if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError") return "missing";
+  if (name === "NotReadableError" || name === "AbortError" || name === "TrackStartError") return "busy";
+  if (message.startsWith("Face tracking")) return "tracker";
+  return "unsupported";
+}
+
+/** Whether the browser already lets this site use the camera and microphone (no prompt will appear). */
+async function alreadyAllowed(): Promise<boolean> {
+  try {
+    const states = await Promise.all((["camera", "microphone"] as const).map((name) => navigator.permissions.query({ name: name as PermissionName })));
+    return states.every((state) => state.state === "granted");
+  } catch {
+    return false;
+  }
+}
 
 const CHECK_LABELS: Record<LikenessLanguage, Record<string, string>> = {
   en: { poses: "Angles", one_face: "One face", smooth: "Movement", blink: "Blink", phrases: "Phrases", lip_sync: "Lip sync", duration: "Length" },
@@ -213,6 +339,11 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
   const [speechUrl, setSpeechUrl] = useState<string | null>(null);
   const [saveProgress, setSaveProgress] = useState(0);
   const [canFinish, setCanFinish] = useState(false);
+  /** Why the camera did not open, shown as a calm card on the get-ready screen. */
+  const [problem, setProblem] = useState<Problem | null>(null);
+  /** Whether the camera and microphone are already allowed, so no browser prompt will follow. */
+  const [allowed, setAllowed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const t = COPY[language];
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -248,6 +379,11 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
   const urlsRef = useRef<string[]>([]);
   const timersRef = useRef<number[]>([]);
   const handleRef = useRef<(reading: FaceReading, ts: number) => void>(() => {});
+  /** The camera picture's brightness, sampled a few times a second while scanning. */
+  const lightRef = useRef({ at: 0, dark: false });
+  const lightCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** The hint on screen, and the one waiting to replace it (HINT_SETTLE_MS). */
+  const settleRef = useRef<{ shown: Hint; candidate: Hint; since: number }>({ shown: null, candidate: null, since: 0 });
 
   useEffect(() => {
     if (defaultName) setName((current) => current || defaultName);
@@ -468,6 +604,16 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
         );
         if (fit !== "ok") hint = fit;
       }
+      // No face in a dark picture: the useful advice is light, not position.
+      if (video?.videoWidth && now - lightRef.current.at > 700) {
+        const canvas = (lightCanvasRef.current ??= Object.assign(document.createElement("canvas"), { width: 16, height: 16 }));
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, 16, 16);
+          lightRef.current = { at: now, dark: meanLuma(ctx.getImageData(0, 0, 16, 16).data) < DARK };
+        }
+      }
+      if (hint === "noFace" && lightRef.current.dark) hint = "dark";
       const matching = !hint && !!face.pose && matchesPose(target, face.pose, baselineRef.current);
       if (holdRef.current.update(matching, now)) {
         if (target === "center") baselineRef.current = face.pose;
@@ -485,13 +631,20 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
         }
       }
       const hold = holdRef.current.progress(now);
+      // What the person sees changes only once a new hint has held for a moment; the scan itself uses `hint`.
+      const settle = settleRef.current;
+      if (hint === settle.shown) settle.candidate = hint;
+      else if (hint !== settle.candidate) {
+        settle.candidate = hint;
+        settle.since = now;
+      } else if (now - settle.since >= HINT_SETTLE_MS) settle.shown = hint;
       // Accumulates over the whole scan and never goes back, even when a hold breaks.
       totalRef.current = Math.max(totalRef.current, (capturedRef.current.length + hold) / sequence.length);
       setScanView({
         target: sequence[indexRef.current],
         progress: face.pose ? poseProgress(sequence[indexRef.current], face.pose, baselineRef.current) : 0,
         hold,
-        hint,
+        hint: settle.shown,
         done: [...capturedRef.current],
         total: totalRef.current,
       });
@@ -528,6 +681,8 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
     setScanDone(false);
     setError(null);
     totalRef.current = 0;
+    settleRef.current = { shown: null, candidate: null, since: 0 };
+    lightRef.current = { at: 0, dark: false };
     setScanView({ target: "center", progress: 0, hold: 0, hint: null, done: [], total: 0 });
     const stream = streamRef.current!;
     scanRecorderRef.current = startRecorder(new MediaStream(stream.getVideoTracks()));
@@ -545,6 +700,11 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
 
   const start = useCallback(async () => {
     setError(null);
+    setProblem(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setProblem("unsupported");
+      return;
+    }
     go("loading");
     try {
       const tracker = trackerRef.current ?? createFaceTracker();
@@ -563,11 +723,17 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
       beginScan();
     } catch (failure) {
       releaseAll();
-      go("intro");
-      const denied = (failure as Error)?.name === "NotAllowedError";
-      setError(denied ? t.allow : (failure as Error)?.message || "Camera unavailable");
+      go("prime");
+      setProblem(problemOf(failure));
     }
-  }, [beginScan, go, releaseAll, t]);
+  }, [beginScan, go, releaseAll]);
+
+  /** From the agreement to the get-ready screen, which says what the browser will ask before it asks. */
+  const prepare = useCallback(() => {
+    setProblem(null);
+    void alreadyAllowed().then(setAllowed);
+    go("prime");
+  }, [go]);
 
   const retry = useCallback(() => {
     if (!streamRef.current || !trackerRef.current) {
@@ -624,26 +790,25 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
   if (!open || typeof document === "undefined") return null;
 
   const live = step === "loading" || step === "scan" || step === "speech";
-  const stepNumber = { intro: 0, loading: 1, scan: 1, speech: 2, review: 3, saving: 3, done: 3 }[step];
+  // Three phases the person can follow: agree, scan (turns, read-aloud, review, save), then what comes next.
+  const phase = step === "intro" || step === "prime" ? 1 : step === "done" ? 3 : 2;
+  const phases = personaId ? t.phases : t.phasesNoPersona;
   const boundaries = phrases.reduce<number[]>((ends, phrase) => [...ends, (ends[ends.length - 1] ?? 0) + tokenizeScript(phrase).length], []);
   const currentPhrase = boundaries.findIndex((end) => position < end);
   const scanning = step === "scan";
   const holding = scanning && !scanView.hint && scanView.hold > 0;
   const direction: Turn | null = scanning && !scanView.hint && scanView.target !== "center" ? scanView.target : null;
   const fullCamera = step === "scan" || step === "loading";
+  const statement = consentStatement(name.trim() || "…", language);
+  const scanLink = personaId ? `${location.origin}/face-scan?persona=${encodeURIComponent(personaId)}` : null;
+  const failedChecks = report ? report.checks.filter((check) => !check.passed && check.required) : [];
+  const problemCopy = problem ? t.problems[problem] : null;
 
   const tree = (
-    <div className={embedded ? "lk-root embedded" : "lk-root"} role={embedded ? "region" : "dialog"} aria-modal={embedded ? undefined : true} aria-label={t.title} lang={language}>
+    <div className={embedded ? `lk-root embedded is-${step}` : `lk-root is-${step}`} role={embedded ? "region" : "dialog"} aria-modal={embedded ? undefined : true} aria-label={t.title} lang={language}>
       <header className="lk-header">
         <div className="lk-header-group">
-          {(step !== "intro" || (embedded && context)) && <span className="lk-header-title">{context ?? t.title}</span>}
-          {stepNumber > 0 && step !== "done" && (
-            <div className="lk-steps" role="img" aria-label={t.stepOf(stepNumber)}>
-              {[1, 2, 3].map((n) => (
-                <span key={n} className={stepNumber >= n ? "on" : undefined} />
-              ))}
-            </div>
-          )}
+          <span className="lk-header-title">{context ?? t.title}</span>
         </div>
         <div className="lk-header-group">
           {step === "intro" && (
@@ -659,6 +824,17 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
             <X size={20} aria-hidden="true" />
           </button>
         </div>
+        <ol className="lk-progress" aria-label={t.stepOf(phase, phases[phase - 1])}>
+          {phases.map((label, index) => {
+            const n = index + 1;
+            return (
+              <li key={label} className={n < phase ? "done" : n === phase ? "on" : undefined} aria-current={n === phase ? "step" : undefined}>
+                <span className="lk-progress-dot" aria-hidden="true">{n < phase ? <Check size={11} strokeWidth={3} /> : n}</span>
+                <span className="lk-progress-label">{label}</span>
+              </li>
+            );
+          })}
+        </ol>
       </header>
 
       <main className="lk-main">
@@ -669,20 +845,22 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
             <video ref={videoRef} playsInline muted className="lk-video" />
             {fullCamera && (
               <div className="lk-oval-wrap">
-                <div ref={ovalRef} className="lk-oval">
+                <div ref={ovalRef} className={holding ? "lk-oval holding" : "lk-oval"}>
                   {step === "scan" && <FaceOval progress={scanView.total} fitted={!scanView.hint} />}
                   {step === "loading" && !scanDone && (
                     <div className="lk-oval-center">
                       <span className="lk-spinner" />
+                      <span className="sr-only" role="status">{t.opening}</span>
                     </div>
                   )}
                   {step === "loading" && scanDone && (
                     <>
                       <FaceOval progress={1} fitted />
                       <div className="lk-oval-center">
-                        <span className="lk-badge lk-in">
+                        <span className="lk-badge lk-pop">
                           <Check size={28} strokeWidth={2.5} aria-hidden="true" />
                         </span>
+                        <span className="sr-only" role="status">{t.scanned}</span>
                       </div>
                     </>
                   )}
@@ -691,25 +869,26 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
                       <Chevrons direction={direction} holding={holding} />
                     </div>
                   )}
-                  {scanning && (
-                    <div className="lk-hint-wrap">
-                      <span className="sr-only" aria-live="polite">
-                        {scanView.hint ? t.hints[scanView.hint] : POSES[scanView.target].prompt[language]}
-                      </span>
-                      {scanView.hint && (
-                        <p key={scanView.hint} className="lk-hint lk-in">
-                          {t.hints[scanView.hint]}
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
+                {scanning && (
+                  <div className="lk-guide">
+                    <span className="sr-only" aria-live="polite">
+                      {scanView.hint ? t.hints[scanView.hint] : POSES[scanView.target].prompt[language]}
+                    </span>
+                    <p key={scanView.hint ?? scanView.target} className={scanView.hint && scanView.hint !== "noFace" ? "lk-hint attention lk-in" : "lk-hint lk-in"} aria-hidden="true">
+                      {scanView.hint === "dark" && <Lightbulb size={15} aria-hidden="true" />}
+                      {scanView.hint ? t.hints[scanView.hint] : POSES[scanView.target].prompt[language]}
+                    </p>
+                    <span className="lk-count" aria-hidden="true">{t.angleOf(Math.min(scanView.done.length + 1, 5), 5)}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           {step === "speech" && (
             <div className="lk-speech">
+              <p className="lk-read-hint">{t.readHint}</p>
               <div className="lk-phrases">
                 {phrases.map((phrase, i) => {
                   const first = boundaries[i - 1] ?? 0;
@@ -741,9 +920,23 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
 
         {step === "intro" && (
           <div className="lk-intro lk-in">
-            {context && !embedded && <p className="lk-context">{context}</p>}
             <h1 className="lk-title">{t.title}</h1>
-            <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} placeholder={t.name} aria-label={t.name} autoComplete="name" className="lk-input" />
+            <ol className="lk-plan">
+              {t.plan.map((item, index) => (
+                <li key={item.title}>
+                  <span className="lk-plan-n" aria-hidden="true">{index + 1}</span>
+                  <span className="lk-plan-text">
+                    <strong>{item.title}<small>{item.time}</small></strong>
+                    <span>{item.body}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <div className="lk-field">
+              <label htmlFor="lk-name">{t.name}</label>
+              <input id="lk-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={120} autoComplete="name" className="lk-input" aria-describedby="lk-name-hint" />
+              <small id="lk-name-hint">{t.nameHint}</small>
+            </div>
             <label className="lk-check">
               <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} />
               <span className="lk-check-box" aria-hidden="true">
@@ -751,21 +944,82 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
               </span>
               <span className="lk-check-label">{t.agree}</span>
             </label>
-            {error && (
-              <p className="lk-error" role="alert">
-                <TriangleAlert size={18} aria-hidden="true" />
-                {error}
-              </p>
+            <figure className="lk-statement">
+              <figcaption>{t.youWillSay}</figcaption>
+              <blockquote lang={language}>“{statement}”</blockquote>
+            </figure>
+            <details className="lk-privacy">
+              <summary><ShieldCheck size={16} aria-hidden="true" />{t.privacyTitle}</summary>
+              <ul>
+                {t.privacy.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            </details>
+            <div className="lk-cta">
+              <button type="button" onClick={prepare} disabled={!agreed || name.trim().length < 2} className="lk-button primary">
+                {t.continue}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "prime" && (
+          <div className="lk-prime lk-in">
+            {problemCopy ? (
+              <div className="lk-problem" role="alert">
+                <span className="lk-problem-icon" aria-hidden="true"><TriangleAlert size={20} /></span>
+                <h2 className="lk-heading">{problemCopy.title}</h2>
+                <p>{problemCopy.body}</p>
+              </div>
+            ) : (
+              <>
+                <div className="lk-prime-art" aria-hidden="true">
+                  <span><Camera size={22} /></span>
+                  <span><Mic size={22} /></span>
+                </div>
+                <h2 className="lk-heading">{t.primeTitle}</h2>
+                <p className="lk-lede">{t.primeBody}{allowed ? "" : ` ${t.primeAsk}`}</p>
+                <ul className="lk-tips">
+                  <li><Lightbulb size={16} aria-hidden="true" />{t.tips[0]}</li>
+                  <li><Volume1 size={16} aria-hidden="true" />{t.tips[1]}</li>
+                  <li><Camera size={16} aria-hidden="true" />{t.tips[2]}</li>
+                </ul>
+              </>
             )}
-            <button type="button" onClick={() => void start()} disabled={!agreed || name.trim().length < 2} className="lk-button primary">
-              {t.start}
-            </button>
+            <div className="lk-cta">
+              <button type="button" onClick={() => void start()} className="lk-button primary">
+                {problemCopy ? t.tryAgain : allowed ? t.startScan : t.allowButton}
+              </button>
+              {problem === "missing" && scanLink && (
+                <button
+                  type="button"
+                  className="lk-button quiet"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(scanLink).then(() => {
+                      setCopied(true);
+                      later(2000, () => setCopied(false));
+                    });
+                  }}
+                >
+                  <Copy size={15} aria-hidden="true" />
+                  {copied ? t.copied : t.copyLink}
+                </button>
+              )}
+              <button type="button" onClick={() => { setProblem(null); go("intro"); }} className="lk-button quiet">
+                {t.back}
+              </button>
+            </div>
           </div>
         )}
 
         {(step === "review" || step === "saving") && report && (
           <div className="lk-review lk-in">
             <h2 className="lk-heading">{report.passed ? t.passedTitle : t.failedTitle}</h2>
+            <p className="lk-lede">{report.passed ? t.passedBody : t.failedBody}</p>
+            {!report.passed && failedChecks.length > 0 && (
+              <ul className="lk-remedies">
+                {failedChecks.map((check) => <li key={check.id}>{t.remedies[check.id] ?? check.label}</li>)}
+              </ul>
+            )}
 
             <div className="lk-stills">
               {(["left", "up", "center", "down", "right"] as PoseId[]).map((pose) => (
@@ -793,11 +1047,18 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
               </p>
             )}
 
+            {step === "saving" && (
+              <div className="lk-save-bar" role="progressbar" aria-label={t.saving(Math.round(saveProgress * 100))} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(saveProgress * 100)}>
+                <span style={{ transform: `scaleX(${Math.max(0.04, saveProgress)})` }} />
+              </div>
+            )}
             <div className="lk-actions">
-              <button type="button" onClick={() => void save()} disabled={!report.passed || step === "saving"} className="lk-button primary">
-                {step === "saving" ? `${Math.round(saveProgress * 100)}%` : t.save}
-              </button>
-              <button type="button" onClick={retry} disabled={step === "saving"} className="lk-button quiet">
+              {report.passed && (
+                <button type="button" onClick={() => void save()} disabled={step === "saving"} className="lk-button primary">
+                  {step === "saving" ? t.saving(Math.round(saveProgress * 100)) : error ? t.saveAgain : t.save}
+                </button>
+              )}
+              <button type="button" onClick={retry} disabled={step === "saving"} className={report.passed ? "lk-button quiet" : "lk-button primary"}>
                 <RotateCcw size={15} aria-hidden="true" />
                 {t.retry}
               </button>
@@ -808,12 +1069,15 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
         {step === "done" && (
           <div className="lk-done lk-in">
             <div className="lk-done-photo">
+              <span className="lk-done-halo" aria-hidden="true" />
               <div>{stillUrls.center && <img src={stillUrls.center} alt="" />}</div>
-              <span>
+              <span className="lk-done-check">
                 <Check size={16} strokeWidth={3} aria-hidden="true" />
               </span>
             </div>
-            <h2 className="lk-heading">{t.doneTitle}</h2>
+            <h2 className="lk-heading" role="status">{t.doneTitle}</h2>
+            <p className="lk-lede">{t.doneBody}</p>
+            {personaId && <p className="lk-next">{t.doneNext}</p>}
             <div className="lk-done-actions">
               {doneAction?.onClick ? (
                 <button type="button" onClick={() => { releaseAll(); doneAction.onClick!(); }} className="lk-button primary">
@@ -825,7 +1089,7 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
                 </a>
               ) : null}
               <button type="button" onClick={close} className={doneAction ? "lk-button quiet" : "lk-button primary"}>
-                {t.close}
+                {doneAction ? t.doneClose : t.close}
               </button>
             </div>
           </div>

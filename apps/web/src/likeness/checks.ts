@@ -212,3 +212,15 @@ export function evaluateLiveness(evidence: CaptureEvidence): LivenessReport {
   ];
   return { passed: checks.every((check) => check.passed || !check.required), checks };
 }
+
+/**
+ * Mean perceived brightness (Rec. 709 luma), 0..1, of RGBA pixels: a small sample of the camera picture, so the
+ * scan can ask for more light when it cannot find a face in a dark room.
+ */
+export function meanLuma(rgba: ArrayLike<number>): number {
+  const pixels = Math.floor(rgba.length / 4);
+  if (!pixels) return 0;
+  let sum = 0;
+  for (let i = 0; i < pixels * 4; i += 4) sum += 0.2126 * rgba[i] + 0.7152 * rgba[i + 1] + 0.0722 * rgba[i + 2];
+  return sum / pixels / 255;
+}

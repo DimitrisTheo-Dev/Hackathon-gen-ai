@@ -404,6 +404,46 @@ export const updateBrandInputSchema = z
   })
   .strict()
   .refine((input) => Object.entries(input).some(([key, value]) => key !== "operationKey" && value !== undefined), "The edit contains no changes.");
+/**
+ * Operation `draft_brand_from_website`: reads one public https page and proposes brand kit fields from it.
+ * Nothing is saved; the person accepts fields one by one and they are saved through `update_brand`.
+ */
+export const draftBrandInputSchema = z
+  .object({
+    url: z.string().trim().min(1, "Paste your website’s address").max(2048, "That address is too long"),
+    operationKey: z.uuid(),
+  })
+  .strict();
+export const brandDraftSchema = z.object({
+  source: z.object({
+    /** The page that was read, after any redirects. */
+    url: z.string(),
+    host: z.string(),
+    title: z.string().nullable(),
+    /** The page's declared language (BCP 47), or null when it declares none. */
+    language: z.string().nullable(),
+    /** Visible characters read from the page, after the cap. */
+    characters: z.number().int().min(0),
+    /** The page was longer than Faceful reads; the rest was skipped. */
+    truncated: z.boolean(),
+    /** Almost no text on the page: it is probably built in the browser with JavaScript. */
+    thin: z.boolean(),
+  }),
+  /** `ai`: written by the configured model from the page. `page`: copied from what the page itself states. */
+  writer: z.enum(["ai", "page"]),
+  /** Why the proposal is page-only, in a sentence, or null. */
+  note: z.string().nullable(),
+  proposal: z.object({
+    name: z.string().max(BRAND_LIMITS.name).nullable(),
+    description: z.string().max(BRAND_LIMITS.description).nullable(),
+    tone: z.string().max(BRAND_LIMITS.tone).nullable(),
+    audience: z.string().max(BRAND_LIMITS.audience).nullable(),
+    color: brandColorSchema.nullable(),
+    rules: z.array(z.string().max(BRAND_LIMITS.rule)).max(BRAND_LIMITS.rules),
+  }),
+  /** Products or services the page names. Suggestions only: products and their approved facts are added by a person. */
+  offerings: z.array(z.object({ name: z.string().max(120), description: z.string().max(300) })).max(6),
+});
 export const SOURCE_LIMITS = { title: 160, url: 2048, excerpt: 5000, perProject: 20 } as const;
 /**
  * Adds a source to one project. The link is a reference only: Faceful never fetches it. The excerpt is
@@ -424,6 +464,8 @@ export const removeSourceInputSchema = z
 export type Brand = z.infer<typeof brandSchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type UpdateBrandInput = z.input<typeof updateBrandInputSchema>;
+export type DraftBrandInput = z.input<typeof draftBrandInputSchema>;
+export type BrandDraft = z.infer<typeof brandDraftSchema>;
 export type AddSourceInput = z.input<typeof addSourceInputSchema>;
 export type RemoveSourceInput = z.infer<typeof removeSourceInputSchema>;
 export type StudioContext = z.infer<typeof contextSchema>;
