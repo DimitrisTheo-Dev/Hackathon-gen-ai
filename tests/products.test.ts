@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { contextSchema, productSchema, timeAtScriptIndex, type CompositionDocument } from "../packages/contracts/src/index";
+import { directorTurn } from "../packages/engine/src/director";
+import type { Planner } from "../packages/engine/src/llm";
 import { startCampaign } from "../packages/engine/src/studio";
 import { engine, key, sha256 } from "./reel-support";
 
@@ -223,4 +225,22 @@ test("place_product falls back to one third in, clamps inside the timeline, and 
   const elsewhere = await ok("create_product", "user:u2", { name: "Theirs", operationKey: key() });
   assert.equal((await op("place_product", "user:u1", { itemId: item.id, productId: elsewhere.id, expectedCompositionRevision: 2, operationKey: key() })).status, 404);
   assert.equal((await op("place_product", "user:u2", { itemId: item.id, productId: elsewhere.id, expectedCompositionRevision: 0, operationKey: key() })).status, 404);
+});
+
+test("the Director writes from the products: they reach the planner as data, with the rule that claims restate approved facts", async () => {
+  const { env, ok } = harness();
+  const ctx = await env.as("user:u1");
+  await ok("create_product", "user:u1", { name: "VitaBoost", description: "Vitamin C capsules.", domain: "health", facts: ["Each capsule contains 1000 mg of vitamin C."], operationKey: key() });
+  let seen = { system: "", user: "" };
+  const planner: Planner = {
+    plan: async (input) => {
+      seen = input;
+      return { intent: "answer", reply: "Noted.", project: null, edits: [], renderItemIds: [], find: null, wantsCheckout: false };
+    },
+  };
+  await directorTurn(env.deps, ctx, { campaignId: null, itemId: null, scope: "project", instruction: "Write a 15-second script about VitaBoost.", operationKey: key() }, planner);
+  const workspace = JSON.parse(seen.user.match(/<workspace>([\s\S]*?)<\/workspace>/)![1]);
+  assert.deepEqual(workspace.products, [{ name: "VitaBoost", description: "Vitamin C capsules.", domain: "health", approvedFacts: ["Each capsule contains 1000 mg of vitamin C."] }]);
+  assert.match(seen.system, /A script may say only what a product's approved facts say about it/);
+  assert.match(seen.system, /no cure, treatment or guaranteed-return promises and carry no diagnosis/);
 });
