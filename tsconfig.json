@@ -28,6 +28,7 @@
     "api",
     "apps/claude-runner",
     "apps/workspace-store/src",
-    "apps/machines/src/lib.ts"
+    "apps/machines/src/lib.ts",
+    "apps/claude-routine"
   ]
 }
