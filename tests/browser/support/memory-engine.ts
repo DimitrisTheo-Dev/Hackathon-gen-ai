@@ -15,6 +15,8 @@ import { handleEngineRequest, type HttpDeps } from "../../../packages/engine/src
 import type { Planner, PlannerOutput } from "../../../packages/engine/src/llm";
 import { workerClaim, workerComplete, workerUploadUrl } from "../../../packages/engine/src/render";
 import { MemoryMedia, MemoryStore } from "../../../packages/engine/src/store-memory";
+import { MemoryFileStore } from "../../../packages/engine/src/r2";
+import { handleMcpRequest } from "../../../packages/engine/src/mcp";
 
 const WORKER_TOKEN = "e2e-render-worker-token-not-a-real-credential-0001";
 const AVATARS = JSON.stringify([{ id: "minas_kontis", name: "Minas", languages: ["en", "el"] }]);
@@ -40,6 +42,30 @@ class E2EMedia extends MemoryMedia {
 class E2EStore extends MemoryStore {
   override readonly media: E2EMedia;
   constructor(origin: string) { super(); this.media = new E2EMedia(origin); }
+}
+/** Draft files for the Video view, kept in memory and served by this server instead of R2. */
+class E2EFiles extends MemoryFileStore {
+  constructor(private readonly origin: string) { super(); }
+  override async uploadUrl(key: string, options: { sha256Hex: string; contentType: string }) {
+    const { headers } = await super.uploadUrl(key, options);
+    return { url: `${this.origin}/__e2e/files/${key}`, headers };
+  }
+  override async downloadUrl(key: string, expiresSeconds: number) {
+    await super.downloadUrl(key, expiresSeconds);
+    return `${this.origin}/__e2e/files/${key}?ttl=${expiresSeconds}`;
+  }
+}
+
+/** A stored object with byte ranges, like the real storage: browsers will not seek or play media without them. */
+function serveBytes(request: Request, bytes: Uint8Array, contentType: string) {
+  const size = bytes.byteLength;
+  const headers = { "Content-Type": contentType, "Accept-Ranges": "bytes", "Cache-Control": "no-store" };
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("range") ?? "");
+  if (!range) return new Response(bytes, { headers });
+  const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+  const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+  if (start > end || start >= size) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
+  return new Response(bytes.slice(start, end + 1), { status: 206, headers: { ...headers, "Content-Range": `bytes ${start}-${end}/${size}` } });
 }
 
 function claims(token: string) {
@@ -86,7 +112,9 @@ export function createMemoryEngine(origin: string) {
     verifyAccessToken: async (token) => claims(token),
     fetch: async () => new Response("{}", { status: 503 }),
     planner: scripted,
+    files: new E2EFiles(origin),
   };
+  const files = base.files as E2EFiles;
   const plannerOff = new Set<string>();
   const wav = silentWav();
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -95,15 +123,22 @@ export function createMemoryEngine(origin: string) {
     if (request.method === "GET" && pathname.startsWith("/__e2e/media/")) {
       const object = store.media.objects.get(decodeURIComponent(pathname.slice("/__e2e/media/".length)));
       if (!object) return new Response("Not found", { status: 404 });
-      // Byte ranges, like the real storage: Safari will not play media from a server that cannot serve them.
-      const bytes = object.bytes, size = bytes.byteLength;
-      const headers = { "Content-Type": "audio/wav", "Accept-Ranges": "bytes", "Cache-Control": "no-store" };
-      const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("range") ?? "");
-      if (!range) return new Response(bytes, { headers });
-      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
-      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
-      if (start > end || start >= size) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
-      return new Response(bytes.slice(start, end + 1), { status: 206, headers: { ...headers, "Content-Range": `bytes ${start}-${end}/${size}` } });
+      return serveBytes(request, object.bytes, "audio/wav");
+    }
+    if (pathname.startsWith("/__e2e/files/")) {
+      const key = decodeURIComponent(pathname.slice("/__e2e/files/".length));
+      if (request.method === "PUT") {
+        // Like R2 with a signed checksum: only the exact bytes the upload ticket declared are stored.
+        const bytes = new Uint8Array(await request.arrayBuffer());
+        const digest = Buffer.from(await crypto.subtle.digest("SHA-256", bytes)).toString("base64");
+        if (digest !== request.headers.get("x-amz-checksum-sha256")) return new Response("BadDigest", { status: 400 });
+        await files.put(key, bytes, request.headers.get("content-type") ?? "application/octet-stream");
+        return new Response(null, { status: 200, headers: { "Access-Control-Allow-Origin": "*" } });
+      }
+      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "PUT", "Access-Control-Allow-Headers": "content-type, x-amz-checksum-sha256" } });
+      const object = files.objects.get(key);
+      if (!object) return new Response("Not found", { status: 404 });
+      return serveBytes(request, object.bytes, object.contentType);
     }
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
     let user: ReturnType<typeof claims>;
@@ -141,6 +176,8 @@ export function createMemoryEngine(origin: string) {
 
   return async function handle(request: Request, pathname: string): Promise<Response | null> {
     if (pathname.startsWith("/__e2e/")) return control(request, pathname);
+    // Agents (and the reel uploader) reach the same engine through the stateless MCP endpoint.
+    if (pathname === "/mcp") return handleMcpRequest(base, request, pathname);
     if (!pathname.startsWith("/v1/")) return null;
     let off = false;
     try { off = plannerOff.has(claims(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "").sub); } catch { /* unauthenticated requests are answered by the engine */ }

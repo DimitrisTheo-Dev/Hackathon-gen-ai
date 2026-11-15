@@ -3,7 +3,7 @@ import { handlePublicRequest, publicDocuments, publicPages, publicProblem, publi
 
 // Public presentation/discovery only. Private studio and domain routes pass through.
 const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy"]);
-const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/docs/docs.js", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/cursor.svg", "/icons/gemini.svg", "/icons/vscode.svg", "/icons/windsurf.svg", "/icons/zed.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icons/app-192.png", "/icons/app-512.png", "/icons/app-maskable-512.png", "/icons/apple-touch-icon.png"]);
+const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/docs/docs.js", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/cursor.svg", "/icons/gemini.svg", "/icons/vscode.svg", "/icons/windsurf.svg", "/icons/zed.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/sw.js", "/offline.html", "/tools/faceful-reel.mjs", "/icons/app-192.png", "/icons/app-512.png", "/icons/app-maskable-512.png", "/icons/apple-touch-icon.png"]);
 const markdown = `# Faceful — content production studio
 
 Create campaigns with your agent. Fine-tune them here.
