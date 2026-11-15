@@ -68,7 +68,7 @@ Labels: **VERIFIED LIVE** — exercised on production with real services. **IMPL
 | AI Creative Director writing drafts from a prompt | **BLOCKED — no model credential.** Runs in honest "basic" mode: finds/opens content, credits, schedule review, exact edits, templates | Add `ANTHROPIC_API_KEY` on Vercel, **or** add a card to the Vercel team's AI Gateway and set `DIRECTOR_PROVIDER=vercel-gateway` (the gateway answered `customer_verification_required`) |
 | Remote MCP server (13 tools), scoped workspace tokens | **VERIFIED LIVE** — Claude Code 2.1.325 against production; Codex CLI 0.169.0 and Claude Code against a local engine on the real database | `evidence/production/mcp-and-oauth.md`, `evidence/engine/mcp-client-trials.md` |
 | MCP OAuth 2.1 (discovery, dynamic registration, consent page, PKCE, refresh) | **VERIFIED LIVE with a scripted client**; not yet through a host's own OAuth UI | `evidence/production/mcp-and-oauth.md` |
-| UI ↔ MCP parity (same projects, same rules) | **VERIFIED LIVE** | Agent-created project and drafts read back through the studio API |
+| UI ↔ MCP parity (same projects, same rules) | **VERIFIED LIVE**. On 15 Nov, a nine-step Claude Code run against production MCP was followed by the studio showing the same project, credited to the agent, with the same three blockers | `evidence/production/terminal-and-interface-e2e.md` |
 | Stripe sandbox: hosted Checkout, webhook-confirmed plan and credits, Customer Portal, double-subscribe guard, tenant isolation | **VERIFIED LIVE** (test card 4242…, credits 1 → 31 via `invoice.paid`) | `evidence/production/stripe-sandbox.md` |
 | Stripe declined card and Customer Portal cancellation on production | **VERIFIED LIVE** (15 Nov). The decline granted nothing. The cancellation first exposed a bug (this API version records it as `cancel_at`); it was fixed, redeployed, and production now reports `cancelAtPeriodEnd: true` | `evidence/production/stripe-sandbox.md` § Edge cases |
 | Stripe replayed / out-of-order webhooks, `subscription.deleted` at period end | **IMPLEMENTED, NOT VERIFIED LIVE** (unit tests with real signature verification) | Manual checklist in `STRIPE_SANDBOX_SETUP.md` |
@@ -106,6 +106,7 @@ Mocked vs real: Stripe network calls are faked in unit tests (signature verifica
 - A 5-second poll would have restarted video playback (new signed URL each read). URLs are now stable per media file.
 - Operation names were looked up on a plain object, so `POST /v1/studio/operations/constructor` (signed in) reached `Object` instead of an operation and tried to return the engine's dependency object, configuration included. Found in review, not by a report. Now a `Map` of own entries; production answers `404 not_found`. Vercel's log retention is too short to rule out earlier use, so rotating the server keys after the hackathon is recommended (`SECURITY.md`).
 - Customer Portal cancellations were not shown (Stripe API `2026-10-28` records them as `cancel_at`). Fixed and re-verified on production.
+- **Writes took 3–6 s, and one MCP call outlasted Claude Code's client timeout.** The functions ran in `iad1` while the database is in Frankfurt. They now run in `fra1`, and writes take about 1–2 s on the server (`evidence/production/terminal-and-interface-e2e.md`).
 
 ## What the demo needs from people
 
