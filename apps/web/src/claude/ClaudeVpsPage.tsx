@@ -287,7 +287,7 @@ export default function ClaudeVpsPage() {
                 <label htmlFor="cc-url">Address</label>
                 <input id="cc-url" data-cc-focus="server" type="url" inputMode="url" autoComplete="url" {...exact} placeholder="https://claude.yourdomain.com" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
                 <label htmlFor="cc-key">Access token</label>
-                <input id="cc-key" type="password" autoComplete="off" {...exact} placeholder="fgw1.… or RUNNER_ACCESS_KEY" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
+                <input id="cc-key" type="password" autoComplete="off" {...exact} placeholder="fgw2.… or RUNNER_ACCESS_KEY" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} required disabled={busy !== null} aria-describedby={serverError ? "cc-server-error" : undefined} />
                 <label className="cc-check"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy !== null} />Remember the key on this device</label>
                 <button className="button primary" disabled={busy !== null}>{busy === "connect" ? <><LoaderCircle className="spin" size={15} aria-hidden="true" />{machine ? "Waking your machine…" : "Connecting…"}</> : "Connect"}</button>
               </form>
