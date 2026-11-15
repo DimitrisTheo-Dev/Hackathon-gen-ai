@@ -550,6 +550,8 @@ function buildServer(deps: HttpDeps, ctx: Ctx, request: Request, limits: Request
     (args) =>
       run("request_file_upload", async () => {
         const key = args.idempotencyKey ?? crypto.randomUUID();
+        // Each link lets the agent put a file in storage, so it shares the `costly` bucket with the studio's upload links.
+        await costly();
         const ticket = await requestUpload(deps, ctx, { campaignId: args.projectId, itemId: args.itemId ?? null, kind: args.kind, name: args.name, mime: args.mime, bytes: args.bytes, sha256: args.sha256, durationSeconds: args.durationSeconds ?? null, meta: args.meta ?? {}, operationKey: key });
         return { idempotencyKey: key, ...ticket, next: ticket.upload ? "PUT the file to upload.url with upload.headers, then call complete_file_upload with file.id." : "Already stored; the file is ready." };
       }),

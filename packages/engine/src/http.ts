@@ -140,7 +140,7 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   },
 } satisfies Record<string, OperationHandler>));
 /** Operations that spend money or call an external provider also count against the stricter `costly` bucket. */
-export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content"]);
+export const COSTLY_OPERATIONS: ReadonlySet<string> = new Set(["render_content", "create_checkout", "connect_channel", "create_clone_job", "review_content", "request_file_upload", "persona_image_upload_url", "product_image_upload_url"]);
 
 async function studio(deps: HttpDeps, request: Request, path: string, correlationId: string, limits: RequestLimits): Promise<Response> {
   const principal = await authenticateWithLimits(deps, limits, request.headers.get("authorization"));
@@ -194,7 +194,11 @@ async function studio(deps: HttpDeps, request: Request, path: string, correlatio
     return json(await directorTurn(deps, ctx, await body(request), deps.planner));
   }
   // Likeness capture ("Scan my face"). Signed-in people only; see likeness.ts.
-  if (post && path === "/likeness/upload-url") return json(await likenessUploadUrl(deps, ctx, await body(request)));
+  if (post && path === "/likeness/upload-url") {
+    // Each link lets the caller put a file in storage, so it counts against `costly` like the other upload links.
+    await limits.enforce(policies.costly, subject);
+    return json(await likenessUploadUrl(deps, ctx, await body(request)));
+  }
   if (post && path === "/likeness/live-token") return json(await likenessLiveToken(deps, ctx));
   if (post && path === "/likeness/consents") {
     // Where the consent was given from is part of its record. Both values are length-capped, never trusted for access;

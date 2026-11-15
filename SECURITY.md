@@ -34,7 +34,7 @@ Faceful lets people and their AI agents draft, render, schedule and pay for shor
 | --- | --- | --- | --- | --- |
 | `principal` | every authenticated `/v1/studio/*` request; every JSON-RPC message to `/mcp` | user, OAuth agent or workspace token | 240 | `RATE_LIMIT_PRINCIPAL_PER_MINUTE` |
 | `director` | `POST /v1/studio/director/turn` (model calls cost money) | principal | 10 | `RATE_LIMIT_DIRECTOR_PER_MINUTE` |
-| `costly` | `render_content`, `create_checkout`, `connect_channel`; MCP `start_render`, `create_checkout_link` | principal | 10 | `RATE_LIMIT_COSTLY_PER_MINUTE` |
+| `costly` | `render_content`, `create_checkout`, `connect_channel`, `create_clone_job`, `request_file_upload`, `persona_image_upload_url`, `POST /v1/studio/likeness/upload-url`; MCP `start_render`, `create_checkout_link`, `request_file_upload` | principal | 10 | `RATE_LIMIT_COSTLY_PER_MINUTE` |
 | `anonymous` | requests with no credential | client network | 120 | `RATE_LIMIT_ANONYMOUS_PER_MINUTE` |
 | `failed_auth` | requests whose credential is refused (studio, MCP, worker, scheduler) | client network | 60 | `RATE_LIMIT_FAILED_AUTH_PER_MINUTE` |
 

@@ -46,7 +46,7 @@ export interface RateLimitConfig {
   principal: RateLimitPolicy;
   /** `POST /v1/studio/director/turn`: each model-backed turn costs money. Per principal. */
   director: RateLimitPolicy;
-  /** Operations that spend money or call providers: render, checkout, channel connection, social provider connect/sync. Per principal. */
+  /** Operations that spend money, call providers or hand out upload links: render, checkout, channel connection, social provider connect/sync, file, face-scan and persona-photo uploads. Per principal. */
   costly: RateLimitPolicy;
   /** Requests that present no credential at all. Per client IP. */
   anonymous: RateLimitPolicy;

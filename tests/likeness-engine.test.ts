@@ -19,7 +19,8 @@ function engine(options: { files?: boolean; env?: Record<string, string> } = {})
   const store = new MemoryStore();
   const deps: HttpDeps = {
     store,
-    config: loadConfig({ SUPABASE_URL: "https://project.supabase.co", APP_BASE_URL: BASE, ...options.env }),
+    // A capture asks for seven upload links, and these tests make several in a minute; the limit has its own tests.
+    config: loadConfig({ SUPABASE_URL: "https://project.supabase.co", APP_BASE_URL: BASE, RATE_LIMIT_COSTLY_PER_MINUTE: "1000", ...options.env }),
     now: () => new Date(clock),
     verifyAccessToken: async (token) => {
       const [kind, id, client] = token.split(":");

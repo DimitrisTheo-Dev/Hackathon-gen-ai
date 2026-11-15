@@ -12,8 +12,8 @@ import type { RateLimitHit, Store } from "./store.js";
  * fixed windows, so limits hold across all function instances. Buckets:
  *   • principal  — every authenticated request, per user / OAuth agent / workspace token;
  *   • director   — model-backed Director turns, per principal (each costs money);
- *   • costly     — render, checkout, channel connection and social provider connect/sync, per principal
- *                  (spend money or call providers);
+ *   • costly     — render, checkout, channel connection, social provider connect/sync and upload links, per
+ *                  principal (spend money, call providers or let the caller store files);
  *   • anonymous  — requests with no credential, per client network;
  *   • failed_auth — requests whose credential was refused, per client network.
  * Exempt: the Stripe webhook and social deliveries (signature-verified; a refused social signature counts as a
@@ -35,7 +35,7 @@ export interface RateLimitEvaluation {
 const MESSAGES: Record<RateLimitPolicy["name"], string> = {
   principal: "Too many requests from this account or connection.",
   director: "The Creative Director is receiving requests faster than this workspace allows.",
-  costly: "Too many render, checkout or channel requests in a short time.",
+  costly: "Too many render, checkout, upload or channel requests in a short time.",
   anonymous: "Too many requests without signing in from this network.",
   failed_auth: "Too many requests with a missing, expired or invalid credential from this network.",
 };
