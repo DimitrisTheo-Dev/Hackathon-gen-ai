@@ -18,6 +18,7 @@ RUN cd workers/reel-render \
 # The exact component the studio previews, and its typeface.
 COPY apps/web/src/video apps/web/src/video
 COPY apps/web/public/fonts/InterVariable.woff2 apps/web/public/fonts/InterVariable.woff2
+COPY packages/engine/src/voice-providers.ts packages/engine/src/voice-providers.ts
 COPY workers/reel-render/src workers/reel-render/src
 
 RUN chown -R node:node /app

@@ -141,12 +141,24 @@ export function agentHandoff(
 }
 
 /**
+ * Which renderer makes an item's video: the stock-avatar renderer when it is connected and the item has a presenter who
+ * speaks its language; otherwise the timeline renderer, which reads the script aloud with a voiceover. Null: neither.
+ */
+export function renderRoute(state: { canRender: boolean; canRenderTimeline?: boolean; hasPresenter: boolean; languageSupported: boolean }): "avatar" | "timeline" | null {
+  if (state.canRender && state.hasPresenter && state.languageSupported) return "avatar";
+  if (state.canRenderTimeline) return "timeline";
+  return state.canRender ? "avatar" : null;
+}
+
+/**
  * Why the render action is unavailable right now, in words safe to show, or "" when it can run.
  * The order goes from what the person cannot change (no renderer, no access) to what they can fix next.
+ * Where the timeline renderer is connected a presenter is optional: without one, the video is made from the timeline.
  */
 export function renderBlockReason(state: {
   kind: ContentItem["kind"];
   canRender: boolean;
+  canRenderTimeline?: boolean;
   renderBlocker: string | null;
   canEdit: boolean;
   submitted: boolean;
@@ -157,15 +169,16 @@ export function renderBlockReason(state: {
   languageSupported: boolean;
   hasScript: boolean;
 }): string {
+  const timeline = Boolean(state.canRenderTimeline);
   if (state.kind !== "avatar_video") return "This format has no video to render.";
-  if (!state.canRender) return state.renderBlocker ?? "Rendering is unavailable in this workspace.";
+  if (!state.canRender && !timeline) return state.renderBlocker ?? "Rendering is unavailable in this workspace.";
   if (!state.canEdit) return "Your access is view-only.";
   if (state.submitted) return "A destination was already submitted for this item.";
   if (state.offline) return "Reconnect to render.";
   if (state.changedRemotely) return "Load the latest version first.";
   if (state.dirty) return "Save your changes first.";
-  if (!state.hasPresenter) return "Choose a presenter first.";
-  if (!state.languageSupported) return "This presenter doesn’t support the script language.";
+  if (!timeline && !state.hasPresenter) return "Choose a presenter first.";
+  if (!timeline && !state.languageSupported) return "This presenter doesn’t support the script language.";
   if (!state.hasScript) return "Write a script first.";
   return "";
 }

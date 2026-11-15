@@ -293,7 +293,15 @@ export const reelRenderSchema = z.object({
 });
 export type ReelRender = z.infer<typeof reelRenderSchema>;
 export const queueRenderInputSchema = z
-  .object({ contentId: idSchema, expectedRevision: z.number().int().positive(), operationKey: z.uuid() })
+  .object({
+    contentId: idSchema,
+    expectedRevision: z.number().int().positive(),
+    operationKey: z.uuid(),
+    /** The persona whose voice reads the script when the timeline has no voice yet. Otherwise a stock voice reads it. */
+    personaId: idSchema.nullable().optional(),
+    /** With a persona: the look whose photo is the picture when the timeline has none. */
+    lookId: idSchema.nullable().optional(),
+  })
   .strict();
 export type QueueRenderInput = z.infer<typeof queueRenderInputSchema>;
 

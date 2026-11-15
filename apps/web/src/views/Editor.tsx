@@ -204,6 +204,7 @@ export function Editor({
   const renderReason = renderBlockReason({
     kind: item.kind,
     canRender: context.capabilities.canRender,
+    canRenderTimeline: context.capabilities.canRenderTimeline,
     renderBlocker: context.capabilities.renderBlocker,
     canEdit,
     submitted,
@@ -668,7 +669,7 @@ export function Editor({
             </DetailSection>
           )}
 
-          <DetailSection {...section("presenter")} label="Presenter & style" value={presenterValue} need={isVideo && !avatar ? "Needed to render" : null}>
+          <DetailSection {...section("presenter")} label="Presenter & style" value={presenterValue} need={isVideo && !avatar && !context.capabilities.canRenderTimeline ? "Needed to render" : null}>
             {!isVideo && (
               <p>
                 Presenter controls apply to avatar videos. This format has no

@@ -4,6 +4,7 @@ import {
   queueRenderInputSchema,
   reelRenderSchema,
   referencedFileIds,
+  type Composition,
   type ReelRender,
   type ResolvedMedia,
 } from "../../contracts/src/index.js";
@@ -13,6 +14,7 @@ import { EngineError } from "./errors.js";
 import { FILES_TABLE, fileContract, fileKey, filesOf, resolveFiles } from "./files.js";
 import { selectOne, type Row } from "./store.js";
 import { loadItem, parse } from "./studio.js";
+import { hasVoice, narrate, narrationText, withPersonaStill, type NarrationHint } from "./voice.js";
 
 /**
  * Reel renders: a queue of saved timelines that Remotion render workers claim, render to MP4 and
@@ -75,6 +77,10 @@ export async function queueRender(deps: EngineDeps, ctx: Ctx, raw: unknown): Pro
     await sweep(deps, { org_id: ctx.org.id });
     const active = await deps.store.select(RENDERS_TABLE, { org_id: ctx.org.id, state: { in: ["queued", "rendering"] } });
     if (active.length >= MAX_ACTIVE_PER_ORG) throw new EngineError("quota_exceeded", `Up to ${MAX_ACTIVE_PER_ORG} renders can wait or run at once in a workspace. Wait for one to finish.`);
+    // Nobody speaks in this timeline yet: the script is read aloud first (voice.ts). The saved edit stays as it was.
+    const personaId = input.personaId ?? null;
+    const pictured = (await withPersonaStill(deps, { orgId: ctx.org.id, projectId: item.project_id, item, composition, personaId, lookId: input.lookId ?? null })) ?? composition;
+    const voiced = await narrate(deps, { orgId: ctx.org.id, projectId: item.project_id, item, composition: pictured, personaId });
     const now = deps.now().toISOString();
     const row = await deps.store.insert(RENDERS_TABLE, {
       id: crypto.randomUUID(),
@@ -83,7 +89,7 @@ export async function queueRender(deps: EngineDeps, ctx: Ctx, raw: unknown): Pro
       item_id: item.id,
       composition_revision: saved.revision,
       // A snapshot: later edits never change what this job renders.
-      composition,
+      composition: voiced.composition,
       state: "queued",
       progress: 0,
       worker_id: null,
@@ -95,7 +101,7 @@ export async function queueRender(deps: EngineDeps, ctx: Ctx, raw: unknown): Pro
       created_at: now,
       updated_at: now,
     });
-    await audit(deps, ctx, { projectId: item.project_id, action: "Queued a video render", objectId: item.id, revision: saved.revision, outcome: deps.config.reelWorkerToken ? "Waiting for a render worker" : "Waiting; no render worker is connected yet" });
+    await audit(deps, ctx, { projectId: item.project_id, action: "Queued a video render", objectId: item.id, revision: saved.revision, outcome: [deps.config.reelWorkerToken ? "Waiting for a render worker" : "Waiting; no render worker is connected yet", voiced.outcome].filter(Boolean).join(" · ").slice(0, 500) });
     return renderContract(deps, row);
   });
 }
@@ -163,6 +169,7 @@ export async function claimReelRender(deps: EngineDeps, raw: unknown) {
     );
     if (!job) continue;
     const composition = parse(compositionSchema, job.composition);
+    const media = await itemMedia(deps, job.org_id, job.item_id);
     return {
       job: {
         id: job.id,
@@ -172,12 +179,21 @@ export async function claimReelRender(deps: EngineDeps, raw: unknown) {
         attempt: job.attempts,
         leaseSeconds: LEASE_SECONDS,
         composition,
-        itemMedia: await itemMedia(deps, job.org_id, job.item_id),
+        itemMedia: media,
         files: await resolveFiles(deps, job.org_id, job.project_id, referencedFileIds(composition), WORKER_URL_TTL),
+        narration: await narrationHint(deps, job, composition, Boolean(media)),
       },
     };
   }
   return { job: null };
+}
+
+/** What to read aloud when the job still has no voice (the engine could not make one): the worker makes it with its own keys. */
+async function narrationHint(deps: EngineDeps, job: Row, composition: Composition, itemHasMedia: boolean): Promise<NarrationHint | null> {
+  if (hasVoice(composition, itemHasMedia)) return null;
+  const item = await selectOne(deps.store, "content_items", { id: job.item_id, org_id: job.org_id });
+  const text = item ? narrationText(item, composition) : "";
+  return text ? { text, language: typeof item?.language === "string" && item.language ? item.language : "en" } : null;
 }
 
 async function ownJob(deps: EngineDeps, jobId: string, workerId: string) {

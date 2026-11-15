@@ -128,8 +128,8 @@ test("the rough preview keeps AI labels for AI presenters only and never saves p
   assert.deepEqual(persona.video[0].source, { kind: "file", fileId: STILL_PRESENTER });
   assert.equal(savedComposition(persona).video.length, 0);
   assert.equal(savedComposition(camera).video.length, 1);
-  assert.deepEqual(stepsFor({ mode: "voice", personaId: null, avatarId: null }), ["describe", "look", "make", "script", "record", "preview"]);
-  assert.deepEqual(stepsFor({ mode: "none", personaId: null, avatarId: null }), ["describe", "look", "make", "script", "preview"]);
+  assert.deepEqual(stepsFor({ mode: "voice", personaId: null, avatarId: null }), ["describe", "look", "make", "script", "record"]);
+  assert.deepEqual(stepsFor({ mode: "none", personaId: null, avatarId: null }), ["describe", "look", "make", "script"]);
 });
 
 test("word timings from the teleprompter are ordered, inside the take and fill the gaps evenly", () => {

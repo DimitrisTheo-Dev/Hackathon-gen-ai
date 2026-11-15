@@ -9,7 +9,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { extname, join } from "node:path";
@@ -85,12 +85,26 @@ function extensionFor(url: string, type: string): string {
 }
 
 export type StagedMedia = { url: (original: string) => string; close: () => Promise<void> };
-/** Downloads each URL once into `dir` and serves the copies on 127.0.0.1, under a random path, until `close`. */
-export async function stageMedia(urls: Iterable<string>, dir: string, hosts: readonly string[], options: { fetcher?: typeof fetch; maxBytes?: number } = {}): Promise<StagedMedia> {
+/**
+ * Downloads each URL once into `dir` and serves the copies on 127.0.0.1, under a random path, until `close`.
+ * `made` are files this worker made itself (a voiceover), served the same way under their key.
+ */
+export async function stageMedia(
+  urls: Iterable<string>,
+  dir: string,
+  hosts: readonly string[],
+  options: { fetcher?: typeof fetch; maxBytes?: number; made?: Array<{ key: string; bytes: Uint8Array; type: string }> } = {},
+): Promise<StagedMedia> {
   const maxBytes = options.maxBytes ?? 1024 ** 3;
   await mkdir(dir, { recursive: true });
   const names = new Map<string, string>();
   const files = new Map<string, { path: string; type: string; size: number }>();
+  for (const made of options.made ?? []) {
+    const name = `${files.size}${EXTENSIONS[made.type] ?? ".bin"}`;
+    await writeFile(join(dir, name), made.bytes);
+    files.set(name, { path: join(dir, name), type: made.type, size: made.bytes.byteLength });
+    names.set(made.key, name);
+  }
   for (const url of new Set(urls)) {
     const response = await fetchMedia(url, hosts, options.fetcher);
     const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() || "application/octet-stream";

@@ -4,7 +4,8 @@
   "entry": [
     "apps/machines/src/index.ts",
     "workers/reel-render/src/worker.ts",
-    "workers/reel-render/src/entry.tsx"
+    "workers/reel-render/src/entry.tsx",
+    "workers/reel-render/cloudflare/src/index.ts"
   ],
   "supportEntry": [
     "scripts/*.{ts,mjs}",

@@ -6,7 +6,7 @@ import { sessionLikenessApi } from "../likeness/session";
 import type { ReelMedia } from "../video/Reel";
 import { FogArt, FogPresenter, LookFaces } from "./look/LookStep";
 import { languageOf } from "./languages";
-import { PreviewStep, usePreviewShown, useProduction } from "./PreviewStep";
+import { produce, usePreviewShown } from "./production";
 import { RecordStep } from "./RecordStep";
 import { copyKey, copyRequest, firstDraftRequest, placeDraft, ScriptCache, useWriteAhead } from "./predraft";
 import { SettingsMenus } from "./SettingsMenus";
@@ -22,7 +22,6 @@ import {
   recommendTemplate,
   records,
   saveDraft,
-  savedComposition,
   saveLastFace,
   scriptKeyOf,
   spokenSeconds,
@@ -63,9 +62,10 @@ function personaPhoto(persona: Persona | undefined, lookId: string | null = null
 }
 
 /**
- * New project, full screen: describe → look → make → script → record (for a person's own take) → preview.
- * Each step is one decision with a sensible default, so Next, Next, Next always ends in a draft. Choices are kept
- * in this browser until the project exists; the project is created when the script step is passed.
+ * New project, full screen: describe → look → make → script → record (for a person's own take), then Create.
+ * Each step is one decision with a sensible default, so Next, Next, Create always ends in a video. Choices are kept
+ * in this browser until the project exists; the project is created when the script step is passed, and Create starts
+ * making the video (production.ts) and opens the studio, where it is followed.
  */
 export function NewProject({
   client,
@@ -85,7 +85,8 @@ export function NewProject({
   initialTemplateId?: string;
   /** Called with the project when one was already created, so the studio can show it. */
   onClose: (campaign: Campaign | null) => void;
-  onDone: (campaign: Campaign, openVideo: boolean) => void;
+  /** `started`: Create started making the video (a render is queued). */
+  onDone: (campaign: Campaign, openVideo: boolean, started: boolean) => void;
 }) {
   const workspaceId = context.workspace.id;
   const [draft, setDraft] = useState<Draft>(() => {
@@ -106,10 +107,9 @@ export function NewProject({
   const [scriptError, setScriptError] = useState("");
   const [undo, setUndo] = useState<ScriptBeat[][]>([]);
   const [ask, setAsk] = useState("");
-  const [busy, setBusy] = useState<"" | "saving" | "finishing">("");
+  const [busy, setBusy] = useState<"" | "saving" | "creating">("");
   const [error, setError] = useState("");
   const [recording, setRecording] = useState(false);
-  const [remoteTake, setRemoteTake] = useState<string | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const scriptRequest = useRef<{ key: string; promise: Promise<void> } | null>(null);
   const styleSeen = useRef(false);
@@ -191,8 +191,6 @@ export function NewProject({
         return briefOk && Boolean(draft.face);
       case "record":
         return beatsOk && Boolean(draft.project);
-      case "preview":
-        return beatsOk && Boolean(draft.project) && (!records(presenter) || Boolean(draft.take));
     }
   }
 
@@ -334,7 +332,10 @@ export function NewProject({
         );
         const main = saved[0];
         if (draftRef.current.face) saveLastFace(workspaceId, draftRef.current.face);
-        patch({ project: { campaignId: campaign.id, itemId: main.id, revision: main.revision, saved: signature, copies: copies.map((copy) => copy.code) }, scriptKey: current.scriptKey ?? key });
+        const project = { campaignId: campaign.id, itemId: main.id, revision: main.revision, saved: signature, copies: copies.map((copy) => copy.code) };
+        // Create runs right after this, before React renders the new draft.
+        draftRef.current = { ...draftRef.current, project };
+        patch({ project, scriptKey: current.scriptKey ?? key });
         if (copies.some((copy) => !copy.translated)) setReply("Your language copies were added as drafts with the original script, ready to translate in the studio.");
       } else {
         const project = current.project;
@@ -347,7 +348,9 @@ export function NewProject({
           operationKey: uuid(),
           patch: { title, script, language: mainLanguage ?? current.language, avatarId, style: { ...item.style, brandColor: current.accent } },
         });
-        patch({ project: { ...project, revision: saved.revision, saved: signature } });
+        const updated = { ...project, revision: saved.revision, saved: signature };
+        draftRef.current = { ...draftRef.current, project: updated };
+        patch({ project: updated });
       }
       return true;
     } catch (reason) {
@@ -383,9 +386,10 @@ export function NewProject({
       }
       if (!(await ensureProject())) return;
     }
-    if (step === "preview") return finish(true);
     const following = stepsFor(presenterOf(draftRef.current))[index + 1];
+    // The last step's action is Create: the video starts being made.
     if (following) setStep(following);
+    else await create();
   }
   function back() {
     if (busy || recording || index === 0) return;
@@ -436,22 +440,25 @@ export function NewProject({
       onClose(null);
     }
   }
-  async function finish(openVideo: boolean) {
+  async function create() {
     const current = draftRef.current;
     if (!current.project || busy) return;
-    setBusy("finishing");
+    if (records(presenter) && !current.take) {
+      setError("Record your take first.");
+      return;
+    }
+    setBusy("creating");
     setError("");
     try {
-      // The preview step usually saved this timeline already, to render it; saving it again would only add a version.
-      if (openVideo && saveTimeline && composition && !timelineSaved) {
-        const document = await client.getComposition(current.project.itemId);
-        await client.saveComposition({ contentId: current.project.itemId, expectedRevision: document.revision, composition: savedComposition(composition), operationKey: uuid() });
-      }
+      // Made from what was chosen, not from the rough preview: a take counts even when its bytes are no longer in this tab.
+      const made = previewComposition({ title: current.title || workingTitle(current.brief || "New video"), beats: (current.beats ?? []).filter((beat) => beat.text.trim()), accent: current.accent, presenter, language: current.language, take, stills: { presenter: false, style: false } });
+      const persona = current.face?.kind === "persona" && mode === "persona" ? { personaId: current.face.personaId, lookId: current.face.lookId } : null;
+      const result = await produce({ client, context, project: current.project, mode, composition: made, persona });
       const campaign = await client.getCampaign(current.project.campaignId);
       clearDraft(workspaceId);
-      onDone(campaign, openVideo);
+      onDone(campaign, result.openVideo, result.route !== "none");
     } catch (reason) {
-      setError(errorText(reason, "The video could not be opened. Your project is saved; try again."));
+      setError(errorText(reason, "The video could not be started. Your project is saved; try again."));
       setBusy("");
     }
   }
@@ -506,19 +513,11 @@ export function NewProject({
     dialog.current?.querySelector<HTMLElement>(".np-step [data-autofocus]")?.focus({ preventScroll: true });
     dialog.current?.querySelector(".np-main")?.scrollTo({ top: 0 });
   }, [step]);
-  useEffect(() => {
-    if (step !== "preview" || !take || take.localUrl || !draft.project) return;
-    client
-      .listFiles(draft.project.campaignId)
-      .then((files) => setRemoteTake(files.find((file) => file.id === take.fileId)?.url ?? null))
-      .catch(() => setRemoteTake(null));
-  }, [step, take, draft.project, client]);
-
-  /* ───────── preview ───────── */
+  /* ───────── rough preview ───────── */
 
   const styleStill = template?.posterUrl ?? null;
   const previewBeats = draft.beats?.length ? draft.beats : briefOk ? beatsFromText(draft.brief) : [{ id: "beat-1", label: "", text: "Your script appears here." }];
-  const takeUrl = take?.localUrl ?? remoteTake;
+  const takeUrl = take?.localUrl ?? null;
   const takeForPreview: Take | null = take && takeUrl ? take : null;
   const composition = useMemo(
     () => {
@@ -538,10 +537,7 @@ export function NewProject({
     if (take && takeUrl) files[take.fileId] = { url: takeUrl, mime: take.mime };
     return { itemMedia: null, files };
   }, [facePhoto, styleStill, take, takeUrl]);
-  // A person's own take, or no presenter at all, is saved as the starting timeline; an AI presenter's video is rendered later.
-  const saveTimeline = mode === "camera" || mode === "voice" || mode === "none";
-  // The last step makes the video and waits for it (PreviewStep.tsx); the rough preview can be hidden throughout.
-  const { production, timelineSaved, retry } = useProduction({ client, context, project: draft.project, mode, composition, active: step === "preview" });
+  // The rough preview beside the look, make and script steps can be hidden.
   const [showPreview, setShowPreview] = usePreviewShown();
 
   /* ───────── describe ───────── */
@@ -627,8 +623,8 @@ export function NewProject({
       <p className="np-lead">{hasFace ? `${faceName ?? "Your presenter"} can present it for you, or you can record it yourself.` : "The AI can build it from captions and graphics, or you can record it yourself."}</p>
       <div role="radiogroup" aria-label="How it is made">
         {hasFace
-          ? makeChoice("ai", <FogPresenter photo={facePhoto} />,`${faceName ?? "Your presenter"} presents it`, "An AI avatar reads your script. You see a rough preview first; the speaking video is made when you render.", true)
-          : makeChoice("ai", <FogArt name="noface" />,"No face, made by AI", "Captions and graphics carry the video. Add music or a voice-over in the video studio.", true)}
+          ? makeChoice("ai", <FogPresenter photo={facePhoto} />,`${faceName ?? "Your presenter"} presents it`, facePersona ? "Their voice reads your script over their photo, with captions. Press Create and the video is made." : "An AI avatar reads your script. Press Create and the speaking video is made.", true)
+          : makeChoice("ai", <FogArt name="noface" />,"No face, made by AI", "Captions and graphics carry the video, read aloud by an AI voice. Add music in the video studio.", true)}
         <div className="np-divider" role="separator">
           <span>Would you like to do something manually?</span>
         </div>
@@ -768,7 +764,7 @@ export function NewProject({
     </>
   );
 
-  /* ───────── record and preview ───────── */
+  /* ───────── record ───────── */
 
   const record =
     draft.project && draft.beats && (mode === "voice" || mode === "camera") ? (
@@ -785,12 +781,11 @@ export function NewProject({
       />
     ) : null;
 
-  const preview = <PreviewStep production={production} onRetry={retry} composition={composition} media={media} showPreview={showPreview} />;
-
-  const content: Record<StepId, ReactNode> = { describe, look, make, script, record, preview };
+  const content: Record<StepId, ReactNode> = { describe, look, make, script, record };
   const sideStep = step === "look" || step === "make" || step === "script";
   const side = showPreview && sideStep && composition;
-  const nextLabel = step === "describe" ? "Continue" : step === "look" ? "Continue" : step === "make" ? "Write the script" : step === "script" ? (records(presenter) ? "Record it" : "See the preview") : step === "record" ? "See the preview" : "Open in video studio";
+  const last = index === steps.length - 1;
+  const nextLabel = last ? "Create" : step === "make" ? "Write the script" : step === "script" ? "Record it" : "Continue";
   const nextDisabled = Boolean(busy) || recording || (step === "script" && (!beatsOk || (scriptBusy && !draft.beats))) || (step === "record" && !draft.take) || (step === "look" && !draft.face);
 
   return (
@@ -810,8 +805,8 @@ export function NewProject({
           ))}
         </ol>
         <div className="np-top-end">
-          {((sideStep && composition) || (step === "preview" && production.state !== "ready")) && (
-            <button type="button" className="button secondary np-preview-toggle" data-where={sideStep ? "side" : "step"} aria-label={showPreview ? "Hide preview" : "Show preview"} title={showPreview ? "Hide preview" : "Show preview"} onClick={() => setShowPreview(!showPreview)}>
+          {sideStep && composition && (
+            <button type="button" className="button secondary np-preview-toggle" aria-label={showPreview ? "Hide preview" : "Show preview"} title={showPreview ? "Hide preview" : "Show preview"} onClick={() => setShowPreview(!showPreview)}>
               {showPreview ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
               <span className="np-preview-toggle-label">{showPreview ? "Hide preview" : "Show preview"}</span>
             </button>
@@ -832,17 +827,12 @@ export function NewProject({
               <ArrowLeft size={14} aria-hidden="true" /> Back
             </button>
             <p className={`np-foot-note${error ? " is-error" : ""}`} role={error ? "alert" : "status"}>
-              {error || (busy === "saving" ? (!draft.project && draft.copies.length ? "Saving your project and its language copies…" : "Saving your project…") : busy === "finishing" ? "Opening the video studio…" : "")}
+              {error || (busy === "saving" ? (!draft.project && draft.copies.length ? "Saving your project and its language copies…" : "Saving your project…") : busy === "creating" ? "Starting your video…" : "")}
             </p>
-            {step === "preview" && (
-              <button type="button" className="button secondary" disabled={busy !== ""} onClick={() => void finish(false)}>
-                Finish later
-              </button>
-            )}
             <button type="button" className="button primary" disabled={nextDisabled} onClick={() => void next()}>
-              {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
+              {busy ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : last ? <Sparkles size={14} aria-hidden="true" /> : null}
               {nextLabel}
-              {step !== "preview" && <ArrowRight size={14} aria-hidden="true" />}
+              {!last && <ArrowRight size={14} aria-hidden="true" />}
             </button>
           </footer>
         </main>

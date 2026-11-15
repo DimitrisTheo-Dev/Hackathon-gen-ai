@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { voiceKeysFrom, type VoiceKeys } from "./voice-providers.js";
 
 export interface AvatarConfig {
   id: string;
@@ -142,6 +143,12 @@ export interface EngineConfig {
   rateLimit: RateLimitConfig;
   /** Credential the Remotion render workers (VPS, boxd or containers) present to claim reel renders. */
   reelWorkerToken: string | null;
+  /**
+   * Speech services for voiceovers made during production (voice.ts): Microsoft Text to Speech (AZURE_SPEECH_KEY with
+   * AZURE_SPEECH_REGION or AZURE_SPEECH_ENDPOINT), and ElevenLabs, Cartesia and fal for persona voices. Each is null
+   * when not configured.
+   */
+  voice: VoiceKeys;
   /** Claude Code machines (machines.ts): who may have one, and the key the gateway checks its short-lived tokens with. */
   machines: {
     /** MACHINES_GATEWAY_KEY, the same value as the gateway's. A keyring "2:<secret>,1:<older>" signs with its first entry. Null: not set up. */
@@ -400,6 +407,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     trustProxyHeaders,
     rateLimit: rateLimitFrom(env, trustProxyHeaders),
     reelWorkerToken: env.REEL_WORKER_TOKEN && env.REEL_WORKER_TOKEN.trim().length >= 32 ? env.REEL_WORKER_TOKEN.trim() : null,
+    voice: voiceKeysFrom(env),
     machines: machinesFrom(env),
   };
 }
