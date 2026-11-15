@@ -31,6 +31,8 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   project_files: [{ columns: ["org_id", "project_id", "item_id", "name", "version"] }],
   // supabase/migrations/20261115130500_clone_jobs.sql
   clone_jobs: [{ columns: ["id"] }, { columns: ["org_id", "idempotency_key"] }],
+  // supabase/migrations/20261115160000_products_reviews.sql: one product per stored photo.
+  brand_products: [{ columns: ["image_key"], where: (r) => r.image_key != null }],
 };
 
 function matches(row: Row, filter: Filter): boolean {

@@ -4,6 +4,8 @@ import {
   campaignSchema,
   contentSchema,
   contextSchema,
+  PRODUCT_LIMITS,
+  productSchema,
   removeSourceInputSchema,
   reviseInputSchema,
   restoreInputSchema,
@@ -16,12 +18,14 @@ import {
   type ContentItem,
   type ContentVersion,
   type Platform,
+  type Product,
   type StudioContext,
 } from "../../contracts/src/index.js";
 import { z } from "zod";
 import { AGENT_GRANTABLE_SCOPES, audit, canonical, idempotent, listWorkspaces, requireScope, type Ctx, type EngineDeps } from "./access.js";
 import { EngineError, StoreConflict } from "./errors.js";
 import { createHumanlikeClient } from "./providers/humanlike.js";
+import { UnconfiguredFileStore } from "./r2.js";
 import { selectOne, type Row } from "./store.js";
 
 export const PLATFORMS: Platform[] = ["instagram", "tiktok", "youtube"];
@@ -73,7 +77,7 @@ export async function creditBalance(deps: EngineDeps, orgId: string): Promise<nu
 
 const DEFAULT_BRAND_COLOR = "#5F6C66";
 /** The brand kit as every reader sees it. An unnamed brand falls back to the workspace name. */
-function brandContract(row: Row | null, orgName: string): Brand {
+export function brandContract(row: Row | null, orgName: string): Brand {
   return parse(brandSchema, {
     name: row?.name || orgName,
     description: row?.description ?? "",
@@ -84,15 +88,56 @@ function brandContract(row: Row | null, orgName: string): Brand {
   });
 }
 
+/* ───────── brand kit products: read here because the context carries them; writes live in products.ts ───────── */
+
+/** Table: supabase/migrations/20261115160000_products_reviews.sql. */
+export const PRODUCTS_TABLE = "brand_products";
+const PRODUCT_PHOTO_TTL_SECONDS = 15 * 60;
+export const productFacts = (row: Row): string[] => (Array.isArray(row.facts) ? row.facts.filter((fact: unknown): fact is string => typeof fact === "string") : []);
+
+/** One product as every reader sees it. The photo link is for people in the studio only, and never fails a read. */
+export async function productContract(deps: EngineDeps, ctx: Ctx, row: Row, photos = true): Promise<Product> {
+  const files = deps.files ?? new UnconfiguredFileStore();
+  let imageUrl: string | null = null;
+  if (photos && ctx.principal.kind === "human" && typeof row.image_key === "string" && row.image_key && files.configured) {
+    try {
+      imageUrl = await files.downloadUrl(row.image_key, PRODUCT_PHOTO_TTL_SECONDS);
+    } catch {
+      imageUrl = null;
+    }
+  }
+  return parse(productSchema, {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? "",
+    domain: row.domain ?? "general",
+    facts: productFacts(row),
+    hasImage: typeof row.image_key === "string" && row.image_key.length > 0,
+    imageUrl,
+    position: row.position ?? 0,
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+  });
+}
+
+/** The workspace's products in brand-kit order. `photos: false` skips signing links (rule checks need none). */
+export async function workspaceProducts(deps: EngineDeps, ctx: Ctx, options: { photos?: boolean } = {}): Promise<Product[]> {
+  const rows = await deps.store.select(PRODUCTS_TABLE, { org_id: ctx.org.id }, { order: ["position", "asc"], limit: PRODUCT_LIMITS.products });
+  rows.sort((a, b) => a.position - b.position || String(a.created_at).localeCompare(String(b.created_at)));
+  return Promise.all(rows.map((row) => productContract(deps, ctx, row, options.photos ?? true)));
+}
+
 export async function getContext(deps: EngineDeps, ctx: Ctx): Promise<StudioContext> {
   requireScope(ctx, "campaign:read");
-  const [brand, avatars, connections, providerConnections, balance, workspaces] = await Promise.all([
+  const [brand, avatars, connections, providerConnections, balance, workspaces, products] = await Promise.all([
     selectOne(deps.store, "brand_profiles", { org_id: ctx.org.id }),
     listAvatars(deps),
     ctx.scopes.has("connections:manage") ? deps.store.select("agent_connections", { org_id: ctx.org.id }, { order: ["created_at", "desc"], limit: 50 }) : Promise.resolve([]),
     deps.store.select("provider_connections", { org_id: ctx.org.id }),
     creditBalance(deps, ctx.org.id),
     listWorkspaces(deps, ctx),
+    // A deployment that has not applied the products migration yet still opens the studio, with no products.
+    workspaceProducts(deps, ctx).catch(() => [] as Product[]),
   ]);
   const blocker = renderBlocker(deps);
   const canRender = !blocker && ctx.scopes.has("render:write");
@@ -105,6 +150,7 @@ export async function getContext(deps: EngineDeps, ctx: Ctx): Promise<StudioCont
     principal: { id: ctx.actorId, kind: ctx.actorKind, scopes: [...ctx.scopes] },
     brand: brandContract(brand, ctx.org.name),
     avatars,
+    products,
     channels: [
       ...studioAccounts.map((row) => ({ id: row.id, platform: row.platform, displayName: row.display_name, state: row.state })),
       ...PLATFORMS.filter((platform) => !connected.has(platform)).map((platform) => ({

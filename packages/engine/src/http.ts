@@ -12,6 +12,7 @@ import { EngineError } from "./errors.js";
 import { likenessLiveToken, likenessUploadUrl, revokeLikenessConsent, saveLikenessConsent } from "./likeness.js";
 import { createPersona, createPersonaLook, deletePersona, deletePersonaLook, listPersonas, personaConsentToWithdraw, personaImageUploadUrl, updatePersona, updatePersonaLook } from "./personas.js";
 import type { Planner } from "./llm.js";
+import { createProduct, deleteProduct, placeProduct, productImageUploadUrl, updateProduct } from "./products.js";
 import { authenticateWithLimits, principalSubject, refuseCredential, RequestLimits } from "./ratelimit.js";
 import { authenticateWorker, cancelJobs, getRenderStatus, renderContent, sweepRenderJobs, workerClaim, workerComplete, workerFail, workerProgress, workerUploadUrl } from "./render.js";
 import { approveSchedule, commitSchedule, prepareSchedule, processDuePublishJobs, verifySubmittedPublishJobs } from "./schedule.js";
@@ -89,6 +90,12 @@ const operations = new Map<string, OperationHandler>(Object.entries({
   restore_version: restoreVersion,
   add_draft: addDraft,
   update_brand: updateBrand,
+  // Brand kit products (products.ts): the same permission as the rest of the brand kit.
+  create_product: createProduct,
+  update_product: updateProduct,
+  delete_product: deleteProduct,
+  product_image_upload_url: productImageUploadUrl,
+  place_product: placeProduct,
   add_source: addSource,
   remove_source: removeSource,
   render_content: renderContent,
