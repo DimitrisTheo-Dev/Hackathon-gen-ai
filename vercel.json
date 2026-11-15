@@ -67,6 +67,14 @@
     {
       "source": "/face-scan/",
       "destination": "/studio/index.html"
+    },
+    {
+      "source": "/logos",
+      "destination": "/studio/index.html"
+    },
+    {
+      "source": "/logos/",
+      "destination": "/studio/index.html"
     }
   ],
   "headers": [
@@ -369,12 +377,30 @@
           "value": "noindex, nofollow"
         }
       ]
+    },
+    {
+      "source": "/logos",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/logos/",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ],
   "proxy": {
     "entrypoint": "proxy.ts",
     "matcher": [
-      "/((?!assets|studio|dev|oauth|v1|api/v1|api/engine|api/mcp|claude-login-test|pitch|face-scan).*)"
+      "/((?!assets|studio|dev|oauth|v1|api/v1|api/engine|api/mcp|claude-login-test|pitch|face-scan|logos).*)"
     ]
   },
   "installCommand": "corepack pnpm install --frozen-lockfile",
