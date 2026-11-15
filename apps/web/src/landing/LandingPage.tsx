@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
 import { ArrowRight, ArrowUpRight, Check, Copy, Menu, Minus, Plus, ShieldCheck, Sparkles, X } from "lucide-react";
 import { AgentList, RotatingAgentHeadline } from "./AgentRotator";
-import { Caption, Presenter, StudioDemo, cast, type PresenterId } from "./StudioDemo";
+import { StudioDemo } from "./StudioDemo";
+import { Showcase, useLoopInView } from "./Showcase";
 
 export { RotatingAgentHeadline } from "./AgentRotator";
 
@@ -54,6 +55,7 @@ function LandingNav() {
       <div className="landing-nav-inner">
         <Wordmark />
         <nav className="landing-nav-links" aria-label="Main navigation">
+          <a href="#made">Examples</a>
           <a href="#how">How it works</a>
           <a href="#agents">For agents</a>
           <a href="/docs/">Docs</a>
@@ -71,6 +73,7 @@ function LandingNav() {
       }}>
         <div className="landing-mobile-menu-heading"><span id={`${menuId}-title`}>Explore Faceful</span><button className="landing-menu-toggle" aria-label="Close navigation" onClick={closeMenu}><X size={19} /></button></div>
         <nav aria-label="Mobile navigation">
+          <a href="#made" onClick={closeMenu}>Examples <ArrowRight size={16} /></a>
           <a href="#how" onClick={closeMenu}>How it works <ArrowRight size={16} /></a>
           <a href="#agents" onClick={closeMenu}>For agents <ArrowRight size={16} /></a>
           <a href="/docs/" onClick={closeMenu}>Docs <ArrowRight size={16} /></a>
@@ -117,12 +120,18 @@ function Reveal({ as: Tag = "div", className = "", children, ...rest }: { as?: "
   return <Element ref={node as Ref<HTMLDivElement>} className={`${className} ${state === "pending" ? "is-waiting" : state === "in" ? "is-in" : ""}`} {...rest}>{children}</Element>;
 }
 
-/** Three drafts from one prompt, each a presenter with the script line as its caption. */
-const promptDrafts: ReadonlyArray<{ title: string; tone: "a" | "b" | "c"; who: PresenterId; words: readonly string[] }> = [
-  { title: "Καλώς ήρθες", tone: "a", who: "eleni", words: ["Γεια!", "Αυτό", "είναι", "το", "BeWell."] },
-  { title: "Η μέρα σου", tone: "b", who: "nikos", words: ["Η", "μέρα", "σου,", "όπως", "τη", "θες."] },
-  { title: "Τα λέμε εκεί", tone: "c", who: "daphne", words: ["Τα", "λέμε", "εκεί,", "τη", "Δευτέρα."] },
+/** Three drafts from one prompt: real template renders, each looping from its own point. */
+const promptDrafts: ReadonlyArray<{ title: string; template: string; phase: number }> = [
+  { title: "Πίεση στο σπίτι", template: "talking-tip", phase: 9 },
+  { title: "3 σημάδια αφυδάτωσης", template: "hosted-list", phase: 2 },
+  { title: "Έλεγχος σπίλων", template: "faq-cards", phase: 15 },
 ];
+
+function DraftReel({ template, phase }: { template: string; phase: number }) {
+  const video = useRef<HTMLVideoElement>(null);
+  useLoopInView(video, phase);
+  return <video ref={video} className="lb-video" src={`/showcase/template-${template}.mp4`} poster={`/showcase/template-${template}.webp`} muted loop playsInline preload="none" />;
+}
 
 function HowItWorks() {
   return <section id="how" className="landing-section landing-how" aria-labelledby="how-heading">
@@ -136,17 +145,13 @@ function HowItWorks() {
           <p>Say what the video is for. You get scripts, captions and a posting time: saved as real drafts, not lost in a chat.</p>
         </div>
         <div className="lb-art lb-prompt-art" aria-hidden="true">
-          <span className="lb-prompt"><Sparkles size={15} />A 15-second Reel for BeWell, friendly, in Greek.</span>
+          <span className="lb-prompt"><Sparkles size={15} />Three Reels for my practice, friendly, in Greek.</span>
           <span className="lb-thread"><i /><i /><i /></span>
           <div className="lb-drafts">
-            {promptDrafts.map(({ title, tone, who, words }) => (
-              <span className="lb-draft" key={title}>
-                <span className={`lb-reel lb-reel-${tone}`}>
-                  <Presenter who={who} />
-                  <span className="fd-presenter"><span className="fd-meter"><i /><i /><i /></span>{cast[who].name}</span>
-                  <span className="fd-caption"><Caption words={words} spoken={1} /></span>
-                </span>
-                <span className="lb-draft-meta"><strong>{title}</strong><small>15 s · Draft v1</small></span>
+            {promptDrafts.map(({ title, template, phase }) => (
+              <span className="lb-draft" key={template}>
+                <span className="lb-reel"><DraftReel template={template} phase={phase} /></span>
+                <span className="lb-draft-meta"><strong>{title}</strong><small>20 s · Draft v1</small></span>
               </span>
             ))}
           </div>
@@ -264,7 +269,7 @@ function Agents() {
 
 const questions = [
   ["Do I need an AI agent?", "No. Sign in and type what you want. Agents are optional, and they work on the same projects you see in the studio."],
-  ["Are the videos real?", "Drafts, scripts, versions and schedules are real and saved to your workspace. Presenter video rendering with Humanlike is rolling out, so the demo above shows storyboards, not rendered video."],
+  ["Are the videos real?", "Drafts, scripts, versions and schedules are real and saved to your workspace. The reels under Made with Faceful are rendered videos. The studio demo at the top shows storyboards."],
   ["Can it post without my approval?", "No. A person approves the exact video, caption and time. Agents can prepare a schedule but cannot approve it. Publishing to social accounts is not connected yet."],
   ["What does it cost?", "Every workspace starts with a few render credits. Plans run in Stripe test mode today, so no real payment is taken."],
 ] as const;
@@ -276,6 +281,7 @@ export function LandingPage() {
     <main>
       <Hero />
       <div className="landing-wide"><StudioDemo /></div>
+      <Showcase />
       <HowItWorks />
       <Agents />
       <section className="landing-faq landing-section" aria-labelledby="faq-heading">
