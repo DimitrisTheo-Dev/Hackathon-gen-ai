@@ -137,7 +137,8 @@ test('templates and the labelled sample create editable drafts without a model',
   const dialog = page.getByRole('dialog', { name: 'Choose a template' });
   await dialog.getByRole('button', { name: /15-second introduction/ }).click();
   const form = page.getByRole('dialog', { name: '15-second introduction' });
-  await form.getByLabel('Script language').selectOption('el');
+  await form.getByRole('button', { name: /^Script language/ }).click();
+  await form.getByRole('option', { name: /Ελληνικά/ }).click();
   await form.getByLabel('Brand or product').fill('BeWell');
   await form.getByLabel('What it helps people do').fill('οργανώσεις τη μέρα σου');
   await form.getByRole('button', { name: 'Create draft' }).click();

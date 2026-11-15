@@ -83,10 +83,6 @@
 .lk-steps { display: flex; gap: 4px; }
 .lk-steps span { inline-size: 20px; block-size: 4px; border-radius: 999px; background: rgb(42 42 39 / 0.14); transition: background-color 0.2s; }
 .lk-steps span.on { background: var(--lk-ink); }
-.lk-lang { display: flex; padding: 2px; border-radius: 999px; background: var(--subtle, #f0efea); font-size: 12px; }
-.lk-lang button { min-block-size: 32px; padding: 4px 12px; border: 0; border-radius: 999px; background: none; color: var(--text-secondary, #6e6c66); transition: color 0.15s, background-color 0.15s, box-shadow 0.15s; }
-@media (hover: hover) and (pointer: fine) { .lk-lang button:hover { color: var(--lk-ink); } }
-.lk-lang button.on { background: var(--surface, #fff); color: var(--lk-ink); box-shadow: var(--elev-1); }
 .lk-icon-button { display: grid; place-items: center; inline-size: 44px; block-size: 44px; margin-inline-end: -10px; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--text-secondary, #6e6c66); transition: color 0.15s, background-color 0.15s; }
 @media (hover: hover) and (pointer: fine) { .lk-icon-button:hover { background: var(--subtle, #f0efea); color: var(--lk-ink); } }
 
@@ -171,12 +167,6 @@
 .lk-intro,
 .lk-prime { display: flex; flex: 1; flex-direction: column; justify-content: center; inline-size: 100%; max-inline-size: 460px; padding-block: 16px 24px; }
 .lk-root.embedded :is(.lk-intro, .lk-prime) { flex: none; margin-block: 2vh auto; padding: 28px; border-radius: var(--radius-xl, 20px); background: var(--surface, #fff); box-shadow: var(--elev-1); }
-.lk-plan { display: grid; gap: 12px; margin: 20px 0 0; padding: 0; list-style: none; }
-.lk-plan li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: start; }
-.lk-plan-n { display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 50%; background: var(--subtle, #f0efea); color: var(--text-secondary, #6e6c66); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.lk-plan-text { display: grid; gap: 1px; font-size: 13.5px; line-height: 1.45; color: var(--text-secondary, #6e6c66); text-wrap: pretty; }
-.lk-plan-text strong { display: flex; align-items: baseline; gap: 8px; color: var(--lk-ink); font-weight: 600; }
-.lk-plan-text small { color: var(--text-muted, #75736c); font-size: 12px; font-weight: 500; }
 .lk-field { display: grid; gap: 6px; margin-block-start: 22px; }
 .lk-field label { font-size: 13px; font-weight: 600; }
 .lk-field small { color: var(--text-muted, #75736c); font-size: 12.5px; }

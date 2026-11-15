@@ -192,7 +192,13 @@ export function voicedMs(frames: FaceFrame[], threshold = 0.015): number {
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
-export function evaluateLiveness(evidence: CaptureEvidence): LivenessReport {
+export interface LivenessOptions {
+  /** Whether phrases the recognizer did not hear fail the capture. Default true; the demo build turns it off. */
+  requirePhrases?: boolean;
+}
+
+export function evaluateLiveness(evidence: CaptureEvidence, options: LivenessOptions = {}): LivenessReport {
+  const requirePhrases = options.requirePhrases ?? true;
   const all = [...evidence.scanFrames, ...evidence.speechFrames];
   const oneFace = all.length ? all.filter((frame) => frame.faces === 1).length / all.length : 0;
   const jump = largestJump(evidence.scanFrames);
@@ -206,7 +212,8 @@ export function evaluateLiveness(evidence: CaptureEvidence): LivenessReport {
     { id: "one_face", label: "One face in view", passed: oneFace >= 0.9, required: true, value: round(oneFace) },
     { id: "smooth", label: "Natural movement", passed: jump < 30, required: true, value: round(jump) },
     { id: "blink", label: "Blinking", passed: blinks >= 1, required: false, value: blinks },
-    { id: "phrases", label: "Phrases spoken", passed: coverage >= PHRASE_COVERAGE, required: true, value: round(coverage) },
+    // Not required: always passes, and the measured coverage is still kept with the consent.
+    { id: "phrases", label: "Phrases spoken", passed: !requirePhrases || coverage >= PHRASE_COVERAGE, required: requirePhrases, value: round(coverage) },
     { id: "lip_sync", label: "Lips match voice", passed: sync >= LIP_SYNC_MIN, required: false, value: round(sync) },
     { id: "duration", label: "Enough speech", passed: evidence.speechMs >= MIN_SPEECH_MS, required: true, value: Math.round(evidence.speechMs) },
   ];

@@ -5,6 +5,7 @@ import type { StudioClient } from "../data/client";
 import { Modal } from "../components/ui";
 import "../templates.css";
 import { languageOf } from "../create/languages";
+import { LanguageFlagMenu } from "../create/Picker";
 import { CloneVideo } from "./CloneVideo";
 import { TEMPLATES_INTRO, TEMPLATES_TABS, TemplateGridSkeleton, templatesTab, type TemplatesTab } from "./page-skeletons";
 
@@ -204,12 +205,8 @@ function TemplateDetail({ template: t, onClose, onExpired, onClone }: { template
             <p className="tl-missing">The sample video is not available right now.</p>
           )}
           {sources.length > 1 && (
-            <div className="segmented tl-languages" role="group" aria-label="Sample language">
-              {sources.map((s) => (
-                <button key={s.language} aria-pressed={language === s.language} onClick={() => setLanguage(s.language)}>
-                  {languageNames[s.language] ?? s.language}
-                </button>
-              ))}
+            <div className="tl-languages">
+              <LanguageFlagMenu label="Sample language" value={language} options={sources.map((s) => s.language)} onChange={setLanguage} />
             </div>
           )}
         </div>

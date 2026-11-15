@@ -260,7 +260,7 @@ test('an active subscription shows its renewal and the Stripe portal, not a seco
   await shot(page, 'billing-active-1440');
 });
 
-test('template picker: language switches by pointer or through its select and creates a real draft', async ({ page }) => {
+test('template picker: language switches from its flag menu by pointer or keyboard and creates a real draft', async ({ page }) => {
   await signIn(page);
   await page.goto('/studio/');
   await page.getByRole('button', { name: 'Choose a template' }).click();
@@ -268,12 +268,19 @@ test('template picker: language switches by pointer or through its select and cr
   await shot(page, 'templates-1440');
   await list.getByRole('button', { name: /15-second introduction/ }).click();
   const form = page.getByRole('dialog', { name: '15-second introduction' });
-  const language = form.getByLabel('Script language');
-  await form.getByText('Ελληνικά', { exact: true }).click();
-  await expect(language).toHaveValue('el');
-  // The select is the real control behind the segments: keyboards and assistive technology use it.
-  await language.selectOption('en');
-  await expect(form.locator('.ob-language button[data-checked]')).toHaveText('English');
+  // The language is a round flag that opens a menu of the template's languages.
+  const language = form.getByRole('button', { name: /^Script language/ });
+  await expect(language).toHaveAccessibleName('Script language: English');
+  await language.click();
+  await form.getByRole('option', { name: /Ελληνικά/ }).click();
+  await expect(language).toHaveAccessibleName('Script language: Greek');
+  // Keyboards work too: open it, arrow to English, Enter.
+  await language.press('Enter');
+  // The chosen language takes focus when the menu opens.
+  await expect(form.getByRole('option', { name: /Ελληνικά/ })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
+  await expect(language).toHaveAccessibleName('Script language: English');
   await form.getByLabel('Brand or product').fill('BeWell');
   await form.getByLabel('What it helps people do').fill('plan your festival day');
   await shot(page, 'templates-form-1440');

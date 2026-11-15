@@ -93,6 +93,18 @@ test("phrase coverage tolerates recognizer mistakes, including the brand name he
   assert.equal(sync.update("I Minas Kontis agree that face full may create an avatar of my face and voice"), sync.words.length);
 });
 
+test("the read-along follows a name heard in the other alphabet or misspelled, digits, and short words", () => {
+  // A Greek recognizer writes a Latin name in Greek letters; an English one spells it by ear.
+  const el = createReadAlongSync(consentStatement("Minas Kontis", "el"));
+  assert.equal(el.update("Εγώ Μηνάς Κόντης συμφωνώ να δημιουργήσει η Φέισφουλ ένα άβαταρ με το πρόσωπο και τη φωνή μου"), el.words.length);
+  assert.ok(phraseCoverage(consentStatement("Minas Kontis", "en"), "I Mina's Condis agree that Faceful may create an avatar of my face and voice") === 1);
+  // Numbers come back as digits, and "choose a" stays two words instead of becoming "choosea".
+  const meet = createReadAlongSync("We usually meet at seven, choose a quiet place and talk about music.");
+  let said = "";
+  for (const word of "we usually meet at 7 choose a quiet place and talk about music".split(" ")) meet.update((said += ` ${word}`));
+  assert.equal(meet.position, meet.words.length);
+});
+
 test("phrases count by everything heard along the way, not only by the last transcript a recognizer held", () => {
   const phrases = ["The quick brown fox jumps over the lazy dog.", "Bright morning sunshine warms the blue ocean.", consentStatement("Minas Kontis", "en")];
   const heard = createPhraseTracker(phrases);
@@ -145,6 +157,18 @@ test("a good capture passes; a missing angle or an unspoken consent blocks; advi
   const still = evaluateLiveness({ ...good, speechFrames: speechFrames.map((frame) => ({ ...frame, jaw: 0.1 })) });
   assert.equal(still.checks.find((check) => check.id === "lip_sync")?.passed, false);
   assert.equal(still.passed, true);
+});
+
+test("the demo build never fails a capture on phrases the recognizer missed, and still keeps what it heard", () => {
+  const scanFrames: FaceFrame[] = Array.from({ length: 300 }, (_, i) => ({ t: i * 33, faces: 1, yaw: Math.sin(i / 30) * 30, pitch: 0, blink: i % 90 === 0 ? 0.9 : 0.1 }));
+  const speechFrames: FaceFrame[] = Array.from({ length: 400 }, (_, i) => ({ t: i * 33, faces: 1, jaw: Math.abs(Math.sin(i / 5)), audio: Math.abs(Math.sin(i / 5)) * 0.2 }));
+  const phrases = pickPhrases("Minas Kontis", "en");
+  const misheard = { posesCaptured: ALL, scanFrames, speechFrames, phrases, transcript: "", speechMs: 30_000 };
+  const demo = evaluateLiveness(misheard, { requirePhrases: false });
+  assert.equal(demo.passed, true);
+  assert.deepEqual(demo.checks.find((check) => check.id === "phrases"), { id: "phrases", label: "Phrases spoken", passed: true, required: false, value: 0 });
+  assert.equal(evaluateLiveness({ ...misheard, posesCaptured: ["center"] }, { requirePhrases: false }).passed, false, "the other checks still apply");
+  assert.equal(evaluateLiveness(misheard).passed, false, "strict by default");
 });
 
 test("the picture's brightness is its mean luma, so a dark room can be told from a missing face", () => {

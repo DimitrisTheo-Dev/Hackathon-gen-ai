@@ -32,6 +32,23 @@ export function normalizeRunnerUrl(input: string): string {
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
 }
 
+const loginState = (loginUrl: string) => { try { return new URL(loginUrl).searchParams.get("state"); } catch { return null; } };
+/**
+ * Claude's code page shows `<code>#<state>`. False only when the state part names another sign-in than `loginUrl`,
+ * such as a code copied from an earlier attempt, so the page can say so before the machine is asked.
+ */
+export function codeFitsLogin(code: string, loginUrl: string): boolean {
+  const hash = code.lastIndexOf("#");
+  const state = loginState(loginUrl);
+  return hash < 0 || !state || code.slice(hash + 1) === state;
+}
+/** A code from Claude's page for exactly this sign-in. Only such text is taken from the clipboard without a paste. */
+export function isCodeForLogin(text: string, loginUrl: string): boolean {
+  const value = text.trim();
+  const hash = value.lastIndexOf("#");
+  return hash >= 8 && value.length <= 2048 && /^[\x21-\x7e]+$/.test(value) && loginState(loginUrl) === value.slice(hash + 1);
+}
+
 /** Splits a streamed NDJSON body into parsed objects, tolerating chunk boundaries. */
 export async function readNdjson(body: ReadableStream<Uint8Array>, onValue: (value: StreamEvent) => void) {
   const reader = body.getReader();

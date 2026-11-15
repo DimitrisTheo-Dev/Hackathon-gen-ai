@@ -26,6 +26,7 @@ import { consentStatement, pickPhrases, type LikenessLanguage } from "./phrases"
 import { createHoldTimer, matchesPose, poseProgress, poseSequence, POSES, type HeadPose, type PoseId } from "./pose";
 import { createBrowserSpeechSource, createLiveSource, probeLive, type LiveHealth, type TranscriptSource } from "./source";
 import { createReadAlongSync, tokenizeScript, type ReadAlongSync } from "./sync";
+import { LanguageFlagMenu } from "../create/Picker";
 import "./likeness.css";
 
 export interface LikenessResult {
@@ -61,23 +62,23 @@ const HINT_SETTLE_MS = 350;
 type Turn = Exclude<PoseId, "center">;
 /** Spoken this long with no text back from live transcription: it is not hearing, so switch recognizers. */
 const LIVE_DEAF_MS = 3000;
+/**
+ * Demo: words the recognizer misses never fail a capture. The phrases check still runs and its value is kept
+ * with the consent; every other check still applies. Build with VITE_LIKENESS_STRICT=1 to require it again.
+ */
+const REQUIRE_PHRASES = import.meta.env.VITE_LIKENESS_STRICT === "1";
 
 const COPY = {
   en: {
     title: "Scan your face",
     name: "Your full name",
-    nameHint: "It goes into the consent you read aloud.",
-    agree: "I consent to an avatar of my face and voice.",
-    youWillSay: "You’ll read this aloud at the end:",
+    lede: "About 2 minutes, with your camera and microphone.",
+    agree: "I agree",
+    youWillSay: "You’ll read this aloud:",
     continue: "Continue",
     phases: ["Consent", "Face scan", "Your looks"],
     phasesNoPersona: ["Consent", "Face scan", "Saved"],
     stepOf: (n: number, label: string) => `Step ${n} of 3: ${label}`,
-    plan: [
-      { title: "Agree", time: "30 sec", body: "Confirm your name and tick the box." },
-      { title: "Turn and read", time: "about 1 min", body: "Turn your head slowly, then read three short lines aloud." },
-      { title: "Check and save", time: "30 sec", body: "See the result before anything is saved." },
-    ],
     privacyTitle: "What happens to your face data",
     privacy: [
       "Face tracking runs on this device. The recordings stay here until you press Save.",
@@ -86,10 +87,10 @@ const COPY = {
       "Withdraw consent on the persona at any time and the recordings are deleted for good. A dated record that you withdrew is kept.",
     ],
     primeTitle: "Get ready",
-    primeBody: "Faceful needs your camera and microphone for about a minute.",
-    primeAsk: "Your browser will ask next. Choose Allow.",
+    primeBody: "Camera and mic, for about a minute.",
+    primeAsk: "Choose Allow when asked.",
     tips: ["Face a window or a soft light", "Find a quiet spot", "Hold the camera at eye level"],
-    allowButton: "Allow camera and microphone",
+    allowButton: "Allow access",
     startScan: "Start the scan",
     back: "Back",
     opening: "Opening the camera…",
@@ -139,18 +140,13 @@ const COPY = {
   el: {
     title: "Σάρωση προσώπου",
     name: "Ονοματεπώνυμο",
-    nameHint: "Μπαίνει στη συναίνεση που θα διαβάσετε φωναχτά.",
-    agree: "Συναινώ σε avatar του προσώπου και της φωνής μου.",
-    youWillSay: "Στο τέλος θα διαβάσετε φωναχτά:",
+    lede: "Περίπου 2 λεπτά, με κάμερα και μικρόφωνο.",
+    agree: "Συμφωνώ",
+    youWillSay: "Θα το διαβάσετε φωναχτά:",
     continue: "Συνέχεια",
     phases: ["Συναίνεση", "Σάρωση", "Εμφανίσεις"],
     phasesNoPersona: ["Συναίνεση", "Σάρωση", "Αποθήκευση"],
     stepOf: (n: number, label: string) => `Βήμα ${n} από 3: ${label}`,
-    plan: [
-      { title: "Συμφωνία", time: "30 δευτ.", body: "Επιβεβαιώστε το όνομά σας και τσεκάρετε το κουτί." },
-      { title: "Στροφές και ανάγνωση", time: "περίπου 1 λεπτό", body: "Γυρίστε αργά το κεφάλι, μετά διαβάστε τρεις μικρές φράσεις." },
-      { title: "Έλεγχος και αποθήκευση", time: "30 δευτ.", body: "Βλέπετε το αποτέλεσμα πριν αποθηκευτεί οτιδήποτε." },
-    ],
     privacyTitle: "Τι γίνεται με τα δεδομένα του προσώπου σας",
     privacy: [
       "Η παρακολούθηση του προσώπου γίνεται σε αυτή τη συσκευή. Οι εγγραφές μένουν εδώ μέχρι να πατήσετε Αποθήκευση.",
@@ -159,10 +155,10 @@ const COPY = {
       "Ανακαλέστε τη συναίνεση από την περσόνα όποτε θέλετε και οι εγγραφές διαγράφονται οριστικά. Μένει μια χρονολογημένη καταγραφή της ανάκλησης.",
     ],
     primeTitle: "Ετοιμαστείτε",
-    primeBody: "Η Faceful χρειάζεται κάμερα και μικρόφωνο για περίπου ένα λεπτό.",
-    primeAsk: "Ο browser θα σας ρωτήσει. Επιλέξτε Να επιτρέπεται.",
+    primeBody: "Κάμερα και μικρόφωνο, για περίπου ένα λεπτό.",
+    primeAsk: "Επιλέξτε Να επιτρέπεται όταν σας ρωτήσει.",
     tips: ["Κοιτάξτε προς ένα παράθυρο ή απαλό φως", "Βρείτε ένα ήσυχο σημείο", "Κρατήστε την κάμερα στο ύψος των ματιών"],
-    allowButton: "Επιτρέψτε κάμερα και μικρόφωνο",
+    allowButton: "Να επιτρέπεται",
     startScan: "Έναρξη σάρωσης",
     back: "Πίσω",
     opening: "Ανοίγει η κάμερα…",
@@ -472,15 +468,18 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
     audioCtxRef.current = null;
     if (stepRef.current !== "speech") return;
     if (speechBlobRef.current) setSpeechUrl(objectUrl(speechBlobRef.current));
-    const evaluated = evaluateLiveness({
-      posesCaptured: capturedRef.current,
-      scanFrames: scanFramesRef.current,
-      speechFrames: speechFramesRef.current,
-      phrases: phrasesRef.current,
-      transcript,
-      speechMs,
-      phraseCoverage: heardRef.current?.coverage(),
-    });
+    const evaluated = evaluateLiveness(
+      {
+        posesCaptured: capturedRef.current,
+        scanFrames: scanFramesRef.current,
+        speechFrames: speechFramesRef.current,
+        phrases: phrasesRef.current,
+        transcript,
+        speechMs,
+        phraseCoverage: heardRef.current?.coverage(),
+      },
+      { requirePhrases: REQUIRE_PHRASES },
+    );
     // Measured values, for tuning the thresholds on real captures. No transcript, name or image.
     console.info("[likeness] checks", evaluated.checks.map((check) => `${check.id}=${check.value}${check.passed ? "" : " (fail)"}`).join(" "), "phrases", heardRef.current?.coverage().map((share) => share.toFixed(2)).join("/"));
     setReport(evaluated);
@@ -812,13 +811,7 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
         </div>
         <div className="lk-header-group">
           {step === "intro" && (
-            <div className="lk-lang" role="group" aria-label="Language">
-              {(["en", "el"] as const).map((code) => (
-                <button key={code} type="button" onClick={() => setLanguage(code)} className={language === code ? "on" : undefined} aria-pressed={language === code}>
-                  {code === "en" ? "EN" : "ΕΛ"}
-                </button>
-              ))}
-            </div>
+            <LanguageFlagMenu label={language === "el" ? "Γλώσσα" : "Language"} value={language} options={["en", "el"]} onChange={(code) => setLanguage(code as LikenessLanguage)} />
           )}
           <button type="button" onClick={close} className="lk-icon-button" aria-label={t.close}>
             <X size={20} aria-hidden="true" />
@@ -921,22 +914,15 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
         {step === "intro" && (
           <div className="lk-intro lk-in">
             <h1 className="lk-title">{t.title}</h1>
-            <ol className="lk-plan">
-              {t.plan.map((item, index) => (
-                <li key={item.title}>
-                  <span className="lk-plan-n" aria-hidden="true">{index + 1}</span>
-                  <span className="lk-plan-text">
-                    <strong>{item.title}<small>{item.time}</small></strong>
-                    <span>{item.body}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
+            <p className="lk-lede">{t.lede}</p>
             <div className="lk-field">
               <label htmlFor="lk-name">{t.name}</label>
-              <input id="lk-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={120} autoComplete="name" className="lk-input" aria-describedby="lk-name-hint" />
-              <small id="lk-name-hint">{t.nameHint}</small>
+              <input id="lk-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={120} autoComplete="name" className="lk-input" />
             </div>
+            <figure className="lk-statement">
+              <figcaption>{t.youWillSay}</figcaption>
+              <blockquote lang={language}>“{statement}”</blockquote>
+            </figure>
             <label className="lk-check">
               <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} />
               <span className="lk-check-box" aria-hidden="true">
@@ -944,10 +930,6 @@ export default function LikenessCapture({ open, api, defaultName = "", onClose, 
               </span>
               <span className="lk-check-label">{t.agree}</span>
             </label>
-            <figure className="lk-statement">
-              <figcaption>{t.youWillSay}</figcaption>
-              <blockquote lang={language}>“{statement}”</blockquote>
-            </figure>
             <details className="lk-privacy">
               <summary><ShieldCheck size={16} aria-hidden="true" />{t.privacyTitle}</summary>
               <ul>

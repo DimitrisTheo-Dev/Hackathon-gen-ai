@@ -3,9 +3,9 @@ import { ArrowLeft, ArrowRight, Clapperboard, LoaderCircle } from "lucide-react"
 import type { Campaign, Template } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
 import { Modal } from "../components/ui";
+import { LanguageFlagMenu } from "../create/Picker";
 
 const languageNames: Record<string, string> = { en: "English", el: "Greek (Ελληνικά)" };
-const languageShort: Record<string, string> = { en: "English", el: "Ελληνικά" };
 
 /** Curated starting points. A template fills editable drafts from what you type; nothing is rendered. */
 export function Templates({
@@ -85,17 +85,7 @@ export function Templates({
             <p className="ob-sub">{selected.description} You can edit every line afterwards.</p>
             <div className="ob-field">
               <label htmlFor="template-language">Script language</label>
-              {/* The select is the real control (keyboard and screen readers); the segments are its pointer shortcut. */}
-              <div className="ob-language" style={{ "--ob-count": selected.languages.length, "--ob-index": Math.max(0, selected.languages.indexOf(language)) } as React.CSSProperties}>
-                <select id="template-language" className="ob-language-select" value={language} disabled={busy} onChange={(event) => setLanguage(event.target.value)}>
-                  {selected.languages.map((code) => <option key={code} value={code}>{languageNames[code] ?? code}</option>)}
-                </select>
-                {selected.languages.map((code) => (
-                  <button key={code} type="button" tabIndex={-1} aria-hidden="true" data-checked={code === language || undefined} disabled={busy} onClick={() => setLanguage(code)}>
-                    {languageShort[code] ?? code}
-                  </button>
-                ))}
-              </div>
+              <LanguageFlagMenu id="template-language" label="Script language" align="start" value={language} options={selected.languages} disabled={busy} onChange={setLanguage} />
             </div>
             {selected.inputs.map((field) => (
               <div className="ob-field" key={field.key}>

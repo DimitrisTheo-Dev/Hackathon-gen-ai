@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createFixtureClient} from '../apps/web/src/data/fixture';
-import {localDirectorPlan,validateDirectorPlan,restorePatch,directorPlanSchema,directorOperationKey,mergeDirectorEntry,changedFields} from '../apps/web/src/director/model';
+import {localDirectorPlan,validateDirectorPlan,restorePatch,directorPlanSchema,directorOperationKey,mergeDirectorEntry,changedFields,postingChanges} from '../apps/web/src/director/model';
 import {renderBlockReason,renderRoute,saveHint,countLabel} from '../apps/web/src/views/editor/model';
 import {withPreferences,writingDeclined,handoffPrompt,agentSeenRecently,requestsNewContent} from '../apps/web/src/director/model';
 import {blockerStep,reviewSteps,reviewState,approvalBlock,blockerScope} from '../apps/web/src/views/editor/review';
@@ -63,6 +63,16 @@ test('a proposal diff reads as plain text: no JSON, and only the parts that chan
  const shown=localDirectorPlan('Show burned-in captions',campaign,{...item,style:{...item.style,captions:false}},context,'item')!.actions[0];assert.equal(shown.kind==='revise'&&shown.patch.style?.captions,true);
  // After a change is applied the item already holds the new value; the recorded "before" still drives the diff.
  assert.deepEqual(changedFields({...item,title:'A calmer title'},title.patch,{title:item.title}),[{field:'title',before:item.title,after:'A calmer title'}]);
+});
+
+test('posting times diff as one line per post: kept, moved, removed, added, or a changed account',()=>{
+ const t=(platform:'instagram'|'tiktok'|'youtube',scheduledAt:string,accountId:string|null=null)=>({platform,accountId,scheduledAt,timezone:'Europe/Athens'});
+ const before=[t('instagram','2026-11-16T07:00:00.000Z'),t('tiktok','2026-11-16T07:00:00.000Z'),t('youtube','2026-11-20T16:00:00.000Z','yt-1')];
+ const after=[t('youtube','2026-11-20T16:00:00.000Z'),t('instagram','2026-11-19T16:00:00.000Z'),t('instagram','2026-11-16T07:00:00.000Z')];
+ assert.deepEqual(postingChanges(before,after).map(row=>`${row.platform} ${row.state}`),['instagram same','tiktok removed','instagram added','youtube account']);
+ assert.deepEqual(postingChanges([t('tiktok','2026-11-16T07:00:00.000Z')],[t('tiktok','2026-11-25T16:00:00.000Z')]).map(row=>[row.state,row.before?.scheduledAt,row.after?.scheduledAt]),[['moved','2026-11-16T07:00:00.000Z','2026-11-25T16:00:00.000Z']]);
+ const [change]=changedFields({targets:before} as never,{targets:after});
+ assert.equal(change?.field,'targets');assert.equal(change?.postings?.length,4);
 });
 
 test('the render action always knows why it is unavailable, and the save hint says what saving does',()=>{
