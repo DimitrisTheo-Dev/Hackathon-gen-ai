@@ -11,6 +11,8 @@ import "./claude.css";
 const STORE = "faceful.claudeRunner";
 /** The machines gateway (apps/machines). When set, the page offers it as the default address. */
 const GATEWAY = (import.meta.env.VITE_CLAUDE_GATEWAY_URL as string | undefined)?.trim().replace(/\/+$/, "") || "";
+/** Local development only: a personal token from the gitignored .env.local, so the page connects by itself. Never in a production build. */
+const DEV_TOKEN = import.meta.env.DEV ? ((import.meta.env.VITE_CLAUDE_GATEWAY_TOKEN as string | undefined)?.trim() ?? "") : "";
 /** `session` means the Faceful sign-in is the credential, so there is no key to keep. */
 type Connection = { url: string; key: string; session?: boolean };
 const readProject = () => { try { return localStorage.getItem(`${STORE}.project`) || "default"; } catch { return "default"; } };
@@ -20,8 +22,9 @@ function loadConnection(): Connection | null {
   try {
     const url = localStorage.getItem(`${STORE}.url`);
     const key = sessionStorage.getItem(`${STORE}.key`) ?? localStorage.getItem(`${STORE}.key`);
-    return url && key ? { url, key } : null;
-  } catch { return null; }
+    if (url && key) return { url, key };
+  } catch { /* fall through to the local default */ }
+  return GATEWAY && DEV_TOKEN ? { url: GATEWAY, key: DEV_TOKEN } : null;
 }
 function saveConnection(connection: Connection | null, remember = false) {
   try {
