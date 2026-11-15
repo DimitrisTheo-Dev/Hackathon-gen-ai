@@ -141,8 +141,16 @@ function contextBlock(deps: EngineDeps, ctx: Ctx, context: Awaited<ReturnType<ty
     .join("\n");
 }
 
-function targetsFrom(schedule: Array<{ platform: Platform; localDateTime: string }>, timezone: string) {
-  return schedule.slice(0, MAX_TARGETS_PER_ITEM).flatMap((slot) => {
+/** Platforms with a connected account in this workspace. Empty when none is connected. */
+async function connectedPlatforms(deps: EngineDeps, ctx: Ctx): Promise<Set<Platform>> {
+  const rows = await deps.store.select("provider_connections", { org_id: ctx.org.id, state: "connected" });
+  return new Set(rows.map((row) => row.platform as Platform));
+}
+
+/** Proposed times, kept only for connected channels when at least one is connected, so nothing is planned for a channel that cannot post. */
+function targetsFrom(schedule: Array<{ platform: Platform; localDateTime: string }>, timezone: string, connected: Set<Platform> = new Set()) {
+  const usable = connected.size ? schedule.filter((slot) => connected.has(slot.platform)) : schedule;
+  return usable.slice(0, MAX_TARGETS_PER_ITEM).flatMap((slot) => {
     try {
       return [{ platform: slot.platform, accountId: null, scheduledAt: localToInstant(slot.localDateTime, timezone), timezone }];
     } catch {
@@ -159,6 +167,7 @@ async function toResult(deps: EngineDeps, ctx: Ctx, output: PlannerOutput, state
 
   if (output.intent === "create") {
     requireScope(ctx, "content:edit");
+    const connected = await connectedPlatforms(deps, ctx);
     const project = output.project;
     const drafts = (project?.items ?? []).filter((entry) => entry.title.trim() && entry.script.trim()).slice(0, 3);
     if (!project || !drafts.length) return done({ summary: `${reply} I could not turn that into a draft yet — tell me the brand and what the video should say.` });
@@ -175,7 +184,7 @@ async function toResult(deps: EngineDeps, ctx: Ctx, output: PlannerOutput, state
         language: (entry.language?.trim() || project.language.trim()).toLowerCase().slice(0, 12) || "en",
         avatarId: entry.avatarId,
         captions: { instagram: entry.caption, tiktok: entry.caption, youtube: entry.caption },
-        targets: targetsFrom(entry.schedule, ctx.org.timezone),
+        targets: targetsFrom(entry.schedule, ctx.org.timezone, connected),
       })),
       action: "Creative Director drafted a project from a prompt",
     });
@@ -223,6 +232,7 @@ async function toResult(deps: EngineDeps, ctx: Ctx, output: PlannerOutput, state
   }
 
   if (output.intent === "edit" || output.intent === "schedule") {
+    const connected = await connectedPlatforms(deps, ctx);
     requireScope(ctx, "content:edit");
     const actions: DirectorAction[] = [];
     const skipped: string[] = [];
@@ -249,7 +259,7 @@ async function toResult(deps: EngineDeps, ctx: Ctx, output: PlannerOutput, state
         if (JSON.stringify(variants) !== JSON.stringify(target.variants)) patch.variants = variants;
       }
       if (edit.schedule) {
-        const targets = targetsFrom(edit.schedule, ctx.org.timezone);
+        const targets = targetsFrom(edit.schedule, ctx.org.timezone, connected);
         if (targets.length) patch.targets = targets;
       }
       if (Object.keys(patch).length) actions.push({ kind: "revise", itemId: target.id, expectedRevision: target.revision, patch } as DirectorAction);

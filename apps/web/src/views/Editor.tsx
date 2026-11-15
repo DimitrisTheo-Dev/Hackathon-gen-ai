@@ -1045,6 +1045,19 @@ export function Editor({
                           }
                         }}
                       />
+                      {target && editable && !submitted && (
+                        <button
+                          type="button"
+                          className="text-button posting-remove"
+                          aria-label={`Don’t post to ${platformNames[channel]}`}
+                          onClick={() => {
+                            update({ targets: value.targets.filter((existing) => existing !== target) }, targetKey);
+                            setTimeInputs((previous) => ({ ...previous, [targetKey]: "" }));
+                          }}
+                        >
+                          Don’t post here
+                        </button>
+                      )}
                       {timeErrors[targetKey] && (
                         <Notice error>{timeErrors[targetKey]}</Notice>
                       )}
