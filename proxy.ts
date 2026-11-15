@@ -3,7 +3,9 @@ import { handlePublicRequest, publicDocuments, publicPages, publicProblem, publi
 
 // Public presentation/discovery only. Private studio and domain routes pass through.
 const pages = new Set(["/", "/index.html", ...publicPages.map(path => path.replace(/\/$/, "")), "/about", "/contact", "/privacy"]);
-const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/docs/docs.js", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/cursor.svg", "/icons/gemini.svg", "/icons/vscode.svg", "/icons/windsurf.svg", "/icons/zed.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icons/app-192.png", "/icons/app-512.png", "/icons/app-maskable-512.png", "/icons/apple-touch-icon.png"]);
+// The /logos design review page's fog texture, music beds (from scripts/logo-music.py) and recorded voice takes.
+const logoReviewFiles = ["/art/fog.webp", ...["glow", "haze", "kalimba", "rise"].flatMap(bed => [`/audio/logo-music/${bed}-a.mp3`, `/audio/logo-music/${bed}-b.mp3`]), ...["connie", "holly", "jillian", "kelsey", "lori", "madison", "melina", "pippa"].map(voice => `/audio/logo-voice/ca-${voice}.mp3`)];
+const files = new Set(["/favicon.svg", "/design.css", "/docs/docs.css", "/docs/docs.js", "/fonts/InterVariable.woff2", "/fonts/LICENSE.txt", "/art/grainient-sunlit.webp", "/icons/claude.svg", "/icons/codex.svg", "/icons/cursor.svg", "/icons/gemini.svg", "/icons/vscode.svg", "/icons/windsurf.svg", "/icons/zed.svg", "/icons/NOTICE.md", "/art/ATTRIBUTION.txt", "/og.png", "/llms.txt", "/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icons/app-192.png", "/icons/app-512.png", "/icons/app-maskable-512.png", "/icons/apple-touch-icon.png", ...logoReviewFiles]);
 const markdown = `# Faceful — content production studio
 
 Create campaigns with your agent. Fine-tune them here.
@@ -54,7 +56,7 @@ export default function proxy(request: Request): Response {
   if (api) return api;
   const path = new URL(request.url).pathname;
   // The domain API, MCP endpoint, OAuth consent page and protected-resource metadata are served by the engine functions.
-  if (/^\/(?:assets|studio|dev|oauth|v1|api\/v1|api\/engine|api\/mcp|mcp|\.well-known\/oauth-protected-resource|claude-login-test|pitch)(?:\/|$)/.test(path)) return next();
+  if (/^\/(?:assets|studio|dev|oauth|v1|api\/v1|api\/engine|api\/mcp|mcp|\.well-known\/oauth-protected-resource|claude-login-test|pitch|logos)(?:\/|$)/.test(path)) return next();
   if (/^\/(?:api|mcp|\.well-known)(?:\/|$)/.test(path)) return publicProblem(request, 404, "endpoint_unavailable", "This path is not served on this origin. The domain API is under /v1 and the MCP endpoint is /mcp; OAuth authorization-server metadata is published by the issuer named in /.well-known/oauth-protected-resource/mcp, not here.", "Read /api/public/status for what this deployment has configured, /docs/api/ for public read operations, or /docs/mcp/ to connect an agent.");
   const normalized = path === "/" ? "/" : path.replace(/\/$/, "");
   const wantsMd = wantsMarkdown(request.headers.get("accept") ?? "");
