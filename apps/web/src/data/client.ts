@@ -47,6 +47,14 @@ import {
   type Product,
   type ReviewContentInput,
   type UpdateProductInput,
+  type AbortTakeInput,
+  type CompleteTakeInput,
+  type DraftScriptInput,
+  type DraftScriptResult,
+  type StartTakeInput,
+  type TakePartInput,
+  type TakePartUrl,
+  type TakeUpload,
 } from "@castroom/contracts";
 
 export class ApiError extends Error {
@@ -252,6 +260,14 @@ export interface StudioClient {
   completeUpload(input: { fileId: string; operationKey: string }): Promise<DraftFile>;
   saveTextFile(input: SaveTextFileInput): Promise<DraftFile>;
   archiveFile(input: { fileId: string; operationKey: string }): Promise<DraftFile>;
+  /** New project flow: a script drafted by the model (or the description split into lines without one). Saves nothing. */
+  draftScript(input: DraftScriptInput): Promise<DraftScriptResult>;
+  /** Starts a recorded take that is uploaded in parts while it is recorded. */
+  startTake(input: StartTakeInput): Promise<TakeUpload>;
+  takePartUrl(input: TakePartInput): Promise<TakePartUrl>;
+  /** Joins the uploaded parts into one draft file of the project. */
+  completeTake(input: CompleteTakeInput): Promise<DraftFile>;
+  abortTake(input: AbortTakeInput): Promise<void>;
   /** Queues an MP4 render of the saved timeline; a render worker produces it as a draft file. */
   queueRender(input: QueueRenderInput): Promise<ReelRender>;
   listRenders(contentId: string): Promise<ReelRender[]>;

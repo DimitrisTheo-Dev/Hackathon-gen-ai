@@ -5,6 +5,7 @@ import {localDirectorPlan,validateDirectorPlan,restorePatch,directorPlanSchema,d
 import {renderBlockReason,saveHint,countLabel} from '../apps/web/src/views/editor/model';
 import {withPreferences,writingDeclined,handoffPrompt,agentSeenRecently,requestsNewContent} from '../apps/web/src/director/model';
 import {blockerStep,reviewSteps,reviewState,approvalBlock,blockerScope} from '../apps/web/src/views/editor/review';
+import {routeHomeRequest} from '../apps/web/src/director/home-route';
 const setup=async()=>{const map=new Map<string,string>();const client=createFixtureClient({getItem:k=>map.get(k)??null,setItem:(k,v)=>{map.set(k,v)}} as Storage);return {client,context:await client.getContext(),campaign:(await client.listCampaigns())[0]};};
 test('director literal script plan saves same shared revision; undo restores as a new version',async()=>{
  const {client,context,campaign}=await setup();const item=campaign.items[0];
@@ -81,13 +82,21 @@ test('the render action always knows why it is unavailable, and the save hint sa
  assert.equal(countLabel(1,'source'),'1 source');assert.equal(countLabel(3,'draft'),'3 drafts');
 });
 
-test('home preferences are written into the request as plain words, and never change an exact instruction',()=>{
- assert.equal(withPreferences('A video about our lunch box',{format:'reel',length:'15',language:'el'}),'A video about our lunch box — an Instagram Reel, 15 seconds, in Greek');
+test('home settings are written into the request as plain words, and never change an exact instruction',()=>{
+ assert.equal(withPreferences('A video about our lunch box',{platform:'instagram',seconds:15,language:'el'}),'A video about our lunch box — an Instagram Reel, 15 seconds, in Greek');
  assert.equal(withPreferences('  A launch video ',{}),'A launch video');
- assert.equal(withPreferences('A launch video',{presenter:'minas'},'Minas'),'A launch video — presented by Minas');
- assert.equal(withPreferences('A launch video',{presenter:'gone'}),'A launch video');
+ assert.equal(withPreferences('A launch video',{platform:null}),'A launch video','“Any” format adds nothing');
+ assert.equal(withPreferences('A launch video',{language:'en',copies:['el','es']}),'A launch video — one version each in English, Greek and Spanish');
+ assert.equal(withPreferences('A launch video',{language:'el',copies:['el']}),'A launch video — in Greek','a copy in the main language is not a second version');
  for(const exact of ['Set title: A new title','Set script: Hello.','Set Instagram caption: Hi','Use avatar: Minas','Hide burned-in captions','Review schedule','Show my content','Play latest version','Regenerate'])
-  assert.equal(withPreferences(exact,{format:'reel',length:'15',language:'el'}),exact,exact);
+  assert.equal(withPreferences(exact,{platform:'instagram',seconds:15,language:'el'}),exact,exact);
+});
+
+test('home router: one new video opens the New project flow; campaigns, finds, edits and questions go to the Director',()=>{
+ for(const video of ['A 15-second Reel introducing our spring menu','A friendly welcome video for new customers','A 30-second explainer for our booking app','Create a 15-second video about our oat latte','Make a TikTok about our weekend brunch','Make a quick tip (15–30 s, vertical) for teaching one thing. Topic: brewing','Our new oat latte, 30 seconds, upbeat','please create an intro for the shop'])
+  assert.equal(routeHomeRequest(video),'new-project',video);
+ for(const other of ['Three short videos for next week’s product launch','Plan three videos for next week about the festival','Plan a campaign for spring','A series of reels about our team','Find my latest launch video','Show my content','Set title: Exactly this','Use avatar: Minas','Review schedule','Make the hook shorter','Shorten the first line','How many credits do I have?','Can you make a video?','What should I post this week','Upgrade my plan','Hello there',''])
+  assert.equal(routeHomeRequest(other),'director',other);
 });
 
 test('a declined writing request offers the person\'s own agent with a ready prompt; the prompt never claims Faceful wrote anything',()=>{

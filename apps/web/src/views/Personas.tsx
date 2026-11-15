@@ -33,7 +33,12 @@ export function Personas({ client, role }: { client: StudioClient; role: string 
   const canEdit = role === "owner" || role === "admin" || role === "editor";
   const [personas, setPersonas] = useState<Persona[] | null>(null);
   const [error, setError] = useState("");
-  const [creating, setCreating] = useState(false);
+  // New project's "Create avatar" opens this page with ?create, straight into a new persona.
+  const [creating, setCreating] = useState(() => canEdit && new URLSearchParams(location.search).has("create"));
+  useEffect(() => {
+    const url = new URL(location.href);
+    if (url.searchParams.has("create")) { url.searchParams.delete("create"); history.replaceState(history.state, "", url); }
+  }, []);
   // Coming back from a face scan lands on the persona it was for.
   const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(location.search).get("persona"));
   const [scanFor, setScanFor] = useState<Persona | null>(null);

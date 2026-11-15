@@ -7,14 +7,17 @@ import { createSocialsApi, type SocialAccount, type SocialProviderInfo } from ".
 import "./connect.css";
 
 /**
- * `/studio/connect/<provider>`: connecting an account by signing in to its platform (Instagram so far).
+ * `/studio/connect/<provider>`: connecting an account by signing in to its platform (Instagram, TikTok).
  *
  * The person starts here, leaves for the platform, and is sent back here with a one-time code. The engine passes
  * that code along in the part of the address after `#`, which browsers never send to a server; this page hands it
  * to the engine together with the person's own session. That last step is what makes a link to someone else's
  * sign-in useless: the engine only completes a sign-in for the person who started it.
  */
-const notes: Record<string, string> = { instagram: "Only professional (business or creator) Instagram accounts can be connected." };
+const notes: Record<string, string> = {
+  instagram: "Only professional (business or creator) Instagram accounts can be connected.",
+  tiktok: "Until TikTok reviews this app, posts can only be private, and the TikTok account has to be set to private.",
+};
 
 /** What the platform's answer left in the address. Read once, then removed so the code is not kept in history. */
 let returned: { grant: string | null; ticket: string | null; problem: string | null } | undefined;

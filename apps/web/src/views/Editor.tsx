@@ -40,6 +40,7 @@ import { OverflowMenu, type OverflowItem } from "./editor/OverflowMenu";
 
 import { DirectorPanel } from '../director/DirectorPanel';
 import type { DirectorAction, DirectorEntry } from '../director/model';
+import type { ProjectStart } from '../create/settings';
 import type { DirectorTurn } from '../director/planner';
 import type { ContentVersion, DirectorTurnResult } from "@castroom/contracts";
 import { failedRender, itemBadge } from "../lib/status";
@@ -59,6 +60,8 @@ type Props = {
   open?: boolean;
   onStart?: () => void;
   onCreate?: () => void;
+  /** Opens the guided New project flow, with the request and settings from the home composer. */
+  onNewProject?: (start: ProjectStart) => void;
   onShowContent?: () => void;
   /** Sends a conversational turn to the shared engine. */
   onDirectorTurn: DirectorTurn;
@@ -102,7 +105,7 @@ type Props = {
 };
 
 export function Editor({
-  campaign, director, onDirectorAction, directorInstruction, onDirectorInstruction, home=false, open=true, onStart, onCreate, onShowContent,
+  campaign, director, onDirectorAction, directorInstruction, onDirectorInstruction, home=false, open=true, onStart, onCreate, onNewProject, onShowContent,
   onDirectorTurn, onDirectorCreated, onDirectorOpen, onDirectorBusy, channels, onTemplates, onBilling, onAgents, onSources, focusDirector=false, playOnOpen=false, onPlayed, versions, reviews,
   item,
   index,
@@ -430,7 +433,7 @@ export function Editor({
       </header>
       {/* Kept mounted while Details is open so an in-flight plan, the scope and attachments are not lost. */}
       <div className="editor-chat" hidden={mode!=='chat'}>
-        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');scroller.current?.scrollTo({top:0});}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>reveal('versions'):undefined} onPresenter={()=>reveal('presenter')} onAgents={onAgents} onSources={onSources} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
+        <DirectorPanel instruction={directorInstruction} setInstruction={onDirectorInstruction} home={home} onStart={onStart} onCreate={onCreate} onNewProject={onNewProject} onShowContent={onShowContent} onInspect={()=>{onStart?.();setMode('details');scroller.current?.scrollTo({top:0});}} onTurn={onDirectorTurn} onCreated={onDirectorCreated} onOpen={onDirectorOpen} onTemplates={onTemplates} onBilling={onBilling} onBusy={onDirectorBusy} onVersions={versions?()=>reveal('versions'):undefined} onPresenter={()=>reveal('presenter')} onAgents={onAgents} onSources={onSources} focusOnMount={focusDirector} item={item} campaign={campaign} context={context} entries={director.entries} syncError={director.error} onRecord={director.record} onRetrySync={director.retry} onExecute={onDirectorAction} onDetails={()=>setMode('details')} busy={busy} offline={offline} dirty={dirty}/>
       </div>
       <div className="editor-details" hidden={mode!=='details'}>
       <div className="editor-scroll" ref={scroller}>

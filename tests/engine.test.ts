@@ -312,7 +312,7 @@ test("director create saves drafts only; edits and schedules come back as propos
   const created = await directorTurn(deps, ctx, turn("Create a 15-second Instagram Reel for BeWell with a friendly Greek-speaking presenter for Monday morning."), plan({
     intent: "create",
     reply: "Έφτιαξα ένα προσχέδιο.",
-    project: { title: "BeWell Reel", brandName: "BeWell", brandDescription: "Festival app.", audience: "Visitors", tone: "Friendly", language: "el", items: [{ title: "Καλώς ήρθες", script: "Γεια σου! Καλώς ήρθες στο BeWell.", caption: "BeWell", avatarId: "minas_kontis", schedule: [{ platform: "instagram", localDateTime: "2026-11-16T09:00" }] }] },
+    project: { title: "BeWell Reel", brandName: "BeWell", brandDescription: "Festival app.", audience: "Visitors", tone: "Friendly", language: "el", items: [{ title: "Καλώς ήρθες", script: "Γεια σου! Καλώς ήρθες στο BeWell.", caption: "BeWell", avatarId: "minas_kontis", language: null, schedule: [{ platform: "instagram", localDateTime: "2026-11-16T09:00" }] }] },
   }));
   assert.equal(created.mode, "ai");
   assert.ok(created.created);
@@ -339,6 +339,21 @@ test("director create saves drafts only; edits and schedules come back as propos
   assert.equal(action.kind, "revise");
   assert.deepEqual(action.kind === "revise" && action.patch, { script: "Γεια! Αυτό είναι το BeWell." }, "an unauthorized presenter is dropped, not applied");
   assert.equal((await getCampaign(deps, ctx, created.created!.id)).items[0].revision, 1, "a proposal changes nothing until applied");
+});
+
+test("director create gives each draft its own language when the person asked for one version per language", async () => {
+  const { deps, as } = engine(rendering);
+  const ctx = await as("user:u1");
+  const created = await directorTurn(deps, ctx, turn("A launch video for BeWell — one version each in English and Greek"), plan({
+    intent: "create",
+    reply: "I drafted a version in each language.",
+    project: { title: "BeWell launch", brandName: "BeWell", brandDescription: "Festival app.", audience: "Visitors", tone: "Friendly", language: "en", items: [
+      { title: "Meet BeWell", script: "Hi! Meet BeWell.", caption: "BeWell", avatarId: null, language: "en", schedule: [] },
+      { title: "Γνώρισε το BeWell", script: "Γεια σου! Γνώρισε το BeWell.", caption: "BeWell", avatarId: null, language: " EL ", schedule: [] },
+      { title: "Project language", script: "No language of its own.", caption: "BeWell", avatarId: null, language: null, schedule: [] },
+    ] },
+  }));
+  assert.deepEqual(created.created!.items.map((entry) => entry.language), ["en", "el", "en"]);
 });
 
 test("without a model the director says so plainly and still answers billing from server truth", async () => {

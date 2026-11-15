@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import { FORMAT_OPTIONS, LANGUAGE_OPTIONS, LENGTH_OPTIONS, type PromptPreferences } from './model';
+import { SettingsMenus } from '../create/SettingsMenus';
+import { defaultSettings } from '../create/settings';
+import type { PromptPreferences } from './model';
 
 /** Real requests this studio handles, shown one at a time in the empty home composer. */
 export const EXAMPLE_PROMPTS = [
@@ -31,28 +32,16 @@ export function PromptCycle({ active }: { active: boolean }) {
   );
 }
 
-type Avatar = { id: string; name: string };
 /**
- * Optional preferences for a new video, set as small pills in the composer. They start unset; what is
- * picked is written into the request as plain words, so the conversation shows exactly what was asked.
+ * The New project flow's own settings, as pills in the composer: length, format, the video's language and its
+ * language copies. They show the flow's defaults; what the person changes is carried into the flow when the request
+ * opens it, or written into the request as plain words when it goes to the Director.
  */
-export function PromptTokens({ prefs, onChange, presenters }: { prefs: PromptPreferences; onChange: (next: PromptPreferences) => void; presenters: Avatar[] }) {
-  const token = (key: keyof PromptPreferences, label: string, options: ReadonlyArray<{ value: string; label: string }>) => (
-    <label className="home-token" data-set={Boolean(prefs[key]) || undefined}>
-      {/* The pill is drawn by this face; the native select sits on top of it, invisible, so pickers stay native. */}
-      <span className="home-token-face" aria-hidden="true">{options.find((option) => option.value === prefs[key])?.label ?? label}<ChevronDown size={12} strokeWidth={2.25} /></span>
-      <select aria-label={label} value={prefs[key] ?? ''} onChange={(event) => onChange({ ...prefs, [key]: event.target.value || undefined })}>
-        <option value="">{label}</option>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </label>
-  );
+export function PromptTokens({ prefs, onChange }: { prefs: PromptPreferences; onChange: (next: PromptPreferences) => void }) {
+  const [defaults] = useState(defaultSettings);
   return (
-    <div className="home-tokens" role="group" aria-label="Video preferences">
-      {token('format', 'Format', FORMAT_OPTIONS)}
-      {token('length', 'Length', LENGTH_OPTIONS)}
-      {token('language', 'Language', LANGUAGE_OPTIONS)}
-      {presenters.length > 0 && token('presenter', 'Presenter', presenters.map((avatar) => ({ value: avatar.id, label: avatar.name })))}
+    <div className="home-tokens" role="group" aria-label="Video settings">
+      <SettingsMenus value={{ ...defaults, ...prefs }} onChange={(change) => onChange({ ...prefs, ...change })} />
     </div>
   );
 }

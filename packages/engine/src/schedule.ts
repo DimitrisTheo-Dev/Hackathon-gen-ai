@@ -24,7 +24,7 @@ export interface Publisher {
    * Submit one approved post. Throw `EngineError` when nothing was sent, `ChannelGrantExpired` when the
    * account must be reconnected, and `UnknownPublishOutcome` when a send started and its result is not known.
    */
-  publish(input: { attemptKey: string; credentials: string | null; mediaUrl: string; mediaMime: string; itemTitle: string; payload: Row; scheduledAt: string }): Promise<{ providerPostId: string; state: "submitted" | "verified_published"; url: string | null }>;
+  publish(input: { attemptKey: string; credentials: string | null; mediaUrl: string; mediaMime: string; mediaDurationSeconds?: number | null; itemTitle: string; payload: Row; scheduledAt: string }): Promise<{ providerPostId: string; state: "submitted" | "verified_published"; url: string | null }>;
   /**
    * Ask the provider what became of a submitted post. Only provider evidence may return `verified_published`.
    * `url`, when given, is where the post can be seen; `providerPostId`, the post's final ID when it differs from the
@@ -298,7 +298,8 @@ export async function processPublishJob(deps: EngineDeps, candidate: Row): Promi
     // Signed for two hours so that at least one is left even when the store hands back a link it signed earlier.
     const mediaUrl = (await deps.store.media.signedUrls([asset.storage_path], 7200))[asset.storage_path];
     if (!mediaUrl) throw new EngineError("provider_unavailable", "The approved video could not be read from storage. Nothing was posted.");
-    const result = await publisher.publish({ attemptKey: job.id, credentials: account.credentials_ciphertext ?? null, mediaUrl, mediaMime: asset.mime, itemTitle: item.title, payload: job.payload, scheduledAt: new Date(job.scheduled_at).toISOString() });
+    const mediaDurationSeconds = asset.duration_seconds === null || asset.duration_seconds === undefined ? null : Number(asset.duration_seconds);
+    const result = await publisher.publish({ attemptKey: job.id, credentials: account.credentials_ciphertext ?? null, mediaUrl, mediaMime: asset.mime, mediaDurationSeconds, itemTitle: item.title, payload: job.payload, scheduledAt: new Date(job.scheduled_at).toISOString() });
     await finish({ state: result.state, provider_post_id: result.providerPostId, published_url: result.url, published_at: result.state === "verified_published" ? deps.now().toISOString() : null, error: null }, result.state);
     await deps.store.insert("audit_events", { id: crypto.randomUUID(), org_id: job.org_id, project_id: job.project_id, actor: PLATFORM_NAME[platform], actor_kind: "system", action: `Approved post uploaded to ${PLATFORM_NAME[platform]}`, object_id: job.item_id, revision: job.revision, outcome: result.state === "verified_published" ? "Published" : `Accepted by ${PLATFORM_NAME[platform]} · not yet confirmed public`, correlation_id: job.id, at: deps.now().toISOString() });
     return "submitted";

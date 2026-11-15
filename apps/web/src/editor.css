@@ -611,22 +611,15 @@
 .prompt-cycle-text { display: block; overflow: hidden; text-overflow: ellipsis; }
 .director-panel.is-home .director-composer-actions { display: flex; align-items: center; gap: 6px; padding: 4px 4px 2px; }
 .director-panel.is-home .director-composer-actions .icon-button { flex: 0 0 auto; inline-size: 34px; block-size: 34px; border-radius: 10px; }
-/* A scroller clips on both axes, so it carries 4px of room for the pills' focus glow (3px) and gives it back with a
-   matching negative margin; scroll padding keeps a pill reached with Tab clear of the right-edge fade. */
-.home-tokens { display: flex; flex: 1 1 auto; gap: 6px; min-inline-size: 0; margin: -4px; padding: 4px; overflow-x: auto; scroll-padding-inline: 4px 20px; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent); }
-.home-tokens::-webkit-scrollbar { display: none; }
-.home-token { position: relative; flex: 0 0 auto; display: inline-flex; }
-.home-token-face { display: inline-flex; align-items: center; gap: 5px; block-size: 30px; padding: 0 9px 0 11px; border: 1px dashed rgba(42,42,39,.22); border-radius: 999px; color: var(--text-secondary); font-size: 12.5px; font-weight: 500; white-space: nowrap; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
-.home-token-face > svg { color: var(--text-muted); transition: color 160ms ease; }
-.home-token[data-set] .home-token-face { border-style: solid; border-color: transparent; background: rgba(42,42,39,.07); color: var(--ink); }
-.home-token select { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; padding: 0; border: 0; opacity: 0; font-size: 16px; cursor: pointer; appearance: none; -webkit-appearance: none; }
-/* Focus lights the pill itself instead of drawing a ring around it: its edge turns golden (dashed while unset, solid once set),
-   a warm fill and a soft amber glow make it pop. The edge keeps 3:1 on white; the yellow lives in the glow. Colour only, so
-   moving focus with the keyboard never moves anything. Focus arrives at once (it follows a key press) and fades out over 160ms. */
-.home-tokens .home-token:has(select:focus-visible) .home-token-face { border-color: var(--highlight-edge); background: rgba(255,176,0,.1); box-shadow: 0 0 0 3px rgba(255,176,0,.22); color: var(--ink); transition-duration: 0s; }
-.home-tokens .home-token:has(select:focus-visible) .home-token-face > svg { color: var(--highlight-edge); transition-duration: 0s; }
-/* Forced colours drop fills and shadows: give the pill a system outline there instead. */
-@media (forced-colors: active) { .home-tokens .home-token:has(select:focus-visible) .home-token-face { outline: 2px solid CanvasText; outline-offset: 2px; } }
+/* The New project flow's own settings menus (create/SettingsMenus), compact here. They wrap instead of scrolling: a
+   scroller would clip their dropdowns. Same component, same look as in the flow, one size smaller. */
+.home-tokens { display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: 6px; min-inline-size: 0; }
+.home-tokens .np-select { block-size: 32px; gap: 6px; padding: 0 9px 0 11px; font-size: 13px; }
+.home-tokens .np-select-label { font-size: 12.5px; }
+.home-tokens .np-select-value { gap: 5px; }
+.home-tokens .np-flag { font-size: 14px; }
+/* An open menu is placed against the window to escape this scrolling panel; a transformed composer would hold it in. */
+.director-panel.is-home .director-composer:has(.np-menu) { transform: none; }
 .director-panel.is-home .director-send { flex: 0 0 auto; inline-size: 36px; block-size: 36px; margin-inline-start: auto; border-radius: 50%; }
 .home-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 16px; margin-block-start: 12px; text-align: center; }
 .home-meta .director-status { margin: 0; justify-content: center; font-size: 12.5px; }
@@ -701,8 +694,6 @@ html[data-booting] .home-formats-row > li { animation-duration: 0s !important; a
   :is(.source-note, .director-status) a:hover { text-decoration-color: currentColor; }
   .agent-handoff-copy:hover { background: var(--accent-dark); }
   .agent-handoff-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-  .home-token:not([data-set]):hover .home-token-face { border-color: rgba(42,42,39,.4); color: var(--ink); }
-  .home-token[data-set]:hover .home-token-face { background: rgba(42,42,39,.1); }
   .director-panel.is-home .home-chips button:hover { box-shadow: var(--elev-2); color: var(--ink); }
   .director-panel.is-home .home-chips button:hover > svg { color: var(--ink); }
   .home-continue:hover { box-shadow: var(--elev-2); }
@@ -747,7 +738,7 @@ html[data-booting] .director-panel.is-home :is(.director-intro > *, .director-co
   .director-panel.is-home .director-composer textarea { min-block-size: 64px; font-size: 16px; }
   .prompt-cycle { font-size: 16px; }
   .director-panel.is-home .director-composer-actions .icon-button, .director-panel.is-home .director-send { inline-size: 44px; block-size: 44px; }
-  .home-token-face { block-size: 34px; padding-inline: 11px 9px; font-size: 13.5px; }
+  .home-tokens .np-select { block-size: 36px; font-size: 13.5px; }
   .director-panel.is-home .home-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-block-start: 20px; }
   .director-panel.is-home .home-chips button { justify-content: flex-start; min-block-size: 48px; padding: 0 12px; border-radius: 14px; font-size: 14px; text-align: start; }
   .director-panel.is-home .director-quick-actions .text-button { min-block-size: 44px; font-size: 14px; }
@@ -762,7 +753,7 @@ html[data-booting] .director-panel.is-home :is(.director-intro > *, .director-co
 @media (max-width: 480px) {
   /* Phones: preferences get their own row above attach and send, so none hides behind the fade. */
   .director-panel.is-home .director-composer-actions { flex-wrap: wrap; row-gap: 6px; }
-  .home-tokens { order: -1; flex: 1 0 100%; scroll-padding-inline: 4px; mask-image: none; }
+  .home-tokens { order: -1; flex: 1 0 100%; }
 }
 @media (max-width: 380px) {
   .director-panel.is-home .home-chips { grid-template-columns: 1fr; }

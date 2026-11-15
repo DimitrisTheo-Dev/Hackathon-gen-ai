@@ -4,7 +4,9 @@ import { audit, requireHuman, requireScope, type Ctx, type EngineDeps } from "./
 import { EngineError, StoreConflict } from "./errors.js";
 import type { Publisher } from "./schedule.js";
 import { bufferProvider } from "./socials-buffer.js";
+import { humanlikeProvider } from "./socials-humanlike.js";
 import { instagramProvider } from "./socials-instagram.js";
+import { tiktokProvider } from "./socials-tiktok.js";
 import type { Row } from "./store.js";
 import { parse } from "./studio.js";
 
@@ -12,7 +14,7 @@ import { parse } from "./studio.js";
  * Social accounts, served under /v1/socials. Three lists drive everything here, and each grows by one entry:
  *
  *   SOCIAL_PLATFORMS   where content and conversations happen (TikTok, Instagram, ...)
- *   socialProviders    how a platform is reached: through Buffer, or directly (Instagram so far)
+ *   socialProviders    how a platform is reached: through Buffer, through Humanlike as a partner, or directly (Instagram, TikTok)
  *   SOCIAL_EVENT_TYPES what can happen on an account (socials-events.ts)
  *
  * A connected account is one row in `provider_connections`. It names its platform and the provider it was
@@ -50,6 +52,9 @@ export interface PublishInput {
   /** Stable per publish job, for providers that accept an idempotency key. */
   attemptKey: string;
   mediaUrl: string;
+  /** The approved file's type and length, where the store knows them. */
+  mediaMime?: string;
+  mediaDurationSeconds?: number | null;
   /** The approved copy: caption, title, visibility, aiDisclosure. */
   payload: Row;
   scheduledAt: string;
@@ -69,6 +74,8 @@ export interface PostStatus {
  *
  * A provider is connected in one of two ways: a person pastes credentials for a service that already holds their
  * accounts (`listAccounts`, Buffer), or signs in to the platform itself and allows this deployment's app (`signIn`).
+ * A credentials provider may also make the credentials itself (`provision`, Humanlike with a partner login), when
+ * the person connects it without pasting any.
  */
 export interface SocialProvider<Credentials = any> {
   id: string;
@@ -77,6 +84,12 @@ export interface SocialProvider<Credentials = any> {
   platforms: SocialPlatform[];
   /** The credentials kept for an account. Stored encrypted, never returned. For `listAccounts`, also what the person supplies. */
   credentialsSchema: z.ZodType<Credentials>;
+  /** Credentials this deployment makes for the workspace itself, used when the person connects with an empty body. */
+  provision?: {
+    /** False: this deployment cannot make them, so they must be pasted. */
+    available(deps: EngineDeps): boolean;
+    make(deps: EngineDeps, workspace: { id: string; name: string }): Promise<Credentials>;
+  };
   /** Checks pasted credentials with the provider and lists the accounts they reach. */
   listAccounts?(deps: EngineDeps, credentials: Credentials): Promise<ProviderAccount[]>;
   signIn?: {
@@ -94,7 +107,9 @@ export interface SocialProvider<Credentials = any> {
 }
 export const socialProviders: Record<string, SocialProvider> = {
   [bufferProvider.id]: bufferProvider,
+  [humanlikeProvider.id]: humanlikeProvider,
   [instagramProvider.id]: instagramProvider,
+  [tiktokProvider.id]: tiktokProvider,
 };
 
 /* ───────────────────────── stored credentials ───────────────────────── */
@@ -181,6 +196,8 @@ export async function listSocials(deps: EngineDeps, ctx: Ctx) {
       platforms: provider.platforms,
       // How a person connects it: by pasting credentials, or by signing in to the platform.
       connect: provider.signIn ? ("sign_in" as const) : ("credentials" as const),
+      // True when an empty `connect` body is enough: this deployment makes the credentials (Humanlike's partner login).
+      ...(provider.provision ? { provisioned: provider.provision.available(deps) } : {}),
       available: usable(deps, provider),
       connected: accounts.some((row) => row.provider === provider.id),
     })),
@@ -273,6 +290,7 @@ function readState(deps: EngineDeps, state: string): { org: string; user: string
 /**
  * POST /v1/socials/providers/:provider/connect.
  * A provider with pasted credentials (Buffer: `{ apiKey }`) is connected at once and answers with its accounts.
+ * One that can make its own credentials here (Humanlike) takes an empty body instead.
  * A provider the person signs in to answers `{ authorizeUrl }`: send them there, and they return to the studio.
  */
 export async function connectSocialProvider(deps: EngineDeps, ctx: Ctx, providerId: string, raw: unknown) {
@@ -285,10 +303,18 @@ export async function connectSocialProvider(deps: EngineDeps, ctx: Ctx, provider
     const payload = b64(Buffer.from(JSON.stringify({ org: ctx.org.id, user: (ctx.principal as { userId: string }).userId, provider: provider.id, expires: deps.now().getTime() + SIGN_IN_MINUTES * 60_000, nonce: b64(randomBytes(12)) })));
     return { provider: provider.id, authorizeUrl: provider.signIn.authorizeUrl(deps, { redirectUri, state: `${payload}.${b64(stateSignature(key, payload))}` })! };
   }
-  const credentials = parse(provider.credentialsSchema, raw);
+  const credentials = await credentialsFor(deps, ctx, provider, raw);
   const result = await saveAccounts(deps, ctx, provider, credentials, await accountsFrom(deps, provider, credentials));
   await audit(deps, ctx, { action: `Connected ${provider.label}`, objectId: provider.id, outcome: `${result.accounts.filter((account) => account.state === "connected").length} account(s) available` });
   return result;
+}
+
+/** What the person pasted; or, when they pasted nothing and the provider makes credentials here, new ones for this workspace. */
+async function credentialsFor(deps: EngineDeps, ctx: Ctx, provider: SocialProvider, raw: unknown) {
+  const empty = raw === undefined || raw === null || (typeof raw === "object" && !Array.isArray(raw) && Object.keys(raw).length === 0);
+  if (!empty || !provider.provision) return parse(provider.credentialsSchema, raw);
+  if (!provider.provision.available(deps)) throw new EngineError("validation_error", `Paste your ${provider.label} key to connect it. This deployment cannot make one for you.`);
+  return provider.provision.make(deps, { id: ctx.org.id, name: String(ctx.org.name ?? "") });
 }
 
 /**
@@ -426,15 +452,25 @@ export function accountPublisher(deps: EngineDeps, account: Row | null | undefin
   const provider = socialProviders[account.provider];
   const key = deps.config.socials.credentialKey;
   if (!key || !provider.platforms.includes(account.platform)) return null;
-  const credentials = () => parse(provider.credentialsSchema, open(key, account));
+  // Credentials that run out are renewed before they are used (TikTok's last a day; the scheduler tick may be daily).
+  const credentials = async () => {
+    const saved = parse(provider.credentialsSchema, open(key, account));
+    const renewed = provider.refresh ? await provider.refresh(deps, saved) : null;
+    if (!renewed) return saved;
+    const sealed = seal(key, account.org_id, provider.id, renewed);
+    await deps.store.update("provider_connections", { id: account.id, org_id: account.org_id }, { credentials_ciphertext: sealed, updated_at: deps.now().toISOString() });
+    // A later check through this same publisher opens the renewed ones.
+    account.credentials_ciphertext = sealed;
+    return renewed;
+  };
   const { postStatus } = provider;
   return {
     // The scheduler holds the post until its approved time and hands it over then.
     schedulesNatively: false,
-    publish: (input) => provider.publish(deps, { ...input, credentials: credentials(), account }),
+    publish: async (input) => provider.publish(deps, { ...input, credentials: await credentials(), account }),
     verify: postStatus
       ? async ({ providerPostId }) => {
-          const status = await postStatus.call(provider, deps, { credentials: credentials(), account, providerPostId });
+          const status = await postStatus.call(provider, deps, { credentials: await credentials(), account, providerPostId });
           const publishedAt = status.publishedAt && !Number.isNaN(Date.parse(status.publishedAt)) ? new Date(status.publishedAt).toISOString() : null;
           // A post the provider has not settled stays submitted: it is not guessed either way.
           return {

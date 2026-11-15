@@ -5,7 +5,9 @@ import { loadConfig } from "../packages/engine/src/config";
 import { handleEngineRequest, type HttpDeps } from "../packages/engine/src/http";
 import { processDuePublishJobs, verifySubmittedPublishJobs } from "../packages/engine/src/schedule";
 import { signSocialWebhook, webhookAdapters } from "../packages/engine/src/socials-events";
+import { humanlikePostId } from "../packages/engine/src/socials-humanlike";
 import { instagramTiming } from "../packages/engine/src/socials-instagram";
+import { tiktokChunks, tiktokTiming } from "../packages/engine/src/socials-tiktok";
 import { MemoryStore } from "../packages/engine/src/store-memory";
 
 /** /v1/socials on the real engine, with an in-memory store and a stand-in for Buffer's GraphQL API. "user:<id>" stands in for a verified session. */
@@ -119,10 +121,167 @@ function instagram() {
   return { state, fetch };
 }
 
+/** A Humanlike workspace key, and this deployment's partner login at Humanlike. */
+const HUMANLIKE_KEY = `hlpk_${"k".repeat(43)}`;
+const PARTNER = { HUMANLIKE_PARTNER_CLIENT_ID: `hlpc_${"0a".repeat(12)}`, HUMANLIKE_PARTNER_CLIENT_SECRET: `hlps_${"p".repeat(43)}` };
+
+/** A stand-in for Humanlike's partner API (Humanlike-node plugins/partners and plugins/integrations/content), in its shapes. */
+function humanlike() {
+  const state = {
+    keys: new Set([HUMANLIKE_KEY]),
+    /** Humanlike workspaces made through the partner login: the address they are known by → their current key. */
+    tenants: new Map<string, { name: string | undefined; key: string }>(),
+    accounts: {
+      tiktok: [{ id: "tok-1", provider: "tiktok", name: "@faceful" }],
+      instagram: [{ id: "ig-1", provider: "instagram", name: "faceful.studio", picture: "https://cdn.example/ig.jpg" }],
+      youtube: [{ id: "yt-1", provider: "youtube", name: "Faceful" }],
+      facebook: [{ id: "fb-1", provider: "facebook", name: "Faceful Page" }],
+    } as Record<string, Array<Record<string, string>>>,
+    creator: { privacy_level_options: ["PUBLIC_TO_EVERYONE", "SELF_ONLY"], max_video_post_duration_sec: 600 } as Record<string, unknown>,
+    posts: new Map<string, Record<string, any>>(),
+    uploads: new Map<string, Uint8Array>(),
+    requests: [] as Array<{ path: string; key: string | null; body: any }>,
+    /** "network": nothing arrives. "lost": the save lands, but its answer never comes back. */
+    fail: null as null | "network" | "lost",
+  };
+  let made = 0;
+  const fetch = (async (url: unknown, init?: RequestInit) => {
+    const target = new URL(String(url));
+    // The approved video, read from storage, and Humanlike's presigned upload into its own storage.
+    if (target.hostname === "media.test") return new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "video/mp4" } });
+    if (target.hostname === "r2.humanlike.test") {
+      assert.equal(init?.method, "PUT");
+      state.uploads.set(target.pathname.slice(1), new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()));
+      return new Response(null, { status: 200 });
+    }
+    assert.equal(target.origin, "https://api.humanlike.co");
+    const headers = new Headers(init?.headers);
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const key = headers.get("x-humanlike-key");
+    state.requests.push({ path: target.pathname, key, body });
+    if (state.fail === "network") throw new Error("socket hang up");
+    const refuse = (status: number, error: string, code?: string) => Response.json({ success: false, error, ...(code ? { code } : {}) }, { status });
+    if (target.pathname === "/partners/tenants") {
+      if (headers.get("x-partner-client") !== PARTNER.HUMANLIKE_PARTNER_CLIENT_ID || headers.get("authorization") !== `Bearer ${PARTNER.HUMANLIKE_PARTNER_CLIENT_SECRET}`) return refuse(401, "Invalid partner client id or secret", "invalid_partner_client");
+      const existing = state.tenants.get(body.email);
+      if (existing && !body.rotate) return Response.json({ company_id: "company-1", system_user_id: "system-1", created: false });
+      if (existing) state.keys.delete(existing.key);
+      const fresh = `hlpk_${String(++made).padStart(43, "t")}`;
+      state.keys.add(fresh);
+      state.tenants.set(body.email, { name: body.name, key: fresh });
+      return Response.json({ company_id: "company-1", system_user_id: "system-1", created: !existing, api_key: fresh, key_prefix: fresh.slice(0, 9) });
+    }
+    if (!key || !state.keys.has(key)) return refuse(401, "Invalid partner key", "invalid_partner_key");
+    if (target.pathname === "/integrations/content/accounts") return Response.json({ success: true, accounts: state.accounts });
+    if (target.pathname === "/integrations/tiktok/creator-info") {
+      assert.equal(body.token_id, "tok-1");
+      return Response.json({ success: true, data: state.creator });
+    }
+    if (target.pathname === "/integrations/content/upload") {
+      const stored = `company-1/${body.folder}/${crypto.randomUUID()}.mp4`;
+      return Response.json({ success: true, key: stored, uploadUrl: `https://r2.humanlike.test/${stored}`, kind: "video", url: `https://r2.humanlike.test/${stored}?read` });
+    }
+    if (target.pathname === "/integrations/content/save") {
+      const post = body.post;
+      const existing = state.posts.get(post.id);
+      if (existing?.status === "publishing") return refuse(409, "This post is being published right now. Wait a minute, then edit it.");
+      if (existing?.status === "published") return refuse(409, "This post was published while you were editing. Your copy was refreshed.");
+      for (const [platform, tokenId] of Object.entries(post.accounts ?? {}))
+        if (!state.accounts[platform]?.some((account) => account.id === tokenId)) return refuse(400, `That ${platform} account is disconnected or not shared with you`);
+      state.posts.set(post.id, { ...post, status: post.status, results: existing?.results ?? {} });
+      if (state.fail === "lost") throw new Error("socket hang up");
+      return Response.json({ success: true, post: state.posts.get(post.id) });
+    }
+    if (target.pathname === "/integrations/content/list") return Response.json({ success: true, posts: [...state.posts.values()] });
+    return refuse(403, "Partner keys cannot be used on this route", "partner_route_denied");
+  }) as typeof globalThis.fetch;
+  return { state, fetch };
+}
+
+/** This deployment's own TikTok app, as the TikTok developer portal shows it. */
+const TIKTOK_LOGIN = { ...switchedOn, TIKTOK_CLIENT_KEY: "awfaceful0test", TIKTOK_CLIENT_SECRET: "tiktok-client-secret", TIKTOK_LOGIN_SCOPES: "user.info.basic,user.info.profile,video.publish" };
+
+/** A stand-in for TikTok's Login Kit and Content Posting API, answering in the shapes TikTok's documentation shows. */
+function tiktok() {
+  const state = {
+    /** One-time codes waiting to be exchanged, as if a person had just allowed access. */
+    codes: new Set(["tt-code-1"]),
+    access: new Set<string>(),
+    refresh: new Set<string>(),
+    issued: 0,
+    /** The app has not been audited yet: only private posts are taken. */
+    audited: false,
+    creator: { creator_username: "faceful.studio", privacy_level_options: ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"], comment_disabled: false, duet_disabled: false, stitch_disabled: false, max_video_post_duration_sec: 600 } as Record<string, unknown>,
+    /** How many status checks a new post stays PROCESSING_UPLOAD for. */
+    processing: 0,
+    publishes: new Map<string, { info: any; source: any; received: number; checks: number; status: string }>(),
+    requests: [] as Array<{ path: string; token: string | null; body: any }>,
+  };
+  const fail = (status: number, code: string, message = code) => Response.json({ data: {}, error: { code, message, log_id: "log-1" } }, { status });
+  const ok = (data: unknown) => Response.json({ data, error: { code: "ok", message: "", log_id: "log-1" } });
+  const issue = (openId = "open-1") => {
+    const n = ++state.issued;
+    state.access.add(`tt-access-${n}`);
+    state.refresh.add(`tt-refresh-${n}`);
+    return Response.json({ access_token: `tt-access-${n}`, expires_in: 86400, open_id: openId, refresh_expires_in: 31536000, refresh_token: `tt-refresh-${n}`, scope: "user.info.basic,user.info.profile,video.publish", token_type: "Bearer" });
+  };
+  const fetch = (async (url: unknown, init?: RequestInit) => {
+    const target = new URL(String(url));
+    const token = new Headers(init?.headers).get("authorization")?.replace(/^Bearer /, "") ?? null;
+    if (target.hostname === "open-upload.tiktokapis.com") {
+      const publish = state.publishes.get(target.searchParams.get("upload_id")!)!;
+      const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(new Headers(init?.headers).get("content-range") ?? "")!;
+      const piece = new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer());
+      assert.equal(piece.byteLength, Number(range[2]) - Number(range[1]) + 1);
+      state.requests.push({ path: "upload", token: null, body: range[0] });
+      publish.received += piece.byteLength;
+      if (publish.received < publish.source.video_size) return new Response(null, { status: 206 });
+      publish.status = "PROCESSING_UPLOAD";
+      return new Response(null, { status: 201 });
+    }
+    const body = init?.body ? (target.pathname === "/v2/oauth/token/" ? Object.fromEntries(new URLSearchParams(String(init.body))) : JSON.parse(String(init.body))) : null;
+    state.requests.push({ path: target.pathname, token, body });
+    if (target.pathname === "/v2/oauth/token/") {
+      assert.deepEqual([body.client_key, body.client_secret], ["awfaceful0test", "tiktok-client-secret"]);
+      if (body.grant_type === "authorization_code" && state.codes.delete(body.code)) {
+        assert.equal(body.redirect_uri, `${BASE}/v1/socials/providers/tiktok/callback`);
+        return issue();
+      }
+      if (body.grant_type === "refresh_token" && state.refresh.has(body.refresh_token)) return issue();
+      return Response.json({ error: "invalid_grant", error_description: "Authorization code or refresh token is expired or invalid.", log_id: "log-1" }, { status: 400 });
+    }
+    if (!token || !state.access.has(token)) return fail(401, "access_token_invalid", "The access token is invalid or not found in the request.");
+    if (target.pathname === "/v2/user/info/") {
+      assert.equal(target.searchParams.get("fields"), "open_id,display_name,avatar_url,username");
+      return ok({ user: { open_id: "open-1", display_name: "Faceful", avatar_url: "https://p16.tiktokcdn.com/a.jpeg", username: "faceful.studio" } });
+    }
+    if (target.pathname === "/v2/post/publish/creator_info/query/") return ok(state.creator);
+    if (target.pathname === "/v2/post/publish/video/init/") {
+      if (!state.audited && body.post_info.privacy_level !== "SELF_ONLY") return fail(403, "unaudited_client_can_only_post_to_private_accounts", "Please review our integration guidelines.");
+      const id = `v_pub_file~v2-1.${state.publishes.size + 1}`;
+      state.publishes.set(id, { info: body.post_info, source: body.source_info, received: 0, checks: 0, status: "PROCESSING_UPLOAD" });
+      return ok({ publish_id: id, upload_url: `https://open-upload.tiktokapis.com/video/?upload_id=${encodeURIComponent(id)}&upload_token=t` });
+    }
+    if (target.pathname === "/v2/post/publish/status/fetch/") {
+      const publish = state.publishes.get(body.publish_id);
+      if (!publish) return fail(400, "invalid_params", "publish_id is invalid");
+      if (publish.received >= publish.source.video_size && ++publish.checks > state.processing) publish.status = "PUBLISH_COMPLETE";
+      const visible = publish.status === "PUBLISH_COMPLETE" && publish.info.privacy_level === "PUBLIC_TO_EVERYONE";
+      // A 64-bit number, as TikTok sends it: too long for a JavaScript number.
+      const answer = JSON.stringify({ data: { status: publish.status, uploaded_bytes: publish.received, publicaly_available_post_id: visible ? ["ID"] : [] }, error: { code: "ok", message: "", log_id: "log-1" } });
+      return new Response(answer.replace('["ID"]', "[7300000000000000001]"), { headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`unexpected TikTok request: ${target.pathname}`);
+  }) as typeof globalThis.fetch;
+  return { state, fetch };
+}
+
 function engine(env: Record<string, string> = switchedOn) {
   let clock = Date.parse("2026-11-15T10:00:00.000Z");
   const remote = buffer();
   const meta = instagram();
+  const partner = humanlike();
+  const tok = tiktok();
   const store = new MemoryStore();
   // Rate-limit windows follow the test's clock, as the database's would follow real time.
   store.clock = () => new Date(clock);
@@ -130,6 +289,8 @@ function engine(env: Record<string, string> = switchedOn) {
   const hub: URLSearchParams[] = [];
   const fetch = (async (url: unknown, init?: RequestInit) => {
     if (/^https:\/\/(api|graph)\.instagram\.com\//.test(String(url))) return meta.fetch(url as string, init);
+    if (/^https:\/\/(api\.humanlike\.co|r2\.humanlike\.test|media\.test)\//.test(String(url))) return partner.fetch(url as string, init);
+    if (/^https:\/\/open(-upload)?\.tiktokapis\.com\//.test(String(url))) return tok.fetch(url as string, init);
     if (String(url) !== "https://pubsubhubbub.appspot.com/subscribe") return remote.fetch(url as string, init);
     hub.push(new URLSearchParams(String(init?.body)));
     return new Response(null, { status: 202 });
@@ -196,7 +357,7 @@ function engine(env: Record<string, string> = switchedOn) {
   /** A delivery in a platform's own format: its exact bytes and its own signature header. */
   const send = (platform: string, raw: string, headers: Record<string, string>) => call(`/v1/socials/${platform}/webhook`, { method: "POST", raw, headers });
   const activity = async (query = "") => (await call(`/v1/socials/events${query}`, { as: "user:u1" })).body.events as any[];
-  return { deps, store, remote, meta, hub, call, connect, signIn, due, deliver, own, send, activity, advance: (minutes: number) => (clock += minutes * 60_000) };
+  return { deps, store, remote, meta, partner, tok, hub, call, connect, signIn, due, deliver, own, send, activity, advance: (minutes: number) => (clock += minutes * 60_000) };
 }
 
 test("the catalog lists every platform and provider, and nothing connects until the deployment switches it on", async () => {
@@ -209,10 +370,12 @@ test("the catalog lists every platform and provider, and nothing connects until 
   assert.deepEqual([whatsapp.kind, whatsapp.providers, whatsapp.accounts], ["messaging", [], []]);
   const instagram = catalog.body.platforms.find((platform: any) => platform.id === "instagram");
   // Instagram can be reached two ways: through Buffer, or directly by signing in to Instagram.
-  assert.deepEqual([instagram.kind, instagram.providers, instagram.webhookUrl], ["social", ["buffer", "instagram"], `${BASE}/v1/socials/instagram/webhook`]);
+  assert.deepEqual([instagram.kind, instagram.providers, instagram.webhookUrl], ["social", ["buffer", "humanlike", "instagram"], `${BASE}/v1/socials/instagram/webhook`]);
   assert.deepEqual(catalog.body.providers, [
     { id: "buffer", label: "Buffer", platforms: ["tiktok", "instagram", "linkedin", "youtube"], connect: "credentials", available: false, connected: false },
+    { id: "humanlike", label: "Humanlike", platforms: ["tiktok", "instagram"], connect: "credentials", provisioned: false, available: false, connected: false },
     { id: "instagram", label: "Instagram", platforms: ["instagram"], connect: "sign_in", available: false, connected: false },
+    { id: "tiktok", label: "TikTok", platforms: ["tiktok"], connect: "sign_in", available: false, connected: false },
   ]);
 
   assert.equal((await call("/v1/socials/linkedin", { as: "user:u1" })).body.label, "LinkedIn");
@@ -224,9 +387,9 @@ test("the catalog lists every platform and provider, and nothing connects until 
   const off = (await call("/v1/health")).body;
   assert.deepEqual([off.publishing.adapters, off.socials], [[], { connections: false, webhooks: false, nativeWebhooks: [] }]);
   const on = (await engine().call("/v1/health")).body;
-  assert.deepEqual([on.publishing.adapters, on.socials], [["buffer"], { connections: true, webhooks: true, nativeWebhooks: [] }]);
+  assert.deepEqual([on.publishing.adapters, on.socials], [["buffer", "humanlike"], { connections: true, webhooks: true, nativeWebhooks: [] }]);
   // The direct Instagram connection counts as a way to post only once this deployment has its own Instagram app.
-  assert.deepEqual((await engine(LOGIN).call("/v1/health")).body.publishing.adapters, ["buffer", "instagram"]);
+  assert.deepEqual((await engine(LOGIN).call("/v1/health")).body.publishing.adapters, ["buffer", "humanlike", "instagram"]);
   // Each platform's own format is switched on by that platform's credentials, and shows on its entry.
   const native = engine(NATIVE);
   assert.deepEqual((await native.call("/v1/health")).body.socials.nativeWebhooks, ["instagram", "whatsapp", "tiktok", "linkedin", "youtube"]);
@@ -808,4 +971,266 @@ test("the scheduler keeps the 60-day sign-in alive, and marks the account expire
   assert.deepEqual(await tick(), { refreshed: 0, expired: 1, failed: 0 });
   assert.equal((await saved()).state, "expired");
   assert.deepEqual(await tick(), { refreshed: 0, expired: 0, failed: 0 });
+});
+
+test("connecting Humanlike: a pasted workspace key, or nothing at all where the deployment holds a partner login; only TikTok and Instagram are kept", async () => {
+  const { call, store, partner } = engine();
+  const catalog = await call("/v1/socials", { as: "user:u1" });
+  assert.deepEqual(catalog.body.providers.find((provider: any) => provider.id === "humanlike"), { id: "humanlike", label: "Humanlike", platforms: ["tiktok", "instagram"], connect: "credentials", provisioned: false, available: true, connected: false });
+  // Without a partner login there is nothing to make a key with, so an empty body is refused, and so are a malformed key and a wrong one.
+  const empty = await call("/v1/socials/providers/humanlike/connect", { as: "user:u1", method: "POST" });
+  assert.deepEqual([empty.status, empty.body.error.code, /Paste your Humanlike key/.test(empty.body.error.message)], [400, "validation_error", true]);
+  assert.equal((await call("/v1/socials/providers/humanlike/connect", { as: "user:u1", method: "POST", body: { apiKey: "hk_live_not-a-workspace-key" } })).status, 400);
+  const wrong = await call("/v1/socials/providers/humanlike/connect", { as: "user:u1", method: "POST", body: { apiKey: `hlpk_${"w".repeat(43)}` } });
+  assert.deepEqual([wrong.status, wrong.body.error.code], [403, "forbidden"]);
+  assert.equal(partner.state.requests.filter((request) => request.path === "/partners/tenants").length, 0);
+
+  const connected = await call("/v1/socials/providers/humanlike/connect", { as: "user:u1", method: "POST", body: { apiKey: HUMANLIKE_KEY } });
+  assert.equal(connected.status, 200, connected.text);
+  // YouTube and Facebook accounts in the Humanlike workspace are left out: Faceful posts only TikTok and Instagram through it.
+  assert.deepEqual(connected.body.accounts.map((account: any) => [account.platform, account.provider, account.state, account.displayName]), [
+    ["tiktok", "humanlike", "connected", "@faceful"],
+    ["instagram", "humanlike", "connected", "faceful.studio"],
+  ]);
+  const rows = await store.select("provider_connections", {});
+  assert.deepEqual(rows.map((row) => [row.platform, row.provider_account_id, row.external_account_id]), [["tiktok", "tok-1", "humanlike:tok-1"], ["instagram", "ig-1", "humanlike:ig-1"]]);
+  assert.ok(!connected.text.includes(HUMANLIKE_KEY) && !JSON.stringify(rows).includes(HUMANLIKE_KEY), "the key is never returned or stored in the clear");
+  assert.ok(partner.state.requests.every((request) => request.key === null || request.key === HUMANLIKE_KEY || request.key === `hlpk_${"w".repeat(43)}`));
+
+  // With the deployment's partner login, an empty body makes this workspace's own Humanlike workspace and keeps its key.
+  const withLogin = engine({ ...switchedOn, ...PARTNER });
+  assert.equal((await withLogin.call("/v1/socials", { as: "user:u1" })).body.providers.find((provider: any) => provider.id === "humanlike").provisioned, true);
+  const made = await withLogin.call("/v1/socials/providers/humanlike/connect", { as: "user:u1", method: "POST" });
+  assert.equal(made.status, 200, made.text);
+  assert.deepEqual(made.body.accounts.map((account: any) => account.platform), ["tiktok", "instagram"]);
+  const [org] = await withLogin.store.select("organizations", { personal_owner_id: "u1" });
+  const [provisioning] = withLogin.partner.state.requests.filter((request) => request.path === "/partners/tenants");
+  assert.deepEqual([provisioning.body.email, provisioning.body.rotate, provisioning.key], [`faceful-${org.id}@faceful.test`, true, null]);
+  const firstKey = withLogin.partner.state.tenants.get(`faceful-${org.id}@faceful.test`)!.key;
+  // Connecting again takes a fresh key: the old one stops working at Humanlike and every row is sealed with the new one.
+  const before = (await withLogin.store.select("provider_connections", {})).map((row) => row.credentials_ciphertext);
+  assert.equal((await withLogin.call("/v1/socials/providers/humanlike/connect", { as: "user:u1", method: "POST" })).status, 200);
+  assert.ok(!withLogin.partner.state.keys.has(firstKey));
+  const after = await withLogin.store.select("provider_connections", {});
+  assert.equal(after.length, 2);
+  assert.ok(after.every((row) => !before.includes(row.credentials_ciphertext)));
+  const synced = await withLogin.call("/v1/socials/providers/humanlike/sync", { as: "user:u1", method: "POST" });
+  assert.equal(synced.status, 200, synced.text);
+  assert.equal(withLogin.partner.state.requests.at(-1)!.key, withLogin.partner.state.tenants.get(`faceful-${org.id}@faceful.test`)!.key);
+  // Another workspace gets a Humanlike workspace of its own.
+  await withLogin.call("/v1/socials/providers/humanlike/connect", { as: "user:u2", method: "POST" });
+  assert.equal(withLogin.partner.state.tenants.size, 2);
+});
+
+test("a post through Humanlike is saved once under an id made from the job, sent by Humanlike, and published only when Humanlike reports it", async () => {
+  const { deps, store, partner, call, advance } = engine();
+  const connected = await call("/v1/socials/providers/humanlike/connect", { as: "user:u1", method: "POST", body: { apiKey: HUMANLIKE_KEY } });
+  const accounts = connected.body.accounts as Array<{ id: string; platform: string }>;
+  const [org] = await store.select("organizations", {});
+  const item = { id: crypto.randomUUID(), org_id: org.id, approved_revision: 3 };
+  const asset = { id: crypto.randomUUID(), org_id: org.id, sha256: "f".repeat(64), storage_path: `orgs/${org.id}/video.mp4`, mime: "video/mp4", duration_seconds: 12 };
+  await store.insert("content_items", item);
+  await store.insert("media_assets", asset);
+  await store.media.put(asset.storage_path, new Uint8Array([1, 2, 3]), "video/mp4");
+  let minute = 0;
+  const schedule = async (platform: "instagram" | "tiktok", payload: Record<string, unknown> = {}) => {
+    const job = { id: crypto.randomUUID(), org_id: org.id, item_id: item.id, revision: 3, media_asset_id: asset.id, platform, account_id: accounts.find((account) => account.platform === platform)!.id, scheduled_at: new Date(Date.parse("2026-11-15T09:00:00.000Z") + minute++ * 60_000).toISOString(), payload: { caption: "Hello from Faceful", title: "Launch", visibility: "public", aiDisclosure: true, assetHash: asset.sha256, ...payload }, state: "scheduled", attempt: 0, next_attempt_at: null, provider_post_id: null, published_url: null, published_at: null, error: null, updated_at: deps.now().toISOString() };
+    await store.insert("publish_jobs", job);
+    return { id: job.id, read: async () => (await store.select("publish_jobs", { id: job.id }))[0] };
+  };
+  const saves = () => partner.state.requests.filter((request) => request.path === "/integrations/content/save");
+
+  // Instagram: the Reel goes to Humanlike due now, with the AI disclosure, fetched from the signed link.
+  const reel = await schedule("instagram");
+  assert.deepEqual(await processDuePublishJobs(deps), { processed: 1, submitted: 1, failed: 0, retried: 0, unknown: 0, verified: 0, swept: 0 });
+  const { post } = saves()[0].body;
+  assert.equal(post.id, humanlikePostId(reel.id));
+  assert.notEqual(post.id, reel.id, "Faceful's own job ids never reach Humanlike");
+  assert.deepEqual([post.type, post.status, post.scheduledFor, post.platforms, post.accounts, post.body, post.title], ["video", "scheduled", deps.now().toISOString(), ["instagram"], { instagram: "ig-1" }, "Hello from Faceful", "Launch"]);
+  assert.match(post.media[0].url, /^https:\/\/media\.test\//);
+  assert.deepEqual(post.instagramOptions, { is_ai_generated: true });
+  assert.deepEqual([(await reel.read()).state, (await reel.read()).provider_post_id], ["submitted", post.id]);
+
+  // Still waiting for Humanlike's publisher: nothing is claimed. Once Instagram's result is in, the job is published.
+  assert.deepEqual(await verifySubmittedPublishJobs(deps), { checked: 1, verified: 0, failed: 0 });
+  partner.state.posts.get(post.id)!.results.instagram = { state: "published", post_id: "1789", link: "https://www.instagram.com/reel/abc/", at: "2026-11-15T10:00:40.000Z" };
+  assert.deepEqual(await verifySubmittedPublishJobs(deps), { checked: 1, verified: 1, failed: 0 });
+  const published = await reel.read();
+  assert.deepEqual([published.state, published.published_url, published.published_at], ["verified_published", "https://www.instagram.com/reel/abc/", "2026-11-15T10:00:40.000Z"]);
+
+  // Instagram through Humanlike posts publicly only, so a private post is refused before anything is sent.
+  const hidden = await schedule("instagram", { visibility: "private" });
+  await processDuePublishJobs(deps);
+  assert.deepEqual([saves().length, (await hidden.read()).state, /only post publicly/.test((await hidden.read()).error)], [1, "failed", true]);
+
+  // A save whose answer is lost is retried, and finds the same post instead of making a second one. Once Humanlike is
+  // already sending it, it answers 409, which counts as handed over.
+  partner.state.fail = "lost";
+  const lost = await schedule("instagram");
+  assert.deepEqual(await processDuePublishJobs(deps), { processed: 1, submitted: 0, failed: 0, retried: 1, unknown: 0, verified: 0, swept: 0 });
+  partner.state.fail = null;
+  partner.state.posts.get(humanlikePostId(lost.id))!.status = "publishing";
+  advance(2);
+  assert.deepEqual(await processDuePublishJobs(deps), { processed: 1, submitted: 1, failed: 0, retried: 0, unknown: 0, verified: 0, swept: 0 });
+  assert.deepEqual([partner.state.posts.size, (await lost.read()).state, (await lost.read()).provider_post_id], [2, "submitted", humanlikePostId(lost.id)]);
+  partner.state.posts.get(humanlikePostId(lost.id))!.results.instagram = { state: "failed", error: "The media could not be fetched", at: "2026-11-15T10:03:00.000Z" };
+  await verifySubmittedPublishJobs(deps);
+  assert.deepEqual([(await lost.read()).state, /refused this post through Humanlike: The media could not be fetched/.test((await lost.read()).error)], ["failed", true]);
+
+  // TikTok: an AI-disclosed post is refused (Humanlike cannot set TikTok's AI label yet), and so is an unlisted one.
+  const labelled = await schedule("tiktok");
+  const unlisted = await schedule("tiktok", { aiDisclosure: false, visibility: "unlisted" });
+  await processDuePublishJobs(deps);
+  assert.match((await labelled.read()).error, /AI-generated/);
+  assert.match((await unlisted.read()).error, /no unlisted posts/);
+  assert.equal(saves().length, 3);
+
+  // A TikTok the account cannot post at that visibility is refused after asking TikTok what it allows.
+  partner.state.creator = { privacy_level_options: ["SELF_ONLY"], max_video_post_duration_sec: 600 };
+  const publicOnly = await schedule("tiktok", { aiDisclosure: false });
+  await processDuePublishJobs(deps);
+  assert.deepEqual([(await publicOnly.read()).state, /cannot post publicly/.test((await publicOnly.read()).error)], ["failed", true]);
+
+  // Otherwise the video is copied into the Humanlike workspace and saved with Humanlike's checked TikTok choices.
+  partner.state.creator = { privacy_level_options: ["PUBLIC_TO_EVERYONE", "SELF_ONLY"], max_video_post_duration_sec: 600 };
+  const tiktok = await schedule("tiktok", { aiDisclosure: false });
+  assert.deepEqual(await processDuePublishJobs(deps), { processed: 1, submitted: 1, failed: 0, retried: 0, unknown: 0, verified: 0, swept: 0 });
+  const sent = saves().at(-1)!.body.post;
+  const [uploadedKey, bytes] = [...partner.state.uploads.entries()][0];
+  assert.deepEqual([...bytes], [1, 2, 3]);
+  assert.deepEqual(sent.media, [{ id: "faceful-video", kind: "video", name: "faceful.mp4", key: uploadedKey }]);
+  assert.deepEqual(sent.tiktokOptions, {
+    privacy: "PUBLIC_TO_EVERYONE",
+    allowComment: false,
+    allowDuet: false,
+    allowStitch: false,
+    commercial: false,
+    ownBrand: false,
+    brandedContent: false,
+    durationSeconds: 12,
+    // Exactly what Humanlike's tiktokPostOptions recomputes from the stored post before it sends anything.
+    consentFingerprint: JSON.stringify(["tok-1", "Hello from Faceful", [["faceful-video", "faceful.mp4"]], "PUBLIC_TO_EVERYONE", false, false, false, false, false, false]),
+  });
+  // A video TikTok leaves in the account's inbox is not a published post.
+  partner.state.posts.get(sent.id)!.results.tiktok = { state: "published", post_id: "v_pub_1", remote: "draft", at: "2026-11-15T10:10:00.000Z" };
+  await verifySubmittedPublishJobs(deps);
+  assert.deepEqual([(await tiktok.read()).state, /inbox/.test((await tiktok.read()).error)], ["failed", true]);
+});
+
+test("connecting TikTok directly: the person is sent to TikTok, and only they can complete the sign-in they started", async () => {
+  const off = engine();
+  const refused = await off.call("/v1/socials/providers/tiktok/connect", { as: "user:u1", method: "POST" });
+  assert.deepEqual([refused.status, refused.body.error.code], [503, "provider_unavailable"]);
+
+  const { call, store, tok } = engine(TIKTOK_LOGIN);
+  assert.deepEqual((await call("/v1/health")).body.publishing.adapters, ["buffer", "humanlike", "tiktok"]);
+  assert.deepEqual((await call("/v1/socials/tiktok", { as: "user:u1" })).body.providers, ["buffer", "humanlike", "tiktok"]);
+  const started = await call("/v1/socials/providers/tiktok/connect", { as: "user:u1", method: "POST" });
+  assert.equal(started.status, 200, started.text);
+  const authorize = new URL(started.body.authorizeUrl);
+  assert.equal(`${authorize.origin}${authorize.pathname}`, "https://www.tiktok.com/v2/auth/authorize/");
+  assert.deepEqual(
+    ["client_key", "response_type", "scope", "redirect_uri"].map((name) => authorize.searchParams.get(name)),
+    ["awfaceful0test", "code", "user.info.basic,user.info.profile,video.publish", `${BASE}/v1/socials/providers/tiktok/callback`],
+  );
+  const state = authorize.searchParams.get("state")!;
+
+  // TikTok sends the browser back with the code; the engine only passes it on to the studio page, after `#`.
+  const back = await call(`/v1/socials/providers/tiktok/callback?${new URLSearchParams({ code: "tt-code-1", scopes: "user.info.basic,video.publish", state })}`);
+  assert.equal(back.status, 302);
+  assert.equal(back.location, `${BASE}/studio/connect/tiktok#${new URLSearchParams({ grant: "tt-code-1", ticket: state })}`);
+  const declined = await call(`/v1/socials/providers/tiktok/callback?${new URLSearchParams({ error: "access_denied", error_description: "User cancelled", state })}`);
+  assert.equal(declined.location, `${BASE}/studio/connect/tiktok#problem=declined`);
+
+  // Someone else cannot complete it; the person who started it can, once.
+  assert.equal((await call("/v1/socials/providers/tiktok/complete", { as: "user:u2", method: "POST", body: { code: "tt-code-1", state } })).status, 403);
+  const done = await call("/v1/socials/providers/tiktok/complete", { as: "user:u1", method: "POST", body: { code: "tt-code-1", state } });
+  assert.equal(done.status, 200, done.text);
+  assert.deepEqual(done.body.accounts.map((account: any) => [account.platform, account.provider, account.displayName, account.profileUrl, account.state]), [["tiktok", "tiktok", "@faceful.studio", "https://www.tiktok.com/@faceful.studio", "connected"]]);
+  const [row] = await store.select("provider_connections", {});
+  assert.deepEqual([row.external_account_id, row.provider_account_id], ["open-1", "open-1"]);
+  assert.ok(!JSON.stringify(row).includes("tt-access-1") && !JSON.stringify(row).includes("tt-refresh-1"), "tokens are never stored in the clear");
+  // The code is good once.
+  const again = await call("/v1/socials/providers/tiktok/complete", { as: "user:u1", method: "POST", body: { code: "tt-code-1", state } });
+  assert.deepEqual([again.status, /did not accept this sign-in/.test(again.body.error.message)], [400, true]);
+  assert.equal(tok.state.requests.filter((request) => request.path === "/v2/user/info/").length, 1);
+});
+
+test("a TikTok video posted directly: asked about first, uploaded from the server, private until TikTok audits the app, and its sign-in renewed before it runs out", async () => {
+  const { deps, store, call, tok, advance } = engine(TIKTOK_LOGIN);
+  Object.assign(tiktokTiming, { pollMs: 0, polls: 2 });
+  const started = await call("/v1/socials/providers/tiktok/connect", { as: "user:u1", method: "POST" });
+  const state = new URL(started.body.authorizeUrl).searchParams.get("state")!;
+  const account = (await call("/v1/socials/providers/tiktok/complete", { as: "user:u1", method: "POST", body: { code: "tt-code-1", state } })).body.accounts[0];
+  const [org] = await store.select("organizations", {});
+  const item = { id: crypto.randomUUID(), org_id: org.id, approved_revision: 3 };
+  const asset = { id: crypto.randomUUID(), org_id: org.id, sha256: "f".repeat(64), storage_path: `orgs/${org.id}/video.mp4`, mime: "video/mp4", duration_seconds: 12 };
+  await store.insert("content_items", item);
+  await store.insert("media_assets", asset);
+  await store.media.put(asset.storage_path, new Uint8Array([1, 2, 3]), "video/mp4");
+  let minute = 0;
+  const schedule = async (payload: Record<string, unknown> = {}) => {
+    const job = { id: crypto.randomUUID(), org_id: org.id, item_id: item.id, revision: 3, media_asset_id: asset.id, platform: "tiktok", account_id: account.id, scheduled_at: new Date(Date.parse("2026-11-15T09:00:00.000Z") + minute++ * 60_000).toISOString(), payload: { caption: "Hello from Faceful #ai", title: "", visibility: "private", aiDisclosure: true, assetHash: asset.sha256, ...payload }, state: "scheduled", attempt: 0, next_attempt_at: null, provider_post_id: null, published_url: null, published_at: null, error: null, updated_at: deps.now().toISOString() };
+    await store.insert("publish_jobs", job);
+    return async () => (await store.select("publish_jobs", { id: job.id }))[0];
+  };
+  const paths = () => tok.state.requests.map((request) => request.path);
+
+  // Private: the account is asked first, the post started, the file sent in one piece, and TikTok confirms it.
+  const first = await schedule();
+  await processDuePublishJobs(deps);
+  assert.deepEqual(paths().slice(-4), ["/v2/post/publish/creator_info/query/", "/v2/post/publish/video/init/", "upload", "/v2/post/publish/status/fetch/"]);
+  const [publishId, publish] = [...tok.state.publishes.entries()][0];
+  assert.deepEqual(publish.info, { title: "Hello from Faceful #ai", privacy_level: "SELF_ONLY", disable_comment: true, disable_duet: true, disable_stitch: true, brand_content_toggle: false, brand_organic_toggle: false, is_aigc: true });
+  assert.deepEqual(publish.source, { source: "FILE_UPLOAD", video_size: 3, chunk_size: 3, total_chunk_count: 1 });
+  assert.equal(tok.state.requests.find((request) => request.path === "upload")!.body, "bytes 0-2/3");
+  const posted = await first();
+  // A private video has no address anyone else can open.
+  assert.deepEqual([posted.state, posted.provider_post_id, posted.published_url], ["verified_published", publishId, null]);
+
+  // Public: refused by TikTok until it audits the app, in words the person can act on. Nothing is uploaded.
+  const uploads = paths().filter((path) => path === "upload").length;
+  const loud = await schedule({ visibility: "public" });
+  await processDuePublishJobs(deps);
+  assert.deepEqual([(await loud()).state, /can only post privately, to a TikTok account that is set to private/.test((await loud()).error)], ["failed", true]);
+  const unlisted = await schedule({ visibility: "unlisted" });
+  await processDuePublishJobs(deps);
+  assert.match((await unlisted()).error, /no unlisted posts/);
+  assert.equal(paths().filter((path) => path === "upload").length, uploads);
+
+  // Once audited, a public post has its own address.
+  tok.state.audited = true;
+  const open = await schedule({ visibility: "public" });
+  await processDuePublishJobs(deps);
+  assert.deepEqual([(await open()).state, (await open()).published_url], ["verified_published", "https://www.tiktok.com/@faceful.studio/video/7300000000000000001"]);
+
+  // Still processing when the wait runs out: the post stays submitted, and a later check confirms it.
+  tok.state.processing = 4;
+  const slow = await schedule();
+  await processDuePublishJobs(deps);
+  assert.equal((await slow()).state, "submitted");
+  assert.deepEqual(await verifySubmittedPublishJobs(deps), { checked: 1, verified: 0, failed: 0 });
+  tok.state.processing = 0;
+  assert.deepEqual(await verifySubmittedPublishJobs(deps), { checked: 1, verified: 1, failed: 0 });
+
+  // A day later the 24-hour token has run out: it is renewed right before the post, and the renewed one is kept.
+  const sealed = (await store.select("provider_connections", { id: account.id }))[0].credentials_ciphertext;
+  advance(25 * 60);
+  const tomorrow = await schedule();
+  await processDuePublishJobs(deps);
+  const renewal = tok.state.requests.findIndex((request) => request.body?.grant_type === "refresh_token");
+  assert.ok(renewal >= 0 && renewal < tok.state.requests.length - 1 && tok.state.requests[renewal + 1].token === `tt-access-${tok.state.issued}`);
+  assert.equal((await tomorrow()).state, "verified_published");
+  assert.notEqual((await store.select("provider_connections", { id: account.id }))[0].credentials_ciphertext, sealed);
+
+  // Access withdrawn at TikTok: the renewal is refused, the post is not sent, and the account asks to be connected again.
+  tok.state.refresh.clear();
+  advance(25 * 60);
+  const withdrawn = await schedule();
+  await processDuePublishJobs(deps);
+  assert.deepEqual([(await withdrawn()).state, /Connect the TikTok account again/.test((await withdrawn()).error)], ["failed", true]);
+  assert.equal((await store.select("provider_connections", { id: account.id }))[0].state, "expired");
+
+  // TikTok's chunk rules: small files go whole, big ones in 10 MB pieces with the remainder in the last.
+  assert.deepEqual([tiktokChunks(3), tiktokChunks(64 * 1024 * 1024), tiktokChunks(105 * 1024 * 1024)], [{ chunkSize: 3, count: 1 }, { chunkSize: 64 * 1024 * 1024, count: 1 }, { chunkSize: 10 * 1024 * 1024, count: 10 }]);
 });

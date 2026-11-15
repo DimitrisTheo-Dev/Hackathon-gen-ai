@@ -7,6 +7,8 @@ import { useAutoGrow } from '../lib/use-auto-grow';
 import { agentSeenRecently, changedFields, handoffPrompt, withPreferences, writingDeclined, type DirectorAction, type DirectorEntry, type DirectorScope, type PromptPreferences } from './model';
 import { AgentHandoff } from './AgentHandoff';
 import { PromptCycle, PromptTokens } from './HomeComposer';
+import { routeHomeRequest } from './home-route';
+import type { ProjectStart } from '../create/settings';
 import { FormatPill, FormatStrip, FormatsContext, formatBrief, homeFormats, withFormat } from './HomeFormats';
 import { AttachmentPills, SourceTray, ViewLink } from './Sources';
 import { Preview } from '../components/ui';
@@ -14,7 +16,7 @@ import { planDirection, recentHistory, type DirectorTurn } from './planner';
 
 type Result=DirectorEntry['results'][string];
 type OpenTarget=NonNullable<DirectorTurnResult['open']>;
-type Props={instruction:string;setInstruction:(value:string)=>void;home?:boolean;focusOnMount?:boolean;onStart?:()=>void;onCreate?:()=>void;onShowContent?:()=>void;onInspect?:()=>void;onTurn:DirectorTurn;onCreated?:(campaign:Campaign,entry:DirectorEntry)=>void;onOpen?:(target:OpenTarget)=>void;onTemplates?:()=>void;onVersions?:()=>void;/** Opens Details on the presenter controls. */onPresenter?:()=>void;/** Switches the studio to Agents / Brand & sources in place; without it the links navigate. */onAgents?:()=>void;onSources?:()=>void;onBilling?:()=>void;/** Reports a real in-flight planning request, so the canvas can show it on the item. */onBusy?:(working:boolean)=>void;item:ContentItem;campaign:Campaign;context:StudioContext;entries:DirectorEntry[];syncError:string;onRecord:(entry:DirectorEntry)=>Promise<void>;onRetrySync:()=>Promise<void>;onExecute:(action:DirectorAction,key:string,reconcile?:boolean)=>Promise<Result>;onDetails:()=>void;busy:boolean;offline:boolean;dirty:boolean};
+type Props={instruction:string;setInstruction:(value:string)=>void;home?:boolean;focusOnMount?:boolean;onStart?:()=>void;onCreate?:()=>void;/** Opens the guided New project flow with the request and the composer's settings. "Create a video" and, from home, a request for one new video go there when it is given. */onNewProject?:(start:ProjectStart)=>void;onShowContent?:()=>void;onInspect?:()=>void;onTurn:DirectorTurn;onCreated?:(campaign:Campaign,entry:DirectorEntry)=>void;onOpen?:(target:OpenTarget)=>void;onTemplates?:()=>void;onVersions?:()=>void;/** Opens Details on the presenter controls. */onPresenter?:()=>void;/** Switches the studio to Agents / Brand & sources in place; without it the links navigate. */onAgents?:()=>void;onSources?:()=>void;onBilling?:()=>void;/** Reports a real in-flight planning request, so the canvas can show it on the item. */onBusy?:(working:boolean)=>void;item:ContentItem;campaign:Campaign;context:StudioContext;entries:DirectorEntry[];syncError:string;onRecord:(entry:DirectorEntry)=>Promise<void>;onRetrySync:()=>Promise<void>;onExecute:(action:DirectorAction,key:string,reconcile?:boolean)=>Promise<Result>;onDetails:()=>void;busy:boolean;offline:boolean;dirty:boolean};
 const PENDING='Preparing your request…';
 const actionTitle:Record<DirectorAction['kind'],string>={revise:'Update draft',render:'Render saved video',review_schedule:'Review schedule',checkout:'Upgrade with Stripe test checkout'};
 const actionLabel:Record<DirectorAction['kind'],string>={revise:'Apply changes',render:'Start render',review_schedule:'Open review',checkout:'Open Stripe test checkout'};
@@ -25,7 +27,7 @@ const starterIcon:Record<string,typeof Video>={'Create a video':Video,'Choose a 
 const count=(n:number,word:string)=>`${n} ${word}${n===1?'':'s'}`;
 function Thinking({children}:{children:string}){return <p className="director-working" role="status"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span>{children}</p>;}
 
-export function DirectorPanel({instruction,setInstruction,home=false,focusOnMount=false,onStart,onCreate,onShowContent,onInspect,onTurn,onCreated,onOpen,onTemplates,onVersions,onPresenter,onAgents,onSources,onBilling,onBusy,item,campaign,context,entries,syncError,onRecord,onRetrySync,onExecute,onDetails,busy,offline,dirty}:Props){
+export function DirectorPanel({instruction,setInstruction,home=false,focusOnMount=false,onStart,onCreate,onNewProject,onShowContent,onInspect,onTurn,onCreated,onOpen,onTemplates,onVersions,onPresenter,onAgents,onSources,onBilling,onBusy,item,campaign,context,entries,syncError,onRecord,onRetrySync,onExecute,onDetails,busy,offline,dirty}:Props){
   const [scope,setScope]=useState<DirectorScope>('item');
   const [format,setFormat]=useState<LibraryTemplate|null>(null);
   const {formats,onAll:onAllFormats}=useContext(FormatsContext);
@@ -99,14 +101,20 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
     catch(e){entry.summary=e instanceof Error?e.message:'A plan could not be prepared. Nothing changed.';await onRecord(entry);}
     setPlanning(false);setInstruction('');setExactEdit(false);
   }
-  const presenters=context.avatars.filter(a=>a.permission==='authorized');
   /** Home requests carry the picked preferences as plain words; docked requests are sent as typed. */
-  const outgoing=(text:string)=>home?withPreferences(withFormat(text,format),prefs,presenters.find(a=>a.id===prefs.presenter)?.name):text;
+  const outgoing=(text:string)=>home?withPreferences(withFormat(text,format),prefs):text;
+  const startProject=(brief:string)=>onNewProject?.({brief:brief.trim(),settings:prefs,templateId:format?.id});
+  /** From home, one new video opens the New project flow already set up; everything else is planned here. */
+  function send(text:string){
+    if(home&&onNewProject&&!active&&routeHomeRequest(text)==='new-project'){startProject(text);return;}
+    void plan(outgoing(text));
+  }
   function pickFormat(next:LibraryTemplate){setFormat(next);setInstruction(formatBrief(next));requestAnimationFrame(()=>{const field=input.current;if(!field)return;field.focus();field.setSelectionRange(field.value.length,field.value.length);});}
-  function submit(event:FormEvent){event.preventDefault();void plan(outgoing(instruction));}
+  function submit(event:FormEvent){event.preventDefault();send(instruction);}
   function suggest(prompt:string){
     if(prompt==='Choose a template'&&onTemplates){onTemplates();return;}
     if(prompt==='Create with my own script'&&onCreate){onCreate();return;}
+    if(prompt==='Create a video'&&home&&onNewProject){startProject(instruction);return;}
     if(['Show my content','Review schedule','Hide burned-in captions','Show burned-in captions'].includes(prompt)){void plan(prompt);return;}
     if(prompt==='Choose an avatar'){onStart?.();(onPresenter??onDetails)();return;}
     if(prompt==='Find existing content'){setInstruction('Find ');input.current?.focus();return;}
@@ -206,12 +214,12 @@ export function DirectorPanel({instruction,setInstruction,home=false,focusOnMoun
           <AttachmentPills sources={campaign.sources} selected={sourceIds} onRemove={id=>setSourceIds(ids=>ids.filter(other=>other!==id))}/>
           <div className="composer-field">
             <label className="sr-only" htmlFor="director-instruction">Direction for your content</label>
-            <textarea ref={input} id="director-instruction" value={instruction} onChange={e=>setInstruction(e.target.value)} maxLength={5000} rows={1} placeholder={home?"Describe your next video, campaign, or idea…":"Ask for a change…"} enterKeyHint="send" onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void plan(outgoing(instruction));}}}/>
+            <textarea ref={input} id="director-instruction" value={instruction} onChange={e=>setInstruction(e.target.value)} maxLength={5000} rows={1} placeholder={home?"Describe your next video, campaign, or idea…":"Ask for a change…"} enterKeyHint="send" onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();send(instruction);}}}/>
             {home&&<PromptCycle active={!instruction}/>}
           </div>
           <div className="director-composer-actions">
             <button ref={clip} className="icon-button" type="button" aria-label="Attach project sources" aria-expanded={attachments} aria-controls={attachments?'director-sources':undefined} title="Attach project sources" onClick={e=>{trayFocus.current=!attachments&&e.detail===0;setTrayInstant(e.detail===0);setAttachments(!attachments);}}><Paperclip size={16}/>{sourceIds.length>0&&<b className="attach-count">{sourceIds.length}</b>}</button>
-            {home&&<PromptTokens prefs={prefs} onChange={setPrefs} presenters={presenters}/>}
+            {home&&<PromptTokens prefs={prefs} onChange={setPrefs}/>}
             {/* With one draft there is nothing to choose between, so the control is not shown; home starts something new. */}
             {!home&&campaign.items.length>1&&<><label className="sr-only" htmlFor="director-scope">Action scope</label>
             <select id="director-scope" value={scope} onChange={e=>setScope(e.target.value as DirectorScope)}><option value="item">This draft</option><option value="project">Whole project ({campaign.items.length})</option></select></>}

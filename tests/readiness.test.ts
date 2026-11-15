@@ -190,7 +190,7 @@ test("OpenAPI is valid 3.1.1 and its schemas are generated from runtime validato
 });
 
 test("public docs have raw text, canonical URLs, semantic code and consistent navigation", async () => {
-  const paths = [...publicDocuments.map((document) => document.path), "/about/", "/contact/", "/privacy/"];
+  const paths = [...publicDocuments.map((document) => document.path), "/about/", "/contact/", "/privacy/", "/terms/"];
   for (const path of paths) {
     const html = await readFile(`apps/web/public${path}index.html`, "utf8");
     assert.match(html, /<html lang="en">/); assert.equal((html.match(/<h1(?:\s|>)/g) ?? []).length, 1);
@@ -207,7 +207,7 @@ test("public docs have raw text, canonical URLs, semantic code and consistent na
 
 test("docs pages share one accessible, script-optional chrome", async () => {
   const docs = publicDocuments.map((document) => document.path);
-  for (const path of [...docs, "/about/", "/contact/", "/privacy/"]) {
+  for (const path of [...docs, "/about/", "/contact/", "/privacy/", "/terms/"]) {
     const html = await readFile(`apps/web/public${path}index.html`, "utf8");
     // Landmarks and the route to the content.
     assert.ok(html.includes('<a class="skip" href="#content">Skip to content</a>'), path);
@@ -243,7 +243,7 @@ test("agent index and sitemap discover public actions without exposing private p
   for (const section of ["## When to use", "## When not to use", "## First calls", "## Current limitations"]) assert.ok(llms.includes(section));
   for (const path of ["/openapi.json", "/docs/api/", "/docs/mcp/", "/docs/cli/"]) assert.ok(llms.includes(path));
   const sitemap = await readFile("apps/web/public/sitemap.xml", "utf8");
-  for (const path of [...publicDocuments.map((document) => document.path), "/about/", "/contact/", "/privacy/"]) assert.ok(sitemap.includes(`<loc>${publicOrigin}${path}</loc>`));
+  for (const path of [...publicDocuments.map((document) => document.path), "/about/", "/contact/", "/privacy/", "/terms/"]) assert.ok(sitemap.includes(`<loc>${publicOrigin}${path}</loc>`));
   assert.ok(!sitemap.includes("/studio/")); assert.ok(!sitemap.includes("/dev/"));
   const robots = await readFile("apps/web/public/robots.txt", "utf8");
   assert.match(robots, /Allow: \/\n/); assert.match(robots, /Disallow: \/studio\//); assert.match(robots, /Disallow: \/dev\//);
@@ -287,7 +287,7 @@ test("RFC 8631 discovery links advertise canonical implemented resources on publ
 test("public presentation links discovery for HTML, Markdown and missing pages without altering private routing", async () => {
   const { default: proxy } = await import("../proxy");
   const { publicDiscoveryLinkHeader } = await import("../packages/public-api/src/discovery");
-  for (const path of ["/", "/index.html", ...publicDocuments.map((document) => document.path), "/about/", "/contact/", "/privacy/", "/readiness-missing-page"]) {
+  for (const path of ["/", "/index.html", ...publicDocuments.map((document) => document.path), "/about/", "/contact/", "/privacy/", "/terms/", "/readiness-missing-page"]) {
     for (const accept of ["text/html", "text/markdown"]) {
       const response = proxy(new Request(`${publicOrigin}${path}`, { headers: { Accept: accept } }));
       assert.equal(response.headers.get("Link"), publicDiscoveryLinkHeader, `${accept} ${path}`);

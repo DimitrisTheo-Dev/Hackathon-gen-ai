@@ -12,7 +12,7 @@ async function check(path:string, status:number, type:string, options:RequestIni
 const content=(body:string)=>body.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 await check('/',200,'text/html',{headers:{Accept:'text/html'}},body=>{assert.ok(content(body).length>500);assert.equal((body.match(/<h1\b/g)??[]).length,1);assert.ok(body.includes('application/ld+json'));assert.ok(body.includes('rel="canonical"'));assert.ok(body.includes('og:image'));});
 await check('/',200,'text/markdown',{headers:{Accept:'text/markdown'}},(body,response)=>{assert.ok(body.length>500);assert.ok(response.headers.get('vary')?.toLowerCase().split(',').map(x=>x.trim()).includes('accept'));});
-for(const path of [...publicDocuments.map(d=>d.path),'/about/','/contact/','/privacy/']) await check(path,200,'text/html',{},body=>assert.ok(content(body).length>500,path+' useful initial HTML'));
+for(const path of [...publicDocuments.map(d=>d.path),'/about/','/contact/','/privacy/','/terms/']) await check(path,200,'text/html',{},body=>assert.ok(content(body).length>500,path+' useful initial HTML'));
 for(const doc of publicDocuments) await check(doc.path,200,'text/markdown',{headers:{Accept:'text/markdown'}},body=>assert.ok(body.startsWith('# ')));
 for(const path of ['/api/public/status','/api/public/permissions','/api/public/docs',...publicDocuments.map(d=>'/api/public/docs/'+d.slug),'/openapi.json']) {
   await check(path,200,'application/json',{},(body,response)=>{JSON.parse(body);assert.equal(response.headers.get('x-api-version'),'1');});await check(path,200,'application/json',{method:'HEAD'},body=>assert.equal(body,''));
