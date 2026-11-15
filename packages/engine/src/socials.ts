@@ -184,6 +184,10 @@ export async function listSocials(deps: EngineDeps, ctx: Ctx) {
       available: usable(deps, provider),
       connected: accounts.some((row) => row.provider === provider.id),
     })),
+    // Whether deliveries in the generic signed format are accepted at the platforms' webhook addresses.
+    webhooks: { generic: Boolean(deps.config.socials.webhookSecret) },
+    /** Whether THIS caller may connect or remove accounts (a signed-in owner or admin). */
+    canManage: ctx.principal.kind === "human" && ctx.scopes.has("connections:manage"),
   };
 }
 
@@ -388,22 +392,38 @@ export async function syncSocialProvider(deps: EngineDeps, ctx: Ctx, providerId:
   return saveAccounts(deps, ctx, provider, credentials, await accountsFrom(deps, provider, credentials));
 }
 
+/** Posts waiting for an account that is being removed can no longer be sent, so they are cancelled now, visibly, instead of failing later. */
+async function cancelUnsentPosts(deps: EngineDeps, orgId: string, accounts: Row[]) {
+  let cancelled = 0;
+  for (const account of accounts)
+    cancelled += (await deps.store.update("publish_jobs", { org_id: orgId, account_id: account.id, state: "scheduled" }, { state: "cancelled", error: "The account was disconnected before this post was sent.", updated_at: deps.now().toISOString() })).length;
+  return cancelled;
+}
+
 /** DELETE /v1/socials/providers/:provider. Removes its accounts and the saved credentials from this workspace. */
 export async function disconnectSocialProvider(deps: EngineDeps, ctx: Ctx, providerId: string) {
   requireManager(ctx, "Disconnecting social accounts");
   const provider = requireProvider(providerId);
+  const accounts = await deps.store.select("provider_connections", { org_id: ctx.org.id, provider: provider.id });
+  const cancelledPosts = await cancelUnsentPosts(deps, ctx.org.id, accounts);
   const removed = await deps.store.remove("provider_connections", { org_id: ctx.org.id, provider: provider.id });
-  if (removed) await audit(deps, ctx, { action: `Disconnected ${provider.label}`, objectId: provider.id, outcome: `${removed} account(s) removed. Posts already scheduled to them will not be sent` });
-  return { removed };
+  if (removed) await audit(deps, ctx, { action: `Disconnected ${provider.label}`, objectId: provider.id, outcome: `${removed} account(s) removed · ${cancelledPosts} unsent post(s) cancelled` });
+  return { removed, cancelledPosts };
 }
 
-/** DELETE /v1/socials/accounts/:id. */
+/**
+ * DELETE /v1/socials/accounts/:id. Only for accounts connected through a provider here. A channel connected with
+ * its platform elsewhere (YouTube with Google, channels.ts) is disconnected there, where the platform's access is
+ * withdrawn as well; here it is simply not found.
+ */
 export async function removeSocialAccount(deps: EngineDeps, ctx: Ctx, accountId: string) {
   requireManager(ctx, "Removing a social account");
-  const removed = await deps.store.remove("provider_connections", { id: accountId, org_id: ctx.org.id });
-  if (!removed) throw new EngineError("not_found", "This account was not found in your workspace.");
-  await audit(deps, ctx, { action: "Removed a social account", objectId: accountId, outcome: "Posts already scheduled to it will not be sent" });
-  return { removed: true as const };
+  const [account] = await deps.store.select("provider_connections", { id: accountId, org_id: ctx.org.id }, { limit: 1 });
+  if (!connectedThroughProvider(account)) throw new EngineError("not_found", "This account was not found in your workspace.");
+  const cancelledPosts = await cancelUnsentPosts(deps, ctx.org.id, [account]);
+  await deps.store.remove("provider_connections", { id: account.id, org_id: ctx.org.id });
+  await audit(deps, ctx, { action: "Removed a social account", objectId: account.id, outcome: `${String(account.display_name).slice(0, 80)} · ${cancelledPosts} unsent post(s) cancelled` });
+  return { removed: true as const, cancelledPosts };
 }
 
 /* ───────────────────────── publishing ───────────────────────── */
