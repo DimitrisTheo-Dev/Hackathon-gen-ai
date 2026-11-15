@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
-import { Captions, Check, Clapperboard, FileStack, Film, LoaderCircle, Palette, Play, Plus, RotateCcw, Save, Trash2, Type, Video, X } from "lucide-react";
+import { CircleAlert, Captions, Check, Clapperboard, FileStack, Film, LoaderCircle, Palette, Play, Plus, RotateCcw, Save, Trash2, Type, Video, X } from "lucide-react";
 import {
   COMPOSITION_HEIGHT,
   COMPOSITION_WIDTH,
@@ -322,7 +322,9 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
       </div>
     );
 
-  const status = !entry ? "Loading the video edit…" : dirty ? "Unsaved changes" : entry.base.revision === 0 ? "First draft from the script. Not saved yet." : `Saved · version ${entry.base.revision}`;
+  // Without an edit, a failure replaces the preview (below), so the header never keeps claiming it is still loading.
+  const loadFailed = !entry && !loading && !!error;
+  const status = !entry ? (loadFailed ? "Not loaded" : "Loading the video edit…") : dirty ? "Unsaved changes" : entry.base.revision === 0 ? "First draft from the script. Not saved yet." : `Saved · version ${entry.base.revision}`;
   const max = composition?.durationSeconds ?? MAX_COMPOSITION_SECONDS;
   const readOnly = !canEdit;
   const rowClass = (track: model.Track, id: string, index: number) => `clip-row ${selection?.id === id ? "selected" : ""} ${invalidRows.has(`${track}:${index}`) ? "invalid" : ""}`;
@@ -369,9 +371,9 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
           )}
         </div>
       </div>
-      {(error || notice || !canEdit || broken.length > 0 || problems.length > 0) && (
+      {((error && !loadFailed) || notice || !canEdit || broken.length > 0 || problems.length > 0) && (
         <div className="video-feedback">
-          {error && (
+          {error && !loadFailed && (
             <Notice error>
               {error}
               {conflict && <button className="text-button" onClick={() => void load(true)}>Load the latest version</button>}
@@ -390,9 +392,18 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
         </div>
       )}
       {!composition ? (
-        <div className="video-loading">
-          {loading ? <><LoaderCircle className="spin" size={18} /> Opening the video edit…</> : <button className="button secondary" onClick={() => void load(true)}>Try again</button>}
-        </div>
+        loadFailed ? (
+          <div className="video-failed" role="alert">
+            <span className="video-failed-icon" aria-hidden="true"><CircleAlert size={18} /></span>
+            <strong>Couldn’t open this video edit</strong>
+            <p>{error}</p>
+            <button className="button secondary" onClick={() => void load(true)}><RotateCcw size={14} aria-hidden="true" />Try again</button>
+          </div>
+        ) : (
+          <div className="video-loading">
+            {loading ? <><LoaderCircle className="spin" size={18} /> Opening the video edit…</> : <button className="button secondary" onClick={() => void load(true)}>Open the video edit</button>}
+          </div>
+        )
       ) : (
         <div className="video-body">
           <section className="video-stage" aria-label="Preview">

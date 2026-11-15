@@ -1114,7 +1114,6 @@ export function Brand({
                 <span>{firstLetter(brand.name, "F")}</span>
               </span>
             )}
-            <Saved on={flash === "name" || flash === "description" || flash === "color"} />
           </div>
           <div className="bk-identity-text">
             <div className="bk-line">
@@ -1143,6 +1142,8 @@ export function Brand({
               />
             </div>
           </div>
+          {/* Its own column at the top right: the colour picker opens below the mark, so a mark-anchored badge would cover it. */}
+          <Saved on={flash === "name" || flash === "description" || flash === "color"} />
         </div>
         {editable && colorOpen && (
           <ColorPicker id="bk-colors" color={brand.color} error={errors.color} onPick={(hex) => void save("color", hex, "Brand colour saved.")} onClose={closeColors} />

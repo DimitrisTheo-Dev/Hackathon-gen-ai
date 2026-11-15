@@ -18,7 +18,7 @@
   /* ── identity ── */
   .bk-identity { margin-block-start: 22px; padding: 20px; border: 1px solid transparent; border-radius: 20px; background: var(--surface); box-shadow: var(--elev-1); }
   /* Top-aligned: an editor that wraps to an extra line grows downward instead of nudging everything up. */
-  .bk-identity-main { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 18px; }
+  .bk-identity-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 18px; }
   .bk-mark { position: relative; display: grid; place-items: center; inline-size: 64px; block-size: 64px; padding: 0; border: 0; border-radius: 18px; background-color: var(--brand); color: var(--brand-ink); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 1px 2px rgba(42,42,39,.08); font-size: 28px; font-weight: 600; line-height: 1; letter-spacing: -.02em; transition: background-color var(--dur-base) ease, color var(--dur-base) ease, transform var(--dur-press) var(--ease-out); }
   button.bk-mark { cursor: pointer; }
   .bk-mark-badge { position: absolute; inset-block-end: -5px; inset-inline-end: -5px; display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 50%; background: var(--surface); color: var(--ink-secondary); box-shadow: var(--elev-2); }
@@ -54,7 +54,7 @@
   .bk-saved[data-on] { opacity: 1; transition-duration: 200ms; }
   /* One tick for the whole identity card, under the tile, so it never reflows the text it confirms. */
   .bk-mark-cell { position: relative; }
-  .bk-mark-cell > .bk-saved { position: absolute; inset-block-start: calc(100% + 9px); inset-inline: -14px; justify-content: center; }
+  .bk-identity-main > .bk-saved { margin-block-start: 8px; }
 
   /* ── colour ── */
   .bk-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; margin-block-start: 18px; padding-block-start: 16px; border-block-start: 1px solid var(--border); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }

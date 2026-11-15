@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
+import { LoaderCircle, Maximize, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import type { LibraryTemplate } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
 import { Modal, Notice } from "../components/ui";
@@ -13,6 +13,14 @@ const FAMILIES: Array<{ family: LibraryTemplate["family"]; title: string; note: 
 
 function seconds(range: [number, number]) {
   return `${range[0]} to ${range[1]} s`;
+}
+function clock(value: number) {
+  const whole = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+/** Posters fade in once decoded, so a slow signed link shows a calm frame instead of a half-drawn image. */
+function shown(event: SyntheticEvent<HTMLImageElement>) {
+  event.currentTarget.dataset.loaded = "";
 }
 
 /**
@@ -61,11 +69,11 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
                 <p>{note}</p>
               </div>
               <ul className="tl-grid">
-                {list.map((t) => (
+                {list.map((t, index) => (
                   <li key={t.id}>
                     <button className="tl-card" onClick={() => setOpenId(t.id)} aria-label={`${t.name}: ${t.useFor}`}>
                       <span className="tl-poster">
-                        {t.posterUrl ? <img src={t.posterUrl} alt="" loading="lazy" decoding="async" onError={refresh} /> : null}
+                        {t.posterUrl ? <img src={t.posterUrl} alt="" loading={index < 5 ? "eager" : "lazy"} decoding="async" onLoad={shown} onError={refresh} /> : null}
                       </span>
                       <span className="tl-card-text">
                         <strong>{t.name}</strong>
@@ -93,7 +101,7 @@ function TemplateDetail({ template: t, onClose, onExpired }: { template: Library
       <div className="tl-detail">
         <div className="tl-player">
           {src ? (
-            <video key={src} src={src} poster={t.posterUrl ?? undefined} controls playsInline preload="metadata" onError={onExpired} />
+            <SamplePlayer key={src} src={src} poster={t.posterUrl} title={t.name} onError={onExpired} />
           ) : (
             <p className="tl-missing">The sample video is not available right now.</p>
           )}
@@ -128,15 +136,100 @@ function TemplateDetail({ template: t, onClose, onExpired }: { template: Library
           {!!t.stills.length && (
             <>
               <h3>Every beat</h3>
-              <ul className="tl-stills">
-                {t.stills.map((s) => (
-                  <li key={s.beat}>{s.url ? <img src={s.url} alt={`Beat: ${s.beat}`} loading="lazy" decoding="async" /> : null}</li>
-                ))}
-              </ul>
+              <ol className="tl-stills">
+                {t.stills.map((s, index) => {
+                  // Each still is one beat of the script; its spoken line names it, not the internal beat id.
+                  const line = t.script.find((entry) => entry.id === s.beat)?.text ?? "";
+                  return (
+                    <li key={s.beat}>
+                      {s.url ? <img src={s.url} alt={line ? `Beat ${index + 1}: ${line}` : `Beat ${index + 1}`} loading="lazy" decoding="async" onLoad={shown} /> : <span className="tl-still-missing" />}
+                      <span className="tl-still-number" aria-hidden="true">{index + 1}</span>
+                    </li>
+                  );
+                })}
+              </ol>
             </>
           )}
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * A small player for the sample: play and pause on the frame or the button, a seek bar, time, sound and full screen.
+ * Native controls draw the browser's own focus square, which this design cannot style; these controls take the
+ * studio's ring, drawn white over the dark frame.
+ */
+function SamplePlayer({ src, poster, title, onError }: { src: string; poster: string | null; title: string; onError: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const toggle = () => {
+    const element = video.current;
+    if (!element) return;
+    if (element.paused || element.ended) void element.play().catch(() => undefined);
+    else element.pause();
+  };
+  const fullscreen = () => {
+    const element = video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    if (!element) return;
+    if (frame.current?.requestFullscreen) void frame.current.requestFullscreen().catch(() => undefined);
+    else element.webkitEnterFullscreen?.();
+  };
+  return (
+    <div className="tl-video" ref={frame} data-playing={playing || undefined}>
+      <video
+        ref={video}
+        src={src}
+        poster={poster ?? undefined}
+        playsInline
+        preload="metadata"
+        muted={muted}
+        onClick={toggle}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+        onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+        onError={onError}
+      />
+      {!playing && (
+        <button type="button" className="tl-video-big" aria-label={`Play the ${title} sample`} onClick={toggle}>
+          <Play size={22} aria-hidden="true" />
+        </button>
+      )}
+      <div className="tl-video-bar">
+        <button type="button" className="tl-video-button" aria-label={playing ? "Pause" : "Play"} onClick={toggle}>
+          {playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+        </button>
+        <input
+          type="range"
+          className="tl-video-seek"
+          aria-label="Position in the sample"
+          aria-valuetext={`${clock(time)} of ${clock(duration)}`}
+          min={0}
+          max={duration || 0}
+          step={0.1}
+          value={Math.min(time, duration || 0)}
+          style={{ "--progress": `${duration ? (time / duration) * 100 : 0}%` } as CSSProperties}
+          onChange={(event) => {
+            const next = Number(event.currentTarget.value);
+            if (video.current) video.current.currentTime = next;
+            setTime(next);
+          }}
+        />
+        <span className="tl-video-time" aria-hidden="true">{clock(time)} / {clock(duration)}</span>
+        <button type="button" className="tl-video-button" aria-label={muted ? "Turn sound on" : "Mute"} aria-pressed={muted} onClick={() => setMuted(!muted)}>
+          {muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}
+        </button>
+        <button type="button" className="tl-video-button" aria-label="Full screen" onClick={fullscreen}>
+          <Maximize size={15} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
   );
 }
