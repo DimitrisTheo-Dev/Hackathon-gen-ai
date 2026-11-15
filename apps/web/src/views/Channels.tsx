@@ -148,7 +148,7 @@ const PLACEHOLDERS = ["youtube", "instagram", "tiktok"] as const;
  * that are not available yet. Loading keeps the same cards in place; a failed load becomes one quiet
  * line with a retry, never an engine message.
  */
-export function Channels({ context, client, onChanged }: { context: StudioContext; client: StudioClient; onChanged: () => Promise<void> }) {
+export function Channels({ context, client, onChanged, onOpenSettings }: { context: StudioContext; client: StudioClient; onChanged: () => Promise<void>; onOpenSettings?: () => void }) {
   const headingId = useId();
   const [status, setStatus] = useState<ChannelStatus | null>(null);
   const [loadError, setLoadError] = useState<"unsupported" | "failed" | null>(null);
@@ -355,18 +355,23 @@ export function Channels({ context, client, onChanged }: { context: StudioContex
           {others.map((platform) => {
             const Icon = platformIcon[platform];
             return (
-              <li className="channel-card" data-availability={status ? "unavailable" : "loading"} key={platform}>
+              <li className="channel-card" data-availability={status ? "ready" : "loading"} key={platform}>
                 <span className="channel-icon" aria-hidden="true">
                   <Icon size={17} />
                 </span>
                 <div className="channel-body">
                   <h3>{platformLabel[platform]}</h3>
                   {status ? (
-                    <p className="channel-meta" title="Needs the platform’s app review before posts can be sent.">Not available yet</p>
+                    <p className="channel-meta">Connect in Settings</p>
                   ) : (
                     <p className="channel-meta"><span className="channel-skeleton" aria-hidden="true" /></p>
                   )}
                 </div>
+                {status && onOpenSettings && (
+                  <div className="channel-action">
+                    <button className="button secondary" aria-label={`Connect ${platformLabel[platform]}`} onClick={onOpenSettings}>Connect</button>
+                  </div>
+                )}
               </li>
             );
           })}

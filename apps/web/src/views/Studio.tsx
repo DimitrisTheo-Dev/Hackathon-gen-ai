@@ -1026,7 +1026,7 @@ export function Studio({
                   </div>
                   <button className="button secondary" onClick={() => go("home")}><Sparkles size={14} />Create a video</button>
                 </div>
-                <div className="channels-slot" data-slot="schedule-channels"><Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense></div>
+                <div className="channels-slot" data-slot="schedule-channels"><Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} onOpenSettings={() => go("settings")} /></Suspense></div>
               </div>
             ) : !campaign ? (
               <div className="empty-state">
@@ -1251,7 +1251,7 @@ export function Studio({
                     })()}
                     </>}
                     {/* Publishing accounts: connect and list them where times are planned. Live workspaces only. */}
-                    {!fixture && <div className="channels-slot" data-slot="schedule-channels"><Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense></div>}
+                    {!fixture && <div className="channels-slot" data-slot="schedule-channels"><Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} onOpenSettings={() => go("settings")} /></Suspense></div>}
                     {/* Unattended publishing grants are not offered by the engine yet; show the entry only where they are. */}
                     {context.capabilities.canCreateGrant && <button
                       className="text-button schedule-grant"
@@ -1297,7 +1297,7 @@ export function Studio({
             onPlayed={()=>setPlayItem(null)}
             versions={fixture?undefined:{load:client.listVersions,restore:restoreVersion}}
             reviews={client}
-            channels={fixture?undefined:<Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} /></Suspense>}
+            channels={fixture?undefined:<Suspense fallback={null}><Channels context={context} client={client} onChanged={refreshContext} onOpenSettings={() => go("settings")} /></Suspense>}
             directorInstruction={directorDrafts[item.id]??""}
             onDirectorInstruction={value=>setDirectorDrafts(previous=>({...previous,[item.id]:value}))}
             onDirectorAction={executeDirector}
