@@ -235,6 +235,9 @@ export function placement(script: string, composition: Composition, product: { i
       time = timeAtScriptIndex(script, composition, mention.index);
       matchedMention = true;
     }
+    // A product named in the opening words would sit under the opening title or statement card: start when it ends.
+    const opening = composition.cards.find((card) => (card.kind === "title" || card.kind === "statement") && card.start <= time && time < card.end);
+    if (opening) time = opening.end;
   }
   const start = round(Math.min(Math.max(0, time), duration - length));
   return { start, end: round(Math.min(duration, start + length)), matchedMention };

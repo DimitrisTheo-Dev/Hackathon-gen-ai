@@ -244,3 +244,17 @@ test("the Director writes from the products: they reach the planner as data, wit
   assert.match(seen.system, /A script may say only what a product's approved facts say about it/);
   assert.match(seen.system, /no cure, treatment or guaranteed-return promises and carry no diagnosis/);
 });
+
+test("a product named in the opening words starts after the opening title card, not under it", async () => {
+  const { placement } = await import("../packages/engine/src/products");
+  const { draftComposition } = await import("../packages/contracts/src/composition");
+  const script = "BeWell Omega is here. One capsule a day, with food, for a steady week.";
+  const composition = draftComposition({ title: "Omega", script, brandColor: "#2a2a27", captionPosition: "center", mediaDurationSeconds: 12 });
+  const title = composition.cards.find((card) => card.kind === "title");
+  assert.ok(title && title.start === 0, "the draft timeline opens on a title card");
+  const placed = placement(script, composition, { id: "p1", name: "BeWell Omega" }, null, 3);
+  assert.equal(placed.matchedMention, true);
+  assert.equal(placed.start, title.end);
+  // An explicit time is respected as given.
+  assert.equal(placement(script, composition, { id: "p1", name: "BeWell Omega" }, 0.5, 3).start, 0.5);
+});
