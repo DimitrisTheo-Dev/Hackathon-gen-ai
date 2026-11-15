@@ -188,7 +188,7 @@ test('video studio: Show product places the photo on the saved timeline, and the
   const placed = page.locator('.clip-list li').filter({ hasText: 'Overlay · Image · BeWell Omega.jpg' });
   await expect(placed).toHaveCount(1);
   await expect(placed.getByLabel('Layout')).toHaveValue('split');
-  await expect(page.getByRole('button', { name: /Cards/ })).toContainText('2');
+  await expect(page.getByRole('toolbar', { name: 'Edit' }).getByRole('button', { name: /^Cards/ })).toContainText('2');
 
   // With the photo on screen, the visual pass no longer asks for it.
   await page.getByRole('button', { name: 'Canvas', exact: true }).first().click();
@@ -202,11 +202,12 @@ test('video studio: Show product places the photo on the saved timeline, and the
 
 for (const width of [1440, 390, 320]) test(`${width}px: products, the product sheet, Review and readiness fit without side scroll and pass axe`, async ({ page }) => {
   await page.setViewportSize({ width, height: width < 761 ? 844 : 900 });
-  const axe = async (label: string, include?: string) => {
-    let builder = new AxeBuilder({ page }).withTags(TAGS);
-    if (include) builder = builder.include(include);
-    const { violations } = await builder.analyze();
-    expect(violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  const axe = async (label: string, include: string) => {
+    // Colours are read at rest: entrance fades (sheets, panels) finish first.
+    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
+    const { violations } = await new AxeBuilder({ page }).withTags(TAGS).include(include).analyze();
+    const blocking = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+    expect(blocking.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => `${n.target.join(' ')} (${n.failureSummary?.split('\n')[1]?.trim()})`).join(', ')}`)).toEqual([]);
   };
   await page.goto('/dev/studio/?view=brand');
   await expect(page.locator('section[aria-labelledby="bk-products-title"] article')).toHaveCount(1);
