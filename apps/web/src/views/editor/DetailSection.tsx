@@ -36,7 +36,7 @@ export function DetailSection({
             id={`${id}-trigger`}
             aria-expanded={open}
             aria-controls={open ? `${id}-panel` : undefined}
-            aria-describedby={[need ? `${id}-need` : "", value ? `${id}-value` : ""].filter(Boolean).join(" ") || undefined}
+            aria-describedby={[value ? `${id}-value` : "", need ? `${id}-need` : ""].filter(Boolean).join(" ") || undefined}
             // A click with no pointer detail came from Enter or Space.
             onClick={(event) => onToggle(event.detail === 0)}
           >
