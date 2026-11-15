@@ -70,7 +70,7 @@ export async function likenessUploadUrl(deps: EngineDeps, ctx: Ctx, raw: unknown
   if (input.type === "image/jpeg" && input.size > LIKENESS_MAX_STILL_BYTES) throw new EngineError("validation_error", "That still is too large to save.");
   const files = storage(deps);
   const key = `${likenessFolder(ctx.org.id, userId)}${crypto.randomUUID()}.${EXTENSIONS[input.type]}`;
-  const { url, headers } = await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.type, expiresSeconds: UPLOAD_TTL_SECONDS });
+  const { url, headers } = await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.type, bytes: input.size, expiresSeconds: UPLOAD_TTL_SECONDS });
   return parse(likenessUploadTicketSchema, { key, uploadUrl: url, headers, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() });
 }
 

@@ -129,7 +129,7 @@ export async function requestUpload(deps: EngineDeps, ctx: Ctx, raw: unknown): P
     if (ready) await audit(deps, ctx, { projectId: project.id, action: `Added draft file ${input.name}`, objectId: row.id, revision: row.version, outcome: `${input.kind}, already stored` });
     const upload = ready
       ? null
-      : { ...(await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.mime, expiresSeconds: UPLOAD_TTL_SECONDS })), method: "PUT" as const, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() };
+      : { ...(await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.mime, bytes: input.bytes, expiresSeconds: UPLOAD_TTL_SECONDS })), method: "PUT" as const, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() };
     return parse(uploadTicketSchema, { file: await fileContract(deps, row), upload });
   });
 }

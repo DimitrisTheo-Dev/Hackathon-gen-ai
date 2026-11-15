@@ -15,8 +15,11 @@ export interface R2Config {
 
 export interface FileStore {
   readonly configured: boolean;
-  /** URL a client PUTs one object to. R2 rejects the body unless it matches the declared SHA-256. */
-  uploadUrl(key: string, options: { sha256Hex: string; contentType: string; expiresSeconds: number }): Promise<{ url: string; headers: Record<string, string> }>;
+  /**
+   * URL a client PUTs one object to. R2 rejects the body unless it matches the declared SHA-256 and byte size.
+   * `headers` are what the client must send; the size is signed but not among them, since fetch sends it itself.
+   */
+  uploadUrl(key: string, options: { sha256Hex: string; contentType: string; bytes: number; expiresSeconds: number }): Promise<{ url: string; headers: Record<string, string> }>;
   downloadUrl(key: string, expiresSeconds: number, filename?: string): Promise<string>;
   head(key: string): Promise<{ bytes: number; contentType: string } | null>;
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
@@ -111,9 +114,13 @@ export class R2FileStore implements FileStore {
       query,
     });
   }
-  async uploadUrl(key: string, options: { sha256Hex: string; contentType: string; expiresSeconds: number }) {
+  async uploadUrl(key: string, options: { sha256Hex: string; contentType: string; bytes: number; expiresSeconds: number }) {
+    if (!Number.isSafeInteger(options.bytes) || options.bytes < 0) throw new EngineError("validation_error", "That file size is not valid.");
     const headers = { "content-type": options.contentType, "x-amz-checksum-sha256": Buffer.from(options.sha256Hex, "hex").toString("base64") };
-    return { url: this.sign("PUT", key, options.expiresSeconds, headers), headers };
+    // The declared size is signed too, so R2 refuses a body of any other length (a checksum alone is checked only
+    // after the bytes arrive). It is not handed back: browsers and fetch refuse a script-set Content-Length and send
+    // the real one themselves.
+    return { url: this.sign("PUT", key, options.expiresSeconds, { ...headers, "content-length": String(options.bytes) }), headers };
   }
   async downloadUrl(key: string, expiresSeconds: number, filename?: string) {
     const query: Record<string, string> = filename ? { "response-content-disposition": `inline; filename="${filename.replace(/[^A-Za-z0-9._ -]/g, "_")}"` } : {};
@@ -129,7 +136,7 @@ export class R2FileStore implements FileStore {
   }
   async put(key: string, bytes: Uint8Array, contentType: string) {
     const sha = createHash("sha256").update(bytes).digest("hex");
-    const { url, headers } = await this.uploadUrl(key, { sha256Hex: sha, contentType, expiresSeconds: 60 });
+    const { url, headers } = await this.uploadUrl(key, { sha256Hex: sha, contentType, bytes: bytes.byteLength, expiresSeconds: 60 });
     const response = await this.fetcher(url, { method: "PUT", headers, body: new Blob([new Uint8Array(bytes)], { type: contentType }) });
     if (!response.ok) throw new EngineError("provider_unavailable", "File storage could not save the file. Nothing was changed; try again.");
   }
@@ -156,7 +163,7 @@ export class UnconfiguredFileStore implements FileStore {
 export class MemoryFileStore implements FileStore {
   readonly configured = true;
   readonly objects = new Map<string, { bytes: Uint8Array; contentType: string }>();
-  async uploadUrl(key: string, options: { sha256Hex: string; contentType: string }) {
+  async uploadUrl(key: string, options: { sha256Hex: string; contentType: string; bytes: number }) {
     assertKey(key);
     return { url: `https://files.test/upload/${key}`, headers: { "content-type": options.contentType, "x-amz-checksum-sha256": Buffer.from(options.sha256Hex, "hex").toString("base64") } };
   }

@@ -271,13 +271,13 @@ test("the R2 signer reproduces AWS's published SigV4 presigned URL, and upload l
     return new Response(null, { status: 204, headers: { "content-length": "2036", "content-type": "application/json" } });
   }) as typeof fetch);
   const key = "orgs/o1/likeness/u1/00000000-0000-4000-8000-000000000000.webm";
-  const link = await r2.uploadUrl(key, { sha256Hex: "a".repeat(64), contentType: "video/webm", expiresSeconds: 600 });
+  const link = await r2.uploadUrl(key, { sha256Hex: "a".repeat(64), contentType: "video/webm", bytes: 2_000_000, expiresSeconds: 600 });
   const parsed = new URL(link.url);
   assert.equal(parsed.host, `${"0".repeat(32)}.r2.cloudflarestorage.com`);
   assert.equal(parsed.pathname, `/faceful-media/${key}`);
   assert.equal(parsed.searchParams.get("X-Amz-Expires"), "600");
-  // The type and checksum are signed headers: the same link cannot carry a different file.
-  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-type;host;x-amz-checksum-sha256");
+  // The size, type and checksum are signed headers: the same link cannot carry a different file.
+  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-length;content-type;host;x-amz-checksum-sha256");
   // The browser only accepts a link over https; plain http is for a loopback test server and nothing else.
   const ticket = (uploadUrl: string) => likenessUploadTicketSchema.safeParse({ key, uploadUrl, headers: link.headers, expiresAt: "2026-11-15T10:10:00.000Z" }).success;
   assert.equal(ticket(link.url), true);

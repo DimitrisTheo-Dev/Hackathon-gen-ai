@@ -232,7 +232,7 @@ export async function personaImageUploadUrl(deps: EngineDeps, ctx: Ctx, raw: unk
   const persona = await findPersona(deps, ctx, input.personaId);
   const files = storage(deps);
   const key = `${personaFolder(ctx.org.id, persona.id)}${crypto.randomUUID()}.${EXTENSIONS[input.type]}`;
-  const { url, headers } = await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.type, expiresSeconds: UPLOAD_TTL_SECONDS });
+  const { url, headers } = await files.uploadUrl(key, { sha256Hex: input.sha256, contentType: input.type, bytes: input.size, expiresSeconds: UPLOAD_TTL_SECONDS });
   return parse(likenessUploadTicketSchema, { key, uploadUrl: url, headers, expiresAt: new Date(deps.now().getTime() + UPLOAD_TTL_SECONDS * 1000).toISOString() });
 }
 

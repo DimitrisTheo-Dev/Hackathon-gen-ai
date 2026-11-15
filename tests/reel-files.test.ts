@@ -11,17 +11,36 @@ test("the R2 signer reproduces AWS's published SigV4 presigned URL", () => {
   assert.match(url, /X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404$/);
 });
 
-test("R2 upload links are bound to one object, its type and its SHA-256", async () => {
+test("R2 upload links are bound to one object, its type, its SHA-256 and its size", async () => {
   const store = new R2FileStore({ accountId: "0".repeat(32), accessKeyId: "AK", secretAccessKey: "SK", bucket: "faceful-media" }, () => new Date("2026-11-14T10:00:00Z"), fetch);
   const digest = sha256("hello");
-  const { url, headers } = await store.uploadUrl(`orgs/o/projects/p/files/${digest}.txt`, { sha256Hex: digest, contentType: "text/plain", expiresSeconds: 900 });
+  const { url, headers } = await store.uploadUrl(`orgs/o/projects/p/files/${digest}.txt`, { sha256Hex: digest, contentType: "text/plain", bytes: 5, expiresSeconds: 900 });
   const parsed = new URL(url);
   assert.equal(parsed.host, `${"0".repeat(32)}.r2.cloudflarestorage.com`);
   assert.equal(parsed.pathname, `/faceful-media/orgs/o/projects/p/files/${digest}.txt`);
-  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-type;host;x-amz-checksum-sha256");
+  assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "content-length;content-type;host;x-amz-checksum-sha256");
   assert.equal(parsed.searchParams.get("X-Amz-Expires"), "900");
   assert.equal(headers["x-amz-checksum-sha256"], Buffer.from(digest, "hex").toString("base64"));
-  await assert.rejects(store.uploadUrl("../escape", { sha256Hex: digest, contentType: "text/plain", expiresSeconds: 60 }));
+  // The size is signed but not handed to the client: fetch refuses a script-set Content-Length and sends the real one.
+  assert.deepEqual(Object.keys(headers).sort(), ["content-type", "x-amz-checksum-sha256"]);
+  // The signature commits to exactly that length: re-signing with it reproduces the link, any other length does not.
+  const resign = (length: string) => presignUrl({ method: "PUT", host: parsed.host, path: parsed.pathname, region: "auto", accessKeyId: "AK", secretAccessKey: "SK", now: new Date("2026-11-14T10:00:00Z"), expiresSeconds: 900, headers: { ...headers, "content-length": length } });
+  assert.equal(resign("5"), url);
+  assert.notEqual(new URL(resign("6")).searchParams.get("X-Amz-Signature"), parsed.searchParams.get("X-Amz-Signature"));
+  await assert.rejects(store.uploadUrl("../escape", { sha256Hex: digest, contentType: "text/plain", bytes: 5, expiresSeconds: 60 }));
+  await assert.rejects(store.uploadUrl(`orgs/o/projects/p/files/${digest}.txt`, { sha256Hex: digest, contentType: "text/plain", bytes: 1.5, expiresSeconds: 60 }));
+});
+
+test("server-side writes to R2 sign the length of the body they send", async () => {
+  const sent: Array<{ url: URL; headers: Record<string, string>; size: number }> = [];
+  const store = new R2FileStore({ accountId: "0".repeat(32), accessKeyId: "AK", secretAccessKey: "SK", bucket: "faceful-media" }, () => new Date("2026-11-14T10:00:00Z"), (async (input: RequestInfo | URL, init?: RequestInit) => {
+    sent.push({ url: new URL(String(input)), headers: init?.headers as Record<string, string>, size: (init?.body as Blob).size });
+    return new Response(null, { status: 200 });
+  }) as typeof fetch);
+  await store.put("orgs/o/manifest.json", new TextEncoder().encode('{"ok":true}'), "application/json");
+  assert.equal(sent[0].url.searchParams.get("X-Amz-SignedHeaders"), "content-length;content-type;host;x-amz-checksum-sha256");
+  assert.equal(sent[0].size, 11);
+  assert.equal(sent[0].headers["content-length"], undefined, "fetch sets the length from the body");
 });
 
 test("R2 settings are read from FACEFUL_R2_* and refused when the account id is malformed", () => {

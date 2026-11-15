@@ -208,7 +208,7 @@ export async function reelRenderUploadUrl(deps: EngineDeps, jobId: string, raw: 
   const input = parse(outputSchema, raw);
   const job = await ownJob(deps, jobId, input.workerId);
   const key = fileKey(job.org_id, job.project_id, input.sha256, "video/mp4");
-  const { url, headers } = await filesOf(deps).uploadUrl(key, { sha256Hex: input.sha256, contentType: "video/mp4", expiresSeconds: 30 * 60 });
+  const { url, headers } = await filesOf(deps).uploadUrl(key, { sha256Hex: input.sha256, contentType: "video/mp4", bytes: input.bytes, expiresSeconds: 30 * 60 });
   return { url, method: "PUT" as const, headers };
 }
 
