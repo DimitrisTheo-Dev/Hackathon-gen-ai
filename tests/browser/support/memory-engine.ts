@@ -24,9 +24,11 @@ import { dirname, join } from "node:path";
  * Nothing here is imported by application code or by the deployed functions.
  */
 import { createHash } from "node:crypto";
+import { basicClaims } from "../../../packages/contracts/src/index";
 import { loadConfig } from "../../../packages/engine/src/config";
 import { handleEngineRequest, type HttpDeps } from "../../../packages/engine/src/http";
 import type { Planner, PlannerOutput } from "../../../packages/engine/src/llm";
+import type { ReviewModel } from "../../../packages/engine/src/review-model";
 import { workerClaim, workerComplete, workerUploadUrl } from "../../../packages/engine/src/render";
 import { MemoryFileStore, R2FileStore, type FileStore } from "../../../packages/engine/src/r2";
 import { MemoryMedia, MemoryStore } from "../../../packages/engine/src/store-memory";
@@ -125,6 +127,13 @@ const scripted: Planner = {
     return base;
   },
 };
+/** Stand-in for the content review's claims model: the shared rules' own claims, so a review needs no network call. */
+const scriptedReview: ReviewModel = {
+  async claims(input) {
+    const products = input.products.map((product) => ({ id: product.id, name: product.name, facts: product.approvedFacts }));
+    return basicClaims(input.sentences.join(" "), { products, brandRules: input.brandRules, domain: input.domain }).map(({ id: _id, ...claim }) => claim);
+  },
+};
 
 /** A row of public.templates for the stand-in library. */
 function standInTemplate(id: string, position: number, family: "face" | "no_face") {
@@ -170,9 +179,16 @@ export function createMemoryEngine(origin: string) {
         if (url.searchParams.get("url")?.includes("AAAAAAAAAAA")) return new Response("Not Found", { status: 404 });
         return Response.json({ title: "Stand-in video: five tips in thirty seconds", author_name: "Stand-in Channel", author_url: "https://www.youtube.com/@standin", type: "video" });
       }
+      // The engine reading a private file through its own signed link (place_product copies a product photo this way).
+      if (url.origin === origin && url.pathname.startsWith("/__e2e/files/")) {
+        const object = memoryFiles.objects.get(decodeURIComponent(url.pathname.slice("/__e2e/files/".length)));
+        return object ? new Response(new Uint8Array(object.bytes), { headers: { "Content-Type": object.contentType } }) : new Response("Not found", { status: 404 });
+      }
+      if (settings.r2 && url.hostname.endsWith(".r2.cloudflarestorage.com")) return globalThis.fetch(input);
       return new Response("{}", { status: 503 });
     },
     planner: scripted,
+    reviewModel: scriptedReview,
   };
   const plannerOff = new Set<string>();
   const wav = silentWav();
