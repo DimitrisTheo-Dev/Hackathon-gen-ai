@@ -321,7 +321,7 @@
   .app-frame .editor-home.surface-dialog { background: transparent; }
   .app-frame .editor-home .director-composer-actions { justify-content: space-between; }
   @media (min-width: 1001px) {
-    .app-frame .editor-home.surface-dialog { inset: 68px 24px 24px calc(var(--sidebar-w) + 24px); max-inline-size: 720px; display: flex; flex-direction: column; justify-content: center; background: transparent; border: 0; padding-block-end: 9vh; }
+    .app-frame .editor-home.surface-dialog { inset: 68px 24px 24px calc(var(--sidebar-w) + 24px); max-inline-size: 720px; display: flex; flex-direction: column; justify-content: safe center; background: transparent; border: 0; padding-block-end: 0; }
     .app-frame .editor-home .editor-chat { flex: 0 1 auto; }
     .app-frame .editor-home .director-panel { overflow: visible; }
     .app-frame .editor-home .director-conversation { padding: 0 8px 8px; max-block-size: 46vh; }

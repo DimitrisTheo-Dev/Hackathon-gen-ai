@@ -71,6 +71,12 @@
 .detail-row h3 button:focus-visible { outline: none; }
 .detail-row:has(button:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 13px; }
 .detail-row:active { background: rgba(42,42,39,.06); }
+/* "Needed": this row must be done before the draft can render or be scheduled. Optional rows carry nothing. */
+.detail-need { display: inline-flex; align-items: center; flex: none; block-size: 20px; padding: 0 8px; border-radius: 999px; background: var(--warning-surface); color: var(--warning-ink); font-size: 11.5px; font-weight: 600; letter-spacing: .01em; }
+.detail-row .detail-need { margin-inline-start: auto; }
+.detail-row .detail-need + .detail-value { margin-inline-start: 0; }
+.detail-key { margin: 2px 0 10px; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); text-wrap: pretty; }
+.detail-key .detail-need { margin-inline-end: 5px; vertical-align: 1px; }
 .detail-value { display: inline-flex; align-items: center; gap: 7px; min-inline-size: 0; margin-inline-start: auto; overflow: hidden; color: var(--text-secondary); font-size: 13px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .detail-chevron { flex: 0 0 auto; color: var(--text-secondary); pointer-events: none; transition: transform 160ms var(--ease-out); }
 .detail-section[data-open="true"] .detail-chevron { transform: rotate(90deg); }
@@ -520,7 +526,7 @@
 .review-message { margin: 0; color: var(--positive-ink); font-size: 13px; line-height: 1.5; }
 .review-footnote { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; text-wrap: pretty; }
 .review-actions { margin-block-start: 18px; }
-@media (hover: hover) and (pointer: fine) { .review-fix:hover { background: var(--accent-dark); } }
+@media (hover: hover) and (pointer: fine) { .review-fix:hover { background: var(--accent-dark); } .review-fix.secondary:hover { background: var(--subtle); color: var(--ink); box-shadow: inset 0 0 0 1px var(--text-muted); } }
 @media (prefers-reduced-motion: reduce) { .review-fix:active { transform: none; } }
 @media (max-width: 760px) {
   .review-status h3 { font-size: 18px; }
@@ -735,7 +741,9 @@ html[data-booting] .director-panel.is-home :is(.director-intro > *, .director-co
 @keyframes cycle-in { from { opacity: 0; transform: translateY(6px); } }
 
 @media (min-width: 1001px) {
-  .app-frame .editor-home.surface-dialog { padding-block-end: 6vh; }
+  /* No padding outside the scroller: content scrolled to the end must reach the panel's edge, not vanish into a band. */
+  .app-frame .editor-home.surface-dialog { padding-block-end: 0; }
+  .app-frame .editor-home .director-panel.is-home { padding-block-end: 28px; scroll-padding-block-end: 28px; }
   .director-panel.is-home .director-conversation { padding: 0 8px 4px; max-block-size: 46vh; }
 }
 @media (max-width: 1000px) {
