@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
-import { CircleAlert, LoaderCircle, Maximize, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
-import type { LibraryTemplate } from "@castroom/contracts";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type SyntheticEvent } from "react";
+import { CircleAlert, CopyPlus, LayoutTemplate, LoaderCircle, Maximize, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import type { LibraryTemplate, StudioContext } from "@castroom/contracts";
 import type { StudioClient } from "../data/client";
 import { Modal } from "../components/ui";
 import "../templates.css";
-import { TEMPLATES_INTRO, TemplateGridSkeleton } from "./page-skeletons";
+import { CloneVideo } from "./CloneVideo";
+import { TEMPLATES_INTRO, TEMPLATES_TABS, TemplateGridSkeleton, templatesTab, type TemplatesTab } from "./page-skeletons";
 
 const languageNames: Record<string, string> = { el: "Greek", en: "English" };
 const FAMILIES: Array<{ family: LibraryTemplate["family"]; title: string; note: string }> = [
@@ -24,11 +25,88 @@ function shown(event: SyntheticEvent<HTMLImageElement>) {
   event.currentTarget.dataset.loaded = "";
 }
 
+const TAB_ICONS: Record<TemplatesTab, typeof LayoutTemplate> = { formats: LayoutTemplate, clone: CopyPlus };
+
 /**
- * The template library: short-form formats with a rendered sample each, read from the engine
+ * Templates: one destination with two ways to start a video, as tabs in the page header.
+ *   - Start from a format: the library of short-form formats, each with a rendered sample.
+ *   - Clone a video you like: paste a link, say what to change, and queue a job.
+ * The open tab lives in the address (`?view=templates&tab=clone`), so a refresh or a shared link opens it again.
+ * A tab's panel stays mounted once opened, so a half-written brief survives a look at the formats.
+ */
+export function TemplateLibrary({ client, context }: { client: StudioClient; context: StudioContext }) {
+  const ids = useId();
+  const [tab, setTab] = useState<TemplatesTab>(templatesTab);
+  const [visited, setVisited] = useState<Set<TemplatesTab>>(() => new Set([tab]));
+  const tabs = useRef<Partial<Record<TemplatesTab, HTMLButtonElement | null>>>({});
+  useEffect(() => {
+    const url = new URL(location.href);
+    if (tab === "clone") url.searchParams.set("tab", "clone");
+    else url.searchParams.delete("tab");
+    if (url.href !== location.href) history.replaceState(history.state, "", url);
+  }, [tab]);
+  const choose = (next: TemplatesTab, focus = false) => {
+    setTab(next);
+    setVisited((previous) => (previous.has(next) ? previous : new Set(previous).add(next)));
+    if (focus) tabs.current[next]?.focus();
+  };
+  // Arrow keys move between the two tabs and open the one they land on (automatic activation; both panels are local).
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const order = TEMPLATES_TABS.map((entry) => entry.key);
+    const index = order.indexOf(tab);
+    const next = event.key === "ArrowRight" || event.key === "ArrowDown" ? order[(index + 1) % order.length]
+      : event.key === "ArrowLeft" || event.key === "ArrowUp" ? order[(index - 1 + order.length) % order.length]
+      : event.key === "Home" ? order[0] : event.key === "End" ? order[order.length - 1] : null;
+    if (!next) return;
+    event.preventDefault();
+    choose(next, true);
+  };
+
+  return (
+    <div className="tl" data-tab={tab}>
+      <header className="tl-intro">
+        <h1>Templates</h1>
+        <p>{TEMPLATES_INTRO}</p>
+        <div className="tl-tabs" role="tablist" aria-label="Ways to start" onKeyDown={onKeyDown}>
+          {TEMPLATES_TABS.map(({ key, label, short }) => {
+            const Icon = TAB_ICONS[key];
+            const selected = tab === key;
+            return (
+              <button
+                key={key}
+                ref={(node) => { tabs.current[key] = node; }}
+                type="button"
+                role="tab"
+                id={`${ids}-tab-${key}`}
+                aria-selected={selected}
+                aria-controls={`${ids}-panel-${key}`}
+                aria-label={label}
+                tabIndex={selected ? 0 : -1}
+                className="tl-tab"
+                onClick={() => choose(key)}
+              >
+                <Icon size={16} aria-hidden="true" />
+                <span className="tl-tab-long" aria-hidden="true">{label}</span>
+                <span className="tl-tab-short" aria-hidden="true">{short}</span>
+              </button>
+            );
+          })}
+        </div>
+      </header>
+      {TEMPLATES_TABS.map(({ key }) => (
+        <div key={key} className="tl-panel" role="tabpanel" id={`${ids}-panel-${key}`} aria-labelledby={`${ids}-tab-${key}`} hidden={tab !== key}>
+          {visited.has(key) && (key === "formats" ? <FormatLibrary client={client} /> : <CloneVideo client={client} context={context} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The format library: short-form formats with a rendered sample each, read from the engine
  * (`GET /v1/templates/library`). Media links are signed and short-lived; a link that stops playing reloads the list.
  */
-export function TemplateLibrary({ client }: { client: StudioClient }) {
+function FormatLibrary({ client }: { client: StudioClient }) {
   const [templates, setTemplates] = useState<LibraryTemplate[] | null>(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -51,15 +129,11 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
   const open = templates?.find((t) => t.id === openId) ?? null;
 
   return (
-    <div className="tl">
-      <header className="tl-intro">
-        <h1>Templates</h1>
-        <p>{TEMPLATES_INTRO}</p>
-      </header>
+    <>
       {error && !templates && (
         <div className="tl-failed" role="alert">
           <span className="tl-failed-icon" aria-hidden="true"><CircleAlert size={16} /></span>
-          <p><strong>Couldn’t load the templates</strong><span>{error}</span></p>
+          <p><strong>Couldn’t load the formats</strong><span>{error}</span></p>
           <button className="button secondary" disabled={retrying} onClick={() => { setRetrying(true); load(); }}>
             {retrying ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <RotateCcw size={14} aria-hidden="true" />}
             {retrying ? "Retrying…" : "Retry"}
@@ -67,7 +141,12 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
         </div>
       )}
       {templates === null && !error && <TemplateGridSkeleton />}
-      {templates?.length === 0 && <p className="tl-empty">No templates are published yet.</p>}
+      {templates?.length === 0 && (
+        <div className="tl-empty">
+          <span className="tl-empty-art" aria-hidden="true"><i /><i /><i /></span>
+          <p><strong>No formats are published yet</strong><span>Formats appear here with a rendered sample each. Until then, start from Create or clone a video you like.</span></p>
+        </div>
+      )}
       {!!templates?.length &&
         FAMILIES.map(({ family, title, note }) => {
           const list = templates.filter((t) => t.family === family);
@@ -75,7 +154,7 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
           return (
             <section className="tl-family" key={family} aria-labelledby={`tl-${family}`}>
               <div className="tl-family-head">
-                <h2 id={`tl-${family}`}>{title}</h2>
+                <h2 id={`tl-${family}`}>{title}<span className="tl-count">{list.length}</span></h2>
                 <p>{note}</p>
               </div>
               <ul className="tl-grid">
@@ -84,6 +163,7 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
                     <button className="tl-card" onClick={() => setOpenId(t.id)} aria-label={`${t.name}: ${t.useFor}`}>
                       <span className="tl-poster">
                         {t.posterUrl ? <img src={t.posterUrl} alt="" loading={index < 5 ? "eager" : "lazy"} decoding="async" onLoad={shown} onError={refresh} /> : null}
+                        <span className="tl-poster-play" aria-hidden="true"><Play size={15} /></span>
                       </span>
                       <span className="tl-card-text">
                         <strong>{t.name}</strong>
@@ -98,7 +178,7 @@ export function TemplateLibrary({ client }: { client: StudioClient }) {
           );
         })}
       {open && <TemplateDetail template={open} onClose={() => setOpenId(null)} onExpired={refresh} />}
-    </div>
+    </>
   );
 }
 

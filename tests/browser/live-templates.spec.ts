@@ -26,6 +26,9 @@ test('the Templates tab lists the library by family and opens a template with it
   await page.getByRole('navigation', { name: 'Studio' }).getByRole('button', { name: 'Templates' }).click();
   await expect(page).toHaveURL(/view=templates/);
   await expect(page.getByRole('heading', { level: 1, name: 'Templates' })).toBeVisible();
+  // The formats are the first of the page's two ways to start.
+  await expect(page.getByRole('tab', { name: 'Start from a format' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Clone a video you like' })).toHaveAttribute('aria-selected', 'false');
   await expect(page.getByRole('heading', { name: 'With a presenter' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Without a face' })).toBeVisible();
   const cards = page.locator('.tl-card');
