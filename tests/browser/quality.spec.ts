@@ -184,7 +184,8 @@ test('video studio: Show product places the photo on the saved timeline, and the
   await sheet.getByRole('radio', { name: 'Split' }).check();
   await sheet.getByRole('button', { name: 'Show product' }).click();
   await expect(sheet).toHaveCount(0);
-  await expect(page.locator('.success-note')).toContainText('BeWell Omega is on screen at 0:00 and on the end card. Saved as version 1.');
+  // The script names the product in its first words, so the photo starts when the opening title card ends.
+  await expect(page.locator('.success-note')).toContainText('BeWell Omega is on screen at 0:02.5 and on the end card. Saved as version 1.');
   const placed = page.locator('.clip-list li').filter({ hasText: 'Overlay · Image · BeWell Omega.jpg' });
   await expect(placed).toHaveCount(1);
   await expect(placed.getByLabel('Layout')).toHaveValue('split');
