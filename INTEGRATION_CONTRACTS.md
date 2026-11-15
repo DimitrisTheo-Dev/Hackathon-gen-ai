@@ -67,9 +67,10 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | Route | Purpose |
 | --- | --- |
 | `GET /v1/health` | Which integrations are configured (booleans and safe sentences only) |
-| `GET /v1/studio/context` | Workspace, role, scopes, brand, avatars, channels, capabilities, connections, workspaces |
+| `GET /v1/studio/context` | Workspace, role, scopes, brand, brand kit products, avatars, channels, capabilities, connections, workspaces |
 | `GET /v1/studio/campaigns`, `/campaigns/:id` | Projects with items, jobs and activity (also sweeps timed-out render jobs) |
 | `GET /v1/studio/items/:id/versions` | Immutable version history |
+| `GET /v1/studio/items/:id/review` | The item's latest content review, or `null` (§13) |
 | `GET /v1/studio/jobs/:id` | Render job status and event trail |
 | `GET /v1/studio/templates` | Curated templates |
 | `GET /v1/studio/personas` | Personas with their consent status and looks; photo links are signed for 15 minutes and only for signed-in people |
@@ -91,7 +92,7 @@ Errors are always `{ "error": { code, message, retryAfterSeconds, reviewUrl } }`
 | `GET /v1/socials/:platform/webhook` | The check a platform makes when the address is registered |
 | `GET /v1/socials/events` | Stored activity, newest first; signed-in members only |
 
-Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_clone_job`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`, and for personas (signed-in members with `content:edit`, never agents) `create_persona`, `update_persona`, `delete_persona`, `withdraw_persona_consent`, `persona_image_upload_url`, `create_persona_look`, `update_persona_look`, `delete_persona_look`. A persona's consent is recorded by the person, with the face scan running inside the studio's Personas tab (or at `/face-scan?persona=<id>` on their own device); the studio and `/face-scan` are the only pages whose headers allow the camera, microphone and WebAssembly. `POST /v1/studio/likeness/consents` with `personaId` links it when the persona has no live consent, and answers `personaId: null` otherwise. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
+Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, `update_brand`, the brand kit's products and the content review (§13: `create_product`, `update_product`, `delete_product`, `product_image_upload_url`, `place_product`, `review_content`, `approve_review`), `add_source`, `remove_source`, `render_content`, `cancel_jobs`, `prepare_schedule`, `approve_schedule`, `commit_schedule`, `create_agent_connection`, `revoke_agent_connection`, `create_from_template`, `create_sample_project`, `create_clone_job`, `create_checkout`, `create_portal`, `connect_channel`, `disconnect_channel`, and for personas (signed-in members with `content:edit`, never agents) `create_persona`, `update_persona`, `delete_persona`, `withdraw_persona_consent`, `persona_image_upload_url`, `create_persona_look`, `update_persona_look`, `delete_persona_look`. A persona's consent is recorded by the person, with the face scan running inside the studio's Personas tab (or at `/face-scan?persona=<id>` on their own device); the studio and `/face-scan` are the only pages whose headers allow the camera, microphone and WebAssembly. `POST /v1/studio/likeness/consents` with `personaId` links it when the persona has no live consent, and answers `personaId: null` otherwise. `create_run_grant` answers `unsupported`. Names are looked up in a `Map` of own entries, so inherited names such as `constructor` or `__proto__` are `not_found` (verified on production, 15 Nov 2026).
 
 **Limits.** JSON bodies on `/v1` and `/mcp` are capped at 256 KB (`413 validation_error`; a declared `Content-Length` over the cap is refused before reading). Requests are rate limited in fixed one-minute windows counted in Postgres (`engine_rate_limit_hit`), so limits hold across function instances:
 
@@ -99,7 +100,7 @@ Operations: `start_campaign`, `add_draft`, `revise_content`, `restore_version`, 
 | --- | --- | --- |
 | `principal` | 240 | user, OAuth agent or workspace token (IDs only) |
 | `director` | 10 | principal, for Director turns |
-| `costly` | 10 | principal, for `render_content`, `create_checkout`, `connect_channel`, and a social provider's `connect`, `sync` and `complete` |
+| `costly` | 10 | principal, for `render_content`, `create_checkout`, `connect_channel`, `create_clone_job`, `review_content`, and a social provider's `connect`, `sync` and `complete` |
 | `anonymous` | 120 | client network, requests without a credential |
 | `failed_auth` | 60 | client network, requests whose credential was refused |
 
@@ -201,17 +202,18 @@ Model: `claude-opus-5-5` through the Anthropic SDK, structured output, low effor
 
 `POST /mcp` — Streamable HTTP, stateless, protocol `2025-11-25` (`@modelcontextprotocol/sdk` 1.32.2). The 2026-07-28 revision is not implemented; a client offering it is answered `2025-11-25`. Protected-resource metadata is at `/.well-known/oauth-protected-resource[/mcp]`; the authorization server is Supabase Auth.
 
-Tools (21):
+Tools (25):
 - **Drafting, rendering, schedule and billing:** `list_projects`, `create_project`, `create_draft`, `revise_draft`, `list_avatars`, `start_render`, `get_render_status`, `list_assets`, `get_asset`, `propose_schedule`, `approve_schedule`, `get_billing_status`, `create_checkout_link`.
 - **Reel production** (`docs/agents/reel-production.md`): `list_draft_files`, `save_text_draft`, `request_file_upload`, `complete_file_upload`, `get_video_timeline`, `save_video_timeline`, `queue_video_render`, `get_video_renders`. Draft files need the files store, and `queue_video_render` needs a Remotion render worker. Neither is configured on production yet (`/v1/health`: `files.connected` and `reelRendering.connected` are false).
+- **Products and review** (§13): `list_products`, `place_product`, `review_content`, `get_review`. No tool approves a review.
 
 Each tool maps to one engine function and inherits its checks. Side-effecting tools accept `idempotencyKey`.
 
-A POST may carry 1–10 JSON-RPC messages (otherwise `-32600`); every message counts against the caller's `principal` bucket, and `start_render` / `create_checkout_link` also count against `costly`. Going over `principal` refuses the whole POST with `429` and the headers above; going over `costly` inside a call returns a tool error with `quota_exceeded` and `retryAfterSeconds`; the server's `instructions` tell agents to wait that long rather than retry at once. Unauthenticated calls get `401` with the protected-resource metadata link and count against `anonymous` or `failed_auth`.
+A POST may carry 1–10 JSON-RPC messages (otherwise `-32600`); every message counts against the caller's `principal` bucket, and `start_render` / `create_checkout_link` / `review_content` also count against `costly`. Going over `principal` refuses the whole POST with `429` and the headers above; going over `costly` inside a call returns a tool error with `quota_exceeded` and `retryAfterSeconds`; the server's `instructions` tell agents to wait that long rather than retry at once. Unauthenticated calls get `401` with the protected-resource metadata link and count against `anonymous` or `failed_auth`.
 
 ## 10. Data model
 
-Tables (all with RLS enabled): `organizations`, `memberships`, `user_state`, `brand_profiles`, `projects`, `content_items`, `content_versions`, `media_assets`, `render_jobs`, `job_events`, `audit_events`, `operations`, `schedule_manifests`, `publish_jobs`, `provider_connections`, `agent_connections`, `billing_customers`, `billing_state`, `checkout_sessions`, `stripe_events`, `credit_ledger`, `social_events`, `likeness_consents`, `personas`, `persona_looks` (one consent backs at most one persona; looks hold private R2 photo keys), plus the earlier `castroom_director_access` / `castroom_director_entries`.
+Tables (all with RLS enabled): `organizations`, `memberships`, `user_state`, `brand_profiles`, `projects`, `content_items`, `content_versions`, `media_assets`, `render_jobs`, `job_events`, `audit_events`, `operations`, `schedule_manifests`, `publish_jobs`, `provider_connections`, `agent_connections`, `billing_customers`, `billing_state`, `checkout_sessions`, `stripe_events`, `credit_ledger`, `social_events`, `likeness_consents`, `personas`, `persona_looks` (one consent backs at most one persona; looks hold private R2 photo keys), `brand_products`, `content_reviews` (§13; server only, like personas), plus the earlier `castroom_director_access` / `castroom_director_entries`.
 
 Browsers can `SELECT` their own organization's projects, items, versions, media rows, jobs, events, audit, manifests and publish jobs. Browsers cannot write any engine table, and cannot read ledgers, tokens, idempotency records, billing or Stripe events. All writes go through the engine with the server secret key. Project chat access (`castroom_director_access`) is granted by the engine when a project is created.
 
@@ -256,3 +258,57 @@ Verification runs on the scheduler tick and, throttled to once a minute per post
 **Failure handling.** `invalid_grant` on refresh marks the connection `expired` and fails the job with "Reconnect YouTube; the approved post was not sent." Transient refusals before any upload retry with backoff (1, 5, 15, 60 minutes). An edit after approval cancels unsent posts. A send whose result cannot be determined is never retried.
 
 **Verified without a user:** Google's real responses for an invalid access token (`tokeninfo` 400 `invalid_token`, Data API 401 `authError`), `invalid_grant` for an invalid refresh token with this client ID and secret (so the pair is valid), and that Supabase returns a Google authorization URL carrying the YouTube scopes, `access_type=offline`, `prompt=consent select_account` and the registered callback. **Not verified:** a person completing Google consent, whether the YouTube Data API is enabled on the Google project, a real upload, and the audit status.
+
+## 13. Products and content review
+
+Contract: `packages/contracts/src/quality.ts` (schemas, routes, statuses) and `quality-rules.ts` (the deterministic rules the engine and the studio's local fixture share, English and Greek). Engine: `products.ts`, `review.ts`, `review-model.ts`. Tables: `brand_products` and `content_reviews` (`supabase/migrations/20261115160000_products_reviews.sql`; RLS on, no policies, no browser grants).
+
+**Products.** Up to 24 per workspace, each with a name, a description, a domain (`general`, `health` or `finance`), up to 12 approved facts and an optional photo. A script may restate an approved fact; any other product claim needs a source or an expert. Same permission as `update_brand`: `content:edit`, for people and agents.
+- `create_product`, `update_product` (only the fields sent change; `imageKey: null` removes the photo), `delete_product`.
+- `product_image_upload_url` `{ type, size, sha256 }` → `{ key, uploadUrl, headers, expiresAt }`: one PUT of exactly those bytes to `orgs/<org>/products/<uuid>.<jpg|png|webp>`, then pass `key` as `imageKey`. The engine accepts only a key in this workspace's products folder that exists, is at most 15 MB and is not another product's; replaced and removed photos are deleted.
+- `context.products` lists them in order. `imageUrl` is a 15-minute link for signed-in people and `null` for agents (like persona photos). The context never fails over products: where the table is missing it answers `products: []`.
+
+**`place_product`** `{ itemId, productId, expectedCompositionRevision, layout, at, seconds, endCard, operationKey }` → `{ itemId, compositionRevision, fileId, placedAt, matchedMention }`. Copies the photo into the item's project as an `image` draft file (`meta: { productId, source: "brand_kit" }`; content-addressed, reused when the same photo is placed again), then adds a layer-1 image clip for `seconds`: at `at`, else where the script first names the product (`matchedMention: true`), else one third in, always inside the timeline. With `endCard`, a closing `cta` card shows the photo (once per photo). It saves through `save_composition`, so a newer timeline is `revision_conflict` and is never overwritten. Needs a product photo and the files store.
+
+**`review_content`** `{ itemId, operationKey }` → `ContentReview`. Run by anyone with `content:edit` (people and agents) and by reviewers; counted against `costly`; idempotent by key; audited as "Reviewed the content". It reads the item's current script, revision and language, the project's sources, the brand rules, the products, the saved timeline and its revision, the project's draft files (`avatar_clip` ids; images by `meta.productId`) and the item's target platforms.
+- `domain = detectDomain(script, products)`.
+- **Claims, basic mode:** `basicClaims`. **AI mode**, when the deployment has a model (`ANTHROPIC_API_KEY` or the AI Gateway, `DIRECTOR_MODEL`, low effort, structured output, server-side refusal fallback): the model reads the script as sentences, the products with their approved facts, the sources' titles and excerpts and the brand rules, all as data, and is told to support a claim only from that material, quoting it exactly, never from outside knowledge, and that any unsourced health or finance benefit is `needs_expert`. The engine then re-checks its answer: claims whose quote is not in the script word for word are dropped; `supported` without an exactly quoted provided fact or source becomes `needs_expert` (health, finance) or `unsupported`; severities may rise above the shared rule's but never fall below it; and every rule-based blocking claim the model's output does not cover (by quote) is kept, a rule's `risky_wording` unless the model flags the same words as blocking too. If the model fails, or the workspace has used its daily allowance (`DIRECTOR_DAILY_TURNS`, counted separately), the review runs in basic mode with a note saying why. `mode` is `ai` only when the model pass succeeded.
+- **Findings:** `deliveryFindings` and `visualFindings`. Without a saved timeline both are empty.
+- **What was examined:** `checked = { claims: true, timeline: a saved timeline was read, transcript: it has word timings, renderedVideo: false }`. `notes` says what was not examined: the rendered video's frames and audio are never inspected in this build; without a timeline the voice, caption and on-screen checks wait for one; no word timings; the model was not used, or was unavailable and why; claims the model's answer lost or had corrected; and that a review flags wording and does not confirm that a claim is true. Nothing is ever called verified.
+- `status = reviewStatus(domain, claims, findings, false)`: blocking items → `needs_changes`; else health or finance → `needs_approval`; else `passed`.
+
+**`approve_review`** `{ reviewId, by, credential, note, operationKey }` → the review with `status: "approved"` and `approval { by, credential, note, principalId, at }`. Signed-in owners, admins and reviewers only. The review must be the item's latest and describe its current revision. Health and finance need the approver's qualification; a review with blocking items needs a note of at least 20 characters saying why they are acceptable. Audited as "Approved a content review".
+
+**`GET /v1/studio/items/:itemId/review`** → the latest review or `null` (`campaign:read`).
+
+**Schedule gate.** `prepare_schedule` adds a blocker for every health or finance item (by `detectDomain` on its current script, with the products) that has no approved review of its current revision. Messages start with `REVIEW_BLOCKER_PREFIX` (`Claims review:`), so the readiness checklist files them under Claims:
+- `Claims review: this health script needs an approved review. Open Details → Review.` (or `finance`)
+- `Claims review: the script changed after its last review. Run a new review and have it approved. Open Details → Review.`
+- `Claims review: reviews are not set up on this deployment yet.` when the reviews (or products) table cannot be read. Scheduling never fails over the gate.
+
+General items are not gated. A blocked item adds no manifest entries, and `approve_schedule` refuses while any blocker remains.
+
+**Director.** The planner's `<workspace>` block carries the products as data (name, description, domain, approved facts). The system prompt says a script may say only what a product's approved facts say, and that health and finance scripts make no cure, treatment or guaranteed-return promise and carry no diagnosis.
+
+**MCP.** `list_products` and `get_review` (read; `get_review` also says whether the review is stale), `place_product` and `review_content` (`content:edit`; `review_content` counts against `costly`). Their descriptions say that approval is a human act in the studio; there is no approve tool, and `approve_review` answers `approval_required` to every agent.
+
+**Errors a client shows.**
+
+| Operation | Code | Message |
+| --- | --- | --- |
+| `approve_review` by an agent | `approval_required` (403) | Approving a content review must be confirmed by a signed-in workspace member in the studio. Agents cannot do this. |
+| `approve_review` by an editor | `forbidden` (403) | Only workspace owners, admins and reviewers can approve a content review. |
+| `approve_review`, script changed | `revision_conflict` (409) | The script changed after this review. Run a new review. |
+| `approve_review`, newer review exists | `revision_conflict` (409) | A newer review of this item exists. Open it and approve that one. |
+| `approve_review`, health/finance without credential | `validation_error` (400) | Add the approver’s qualification, for example “MD, cardiologist”. Health scripts need a qualified approver. (finance: “Certified financial adviser”) |
+| `approve_review`, blocking items, short note | `validation_error` (400) | This review still has N blocking items. Write at least 20 characters saying why they are acceptable. |
+| `review_content`, `approve_review`, `GET …/review` where the tables are missing | `provider_unavailable` (503) | Content reviews aren’t available on this deployment yet: its database has not been updated for them, or could not be reached. Nothing was changed. |
+| `place_product`, timeline changed | `revision_conflict` (409) | This video edit changed after you opened it. Reload the latest version before placing the product. |
+| `place_product`, product without photo | `validation_error` (400) | Add a photo to this product in the brand kit before placing it on a video. |
+| `place_product`, photo unreadable | `provider_unavailable` (503) | The product photo could not be read from storage. Nothing was changed; try again. |
+| `create_product`, 25th product | `validation_error` (400) | A brand kit holds up to 24 products. Delete one to add another. |
+| `create_product` / `update_product`, photo key | `validation_error` (400) | That photo does not belong to this workspace’s products. Upload it again. · The photo did not finish uploading. Try again. · That photo is too large. Use one under 15 MB. · That photo is already used by another product. Upload it again. |
+| product photo without a files store | `provider_unavailable` (503) | Private file storage isn’t connected on this deployment yet, so a product photo can’t be saved. Add the FACEFUL_R2_* settings. |
+| any product or review id from another workspace | `not_found` (404) | This product was not found in your brand kit. · This review was not found in your workspace. |
+
+**On production today.** The migration is not applied to the hosted database yet, so until the owner applies it the context lists no products (each read logs a `store_error` for `brand_products`), product operations answer the database's 503, reviews answer the 503 above, and `prepare_schedule` blocks every health and finance item with "reviews are not set up on this deployment yet". There is no model key, so reviews run in basic mode and say so. The files store is not connected, so product photos and `place_product` answer `provider_unavailable`.
