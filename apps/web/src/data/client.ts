@@ -16,6 +16,7 @@ import {
   type DirectorTurnInput,
   type DirectorTurnResult,
   type RestoreInput,
+  type LibraryTemplate,
   type Template,
   type TemplateInput,
   type AddSourceInput,
@@ -189,6 +190,8 @@ export interface StudioClient {
   /** One conversational turn. Drafting may be saved; nothing is rendered, approved, charged or published. */
   directorTurn(input: DirectorTurnInput): Promise<DirectorTurnResult>;
   listTemplates(): Promise<Template[]>;
+  /** The video template library (rendered samples with signed media URLs). */
+  listLibraryTemplates(): Promise<LibraryTemplate[]>;
   createFromTemplate(input: TemplateInput): Promise<Campaign>;
   createSampleProject(input: SampleInput): Promise<Campaign>;
   listVersions(contentId: string): Promise<ContentVersion[]>;
