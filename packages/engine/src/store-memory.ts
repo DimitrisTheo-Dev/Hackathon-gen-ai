@@ -29,6 +29,8 @@ const uniques: Record<string, Array<{ columns: string[]; where?: (row: Row) => b
   personas: [{ columns: ["consent_id"], where: (r) => r.consent_id != null }],
   video_compositions: [{ columns: ["org_id", "item_id"] }],
   project_files: [{ columns: ["org_id", "project_id", "item_id", "name", "version"] }],
+  // supabase/migrations/20261115130500_clone_jobs.sql
+  clone_jobs: [{ columns: ["id"] }, { columns: ["org_id", "idempotency_key"] }],
 };
 
 function matches(row: Row, filter: Filter): boolean {

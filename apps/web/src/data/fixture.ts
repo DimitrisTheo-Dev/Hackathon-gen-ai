@@ -631,6 +631,10 @@ export function createFixtureClient(storage?: Storage): StudioClient {
     listTemplates: async () => [],
     // The library's media lives in private storage behind the signed-in studio.
     listLibraryTemplates: async () => [],
+    // Cloning needs the engine (it asks the platforms about the link and stores the job); the tab is hidden here.
+    lookupCloneSource: unavailable,
+    listCloneJobs: async () => [],
+    createCloneJob: unavailable,
     createFromTemplate: unavailable,
     createSampleProject: unavailable,
     listVersions: unavailable,

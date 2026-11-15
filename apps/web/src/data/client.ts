@@ -21,6 +21,9 @@ import {
   type TemplateInput,
   type AddSourceInput,
   type Brand,
+  type CloneJob,
+  type CloneJobInput,
+  type CloneSource,
   type RemoveSourceInput,
   type UpdateBrandInput,
   type CreatePersonaInput,
@@ -245,6 +248,12 @@ export interface StudioClient {
   queueRender(input: QueueRenderInput): Promise<ReelRender>;
   listRenders(contentId: string): Promise<ReelRender[]>;
   cancelRender(input: { renderId: string; operationKey: string }): Promise<ReelRender>;
+  /** What a YouTube, TikTok or Instagram link points to, with title and author when the platform gives them. */
+  lookupCloneSource(url: string): Promise<CloneSource>;
+  /** This workspace's clone jobs, newest first. */
+  listCloneJobs(): Promise<CloneJob[]>;
+  /** Queues a clone job. Nothing is made until a worker takes it; nothing is published. */
+  createCloneJob(input: CloneJobInput): Promise<CloneJob>;
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {
