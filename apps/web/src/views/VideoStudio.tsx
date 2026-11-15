@@ -445,10 +445,10 @@ export default function VideoStudio({ client, context, campaign, itemId, onSelec
             </div>
           </section>
           {/* The timeline runs the full width under the preview and the inspector, the way an editor's does. */}
-          <section className="video-timeline" aria-label="Timeline">
+          <div className="video-timeline-area">
             <Timeline composition={composition} playerRef={playerRef} selection={selection} labelFor={labelFor} onSelect={select} />
             <p className="video-note">1080 × 1920 · {composition.fps} fps · {model.timeLabel(composition.durationSeconds)}. The preview and the MP4 render draw the same frames.</p>
-          </section>
+          </div>
           <section className="video-inspector" aria-label="Edit the video">
             <div className="segmented video-tabs" role="toolbar" aria-label="Edit">
               {TABS.map(({ id, label, icon: Icon }) => (
