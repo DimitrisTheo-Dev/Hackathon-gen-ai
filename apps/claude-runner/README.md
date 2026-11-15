@@ -25,10 +25,10 @@ With `STORE_URL` and `STORE_TOKEN` set (the token opens only that user's R2 fold
 
 - `POST /v1/run {prompt, project}` works in `work/<project>` and autosaves it to `projects/<project>/autosave.tar.gz` after every run.
 - `POST /v1/workspace/save` keeps a version under `projects/<project>/saves/`; `POST /v1/workspace/restore` swaps the files, after saving the current ones as a new version.
-- Claude's sign-in and session history are saved to `private/claude-home.tar.gz` after sign-in and after every run.
+- Claude's sign-in and session history are saved to `private/claude-home.tar.gz` after sign-in and after every run, sealed with AES-256-GCM when `CLAUDE_HOME_KEY` is set (cloud machines always set it; Claude never sees the key).
 - `POST /v1/sync` saves everything; the gateway calls it before a machine sleeps.
 
-Mint a token for a standalone runner with `node apps/workspace-store/mint-token.mjs <user-id>` (needs `FACEFUL_STORE_SIGNING_KEY`).
+Mint a token for a standalone runner with `node apps/workspace-store/mint-token.mjs <user-id> [ttl]` (needs `FACEFUL_STORE_SIGNING_KEY`; the lifetime defaults to 30 days, at most 90). Cloud machines don't need one: the gateway gives each a 12-hour token and renews it.
 
 ## Locally
 
